@@ -4,7 +4,7 @@
 import {
   collection, doc, onSnapshot,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db, ADMIN_UID } from "./firebase.js?v=8";
+import { db, ADMIN_UID } from "./firebase.js?v=9";
 
 const names = new Map(); // uid -> nom, ou null si absent de l'annuaire (pas d'entrée = pas encore chargé)
 const subs = new Map(); // non-admin : uid -> unsubscribe (une écoute par personne affichée)

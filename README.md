@@ -67,10 +67,10 @@ Sans cet index, « Télécharger mes données » et la suppression de compte éc
 3. Le site est servi sur <https://tomcavaliere.github.io/Canal-Dev/>.
 
 **À chaque publication qui modifie le JS ou le CSS**, incrémente le numéro de version des liens
-(`?v=4` → `?v=5`) pour que les navigateurs ne mélangent pas anciens et nouveaux fichiers
+(`?v=9` → `?v=10`) pour que les navigateurs ne mélangent pas anciens et nouveaux fichiers
 (GitHub Pages les garde 10 minutes en cache) :
 ```bash
-sed -i '' 's/?v=4"/?v=5"/g' index.html confidentialite.html js/*.js
+sed -i '' 's/?v=9"/?v=10"/g' index.html confidentialite.html js/*.js
 ```
 
 ## Utilisation (admin)
