@@ -32,10 +32,10 @@ service cloud.firestore {
     match /users/{uid} {
       function validProfile() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['email', 'displayName', 'photoURL', 'createdAt', 'lastLogin'])
+        // Minimisation RGPD : plus de photo de profil (les anciens profils la perdent à la connexion suivante).
+        return d.keys().hasOnly(['email', 'displayName', 'createdAt', 'lastLogin'])
           && d.email == request.auth.token.email
           && d.displayName is string && d.displayName.size() <= 200
-          && d.photoURL is string && d.photoURL.size() <= 2000
           && d.lastLogin == request.time;
       }
 
@@ -46,7 +46,8 @@ service cloud.firestore {
       allow update: if signedIn() && request.auth.uid == uid
         && validProfile()
         && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAdmin();
+      // Droit à l'effacement : l'utilisateur peut supprimer son propre profil.
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
     // ---------- Conversations ----------
@@ -63,26 +64,76 @@ service cloud.firestore {
       allow read: if signedIn() && (isAdmin() || request.auth.uid in resource.data.members);
       // Création / modification (dont ajout/retrait de membres) / suppression : admin uniquement.
       allow create, update: if isAdmin() && validConversation();
+      // Droit à l'effacement : un membre peut uniquement se retirer lui-même de la liste.
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.members
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+        && request.resource.data.members == resource.data.members.removeAll([request.auth.uid]);
       allow delete: if isAdmin();
 
       // ---------- Messages ----------
       match /messages/{msgId} {
+        // `image` (facultatif) ne contient que les dimensions ; la photo elle-même est
+        // dans images/{msgId}, écrite dans le même batch.
+        function validImageMeta(img) {
+          return img is map && img.keys().hasOnly(['w', 'h'])
+            && img.w is int && img.w > 0 && img.w <= 1600
+            && img.h is int && img.h > 0 && img.h <= 1600
+            && existsAfter(/databases/$(database)/documents/conversations/$(convId)/images/$(msgId));
+        }
+        function validMessage() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['text', 'authorUid', 'authorName', 'createdAt', 'image'])
+            && d.authorUid == request.auth.uid
+            && d.createdAt == request.time
+            && d.text is string
+            && d.text.size() <= 4000
+            && (d.text.size() > 0 || 'image' in d)
+            && (!('image' in d) || validImageMeta(d.image))
+            && d.authorName is string
+            && d.authorName.size() <= 200;
+        }
+
         allow read: if canAccess(convId);
-        allow create: if canAccess(convId)
-          && request.resource.data.keys().hasOnly(['text', 'authorUid', 'authorName', 'authorPhoto', 'createdAt'])
-          && request.resource.data.authorUid == request.auth.uid
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 4000
-          && request.resource.data.authorName is string
-          && request.resource.data.authorName.size() <= 200
-          && request.resource.data.authorPhoto is string
-          && request.resource.data.authorPhoto.size() <= 2000;
+        allow create: if canAccess(convId) && validMessage();
         allow update: if false;
         allow delete: if isAdmin()
           || (canAccess(convId) && resource.data.authorUid == request.auth.uid);
       }
+
+      // ---------- Photos (une par message, même identifiant que le message) ----------
+      match /images/{imgId} {
+        function validImage() {
+          let d = request.resource.data;
+          let parts = d.data.split(',');
+          return d.keys().hasOnly(['data', 'authorUid', 'createdAt'])
+            && d.authorUid == request.auth.uid
+            && d.createdAt == request.time
+            && d.data is string
+            && d.data.size() <= 900000
+            && parts.size() == 2
+            && parts[0] == 'data:image/jpeg;base64'
+            && getAfter(/databases/$(database)/documents/conversations/$(convId)/messages/$(imgId)).data.authorUid == request.auth.uid;
+        }
+
+        allow read: if canAccess(convId);
+        allow create: if canAccess(convId) && validImage();
+        allow update: if false;
+        allow delete: if isAdmin()
+          || (canAccess(convId) && resource.data.authorUid == request.auth.uid);
+      }
+    }
+
+    // ---------- Droits RGPD : accès / portabilité / effacement ----------
+    // Requête collection group sur tous les messages d'un auteur (export et suppression
+    // de compte), y compris dans des conversations dont il n'est plus membre.
+    match /{path=**}/messages/{msgId} {
+      allow read, delete: if isAdmin()
+        || (signedIn() && resource.data.authorUid == request.auth.uid);
+    }
+    match /{path=**}/images/{imgId} {
+      allow read, delete: if isAdmin()
+        || (signedIn() && resource.data.authorUid == request.auth.uid);
     }
 
     // Tout le reste est interdit.
