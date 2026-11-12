@@ -5,10 +5,10 @@ import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
   orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js";
-import { initAccount } from "./account.js";
-import { avatarEl, initials } from "./ui.js";
-import { prepareImage } from "./images.js";
+import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=2";
+import { initAccount } from "./account.js?v=2";
+import { avatarEl, initials } from "./ui.js?v=2";
+import { prepareImage } from "./images.js?v=2";
 
 const $ = (id) => document.getElementById(id);
 
@@ -65,7 +65,20 @@ async function login() {
   }
 }
 
+// Une erreur au démarrage ne doit jamais laisser la page bloquée sur « Chargement… ».
 async function onAuth(user) {
+  try {
+    await startSession(user);
+  } catch (err) {
+    console.error(err);
+    $("pending-error").textContent = "Erreur de chargement : " + (err.message || err)
+      + ". Recharge la page (Cmd/Ctrl + Maj + R).";
+    $("pending-error").hidden = false;
+    show("screen-pending");
+  }
+}
+
+async function startSession(user) {
   teardown();
   if (!user) {
     show("screen-login");
@@ -85,7 +98,7 @@ async function onAuth(user) {
   fillUserHeader(user);
 
   if (state.isAdmin) {
-    const { setupAdmin } = await import("./admin.js");
+    const { setupAdmin } = await import("./admin.js?v=2");
     state.admin = setupAdmin({
       getConversations: () => state.conversations,
       getSelected: () => (state.selectedId ? { id: state.selectedId, ...state.conversations.get(state.selectedId) } : null),

@@ -60,6 +60,13 @@ Sans cet index, « Télécharger mes données » et la suppression de compte éc
 2. GitHub → **Settings → Pages** → Source : *Deploy from a branch*, branche `main`, dossier `/ (root)`.
 3. Le site est servi sur <https://tomcavaliere.github.io/Canal-Dev/>.
 
+**À chaque publication qui modifie le JS ou le CSS**, incrémente le numéro de version des liens
+(`?v=2` → `?v=3`) pour que les navigateurs ne mélangent pas anciens et nouveaux fichiers
+(GitHub Pages les garde 10 minutes en cache) :
+```bash
+sed -i '' 's/?v=2"/?v=3"/g' index.html confidentialite.html js/*.js
+```
+
 ## Utilisation (admin)
 1. **+ Nouvelle** : crée une conversation.
 2. Demande à la personne de se connecter une fois : elle apparaît dans **Utilisateurs** avec la mention « en attente ».

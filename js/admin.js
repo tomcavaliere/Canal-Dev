@@ -4,9 +4,9 @@ import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, limit,
   onSnapshot, arrayUnion, arrayRemove, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db, ADMIN_UID } from "./firebase.js";
-import { purgeUserData } from "./account.js";
-import { avatarEl } from "./ui.js";
+import { db, ADMIN_UID } from "./firebase.js?v=2";
+import { purgeUserData } from "./account.js?v=2";
+import { avatarEl } from "./ui.js?v=2";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
