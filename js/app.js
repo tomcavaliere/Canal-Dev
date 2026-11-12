@@ -251,12 +251,13 @@ function listenConversations() {
   });
 }
 
-function byCreatedDesc(a, b) {
-  return (b[1].createdAt?.toMillis?.() ?? 0) - (a[1].createdAt?.toMillis?.() ?? 0);
+// Date de la dernière activité : dernier message, ou création pour une conversation vide.
+function activityOf(c) {
+  return (c.lastMessageAt ?? c.createdAt)?.toMillis?.() ?? 0;
 }
 
 function sortedConversations() {
-  return [...state.conversations.entries()].sort(byCreatedDesc);
+  return [...state.conversations.entries()].sort((a, b) => activityOf(b[1]) - activityOf(a[1]));
 }
 
 /* ---------- Projets ---------- */
@@ -370,7 +371,7 @@ function syncMessageWatchers() {
       if (!snap.metadata.fromCache) first = false;
       state.recent.set(id, snap.docs.map((d) => {
         const m = d.data({ serverTimestamps: "estimate" });
-        return { t: m.createdAt?.toMillis?.() ?? 0, authorUid: m.authorUid };
+        return { t: m.createdAt?.toMillis?.() ?? 0, authorUid: m.authorUid, authorName: m.authorName, excerpt: excerpt(m) };
       }));
       if (isViewing(id)) markRead(id);
       else updateUnread(id);
@@ -433,9 +434,15 @@ function pruneLastRead() {
   if (changed) saveLastRead();
 }
 
-function updateUnread(id) {
+function unreadMessages(id) {
   const since = lastReadOf(id);
-  const n = (state.recent.get(id) || []).filter((m) => m.t > since && m.authorUid !== state.user.uid).length;
+  return (state.recent.get(id) || []).filter((m) => m.t > since && m.authorUid !== state.user.uid);
+}
+
+function updateUnread(id) {
+  const n = unreadMessages(id).length;
+  // Le nombre ne change pas, mais l'aperçu du dernier message non lu, si.
+  if (n && (state.unread.get(id) || 0) === n) { renderConversationList(); return; }
   if ((state.unread.get(id) || 0) === n) return;
   if (n) state.unread.set(id, n); else state.unread.delete(id);
   renderConversationList();
@@ -501,10 +508,18 @@ function conversationItem(id, c) {
   title.className = "item-title";
   title.textContent = c.title || "(sans titre)";
   row.append(title);
+  if (c.lastMessageAt) row.append(activityTime(c.lastMessageAt.toDate()));
   if (unread) row.append(unreadBadge(unread, unreadLabel(unread)));
   btn.append(row);
 
-  if (state.isAdmin) {
+  // Aperçu du dernier message non lu, à la place de la description.
+  const last = unread ? unreadMessages(id).at(-1) : null;
+  if (last) {
+    const sub = document.createElement("span");
+    sub.className = "item-sub item-preview";
+    sub.textContent = `${displayText(last.authorUid, last.authorName)} : ${last.excerpt}`;
+    btn.append(sub);
+  } else if (state.isAdmin) {
     const sub = document.createElement("span");
     sub.className = "item-sub";
     const n = c.members?.length ?? 0;
@@ -518,6 +533,22 @@ function conversationItem(id, c) {
   }
   li.append(btn);
   return li;
+}
+
+const clockFmt = new Intl.DateTimeFormat("fr-FR", { timeStyle: "short" });
+const shortDayFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+const shortDateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
+
+// Heure du dernier message aujourd'hui, sinon sa date.
+function activityTime(date) {
+  const now = new Date();
+  const t = document.createElement("time");
+  t.className = "item-time";
+  t.dateTime = date.toISOString();
+  if (date.toDateString() === now.toDateString()) t.textContent = clockFmt.format(date);
+  else if (date.getFullYear() === now.getFullYear()) t.textContent = shortDayFmt.format(date);
+  else t.textContent = shortDateFmt.format(date);
+  return t;
 }
 
 function emptyItem(text) {
@@ -1269,6 +1300,8 @@ $("composer").addEventListener("submit", (e) => {
     });
     images.cache.set(msgRef.id, Promise.resolve(image.data));
   }
+  // Date de la dernière activité, pour classer la conversation en tête de liste chez tous ses membres.
+  batch.update(doc(db, "conversations", convId), { lastMessageAt: serverTimestamp() });
   input.value = "";
   if (image) clearAttachment();
   if (replyTo) clearReply();

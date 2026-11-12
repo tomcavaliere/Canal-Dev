@@ -139,6 +139,21 @@ describe("Conversations", () => {
     assertFails(updateDoc(doc(bob(), "conversations/c1"), { members: arrayUnion("bob") })));
   it("l'admin ajoute un membre", () =>
     assertSucceeds(updateDoc(doc(admin(), "conversations/c1"), { members: arrayUnion("bob"), updatedAt: serverTimestamp() })));
+  it("un membre met à jour la date du dernier message, à l'heure du serveur", () =>
+    assertSucceeds(updateDoc(doc(alice(), "conversations/c1"), { lastMessageAt: serverTimestamp() })));
+  it("une date du dernier message fixée par le client est refusée", () =>
+    assertFails(updateDoc(doc(alice(), "conversations/c1"), { lastMessageAt: Timestamp.now() })));
+  it("un membre ne modifie rien d'autre en même temps", () =>
+    assertFails(updateDoc(doc(alice(), "conversations/c1"), { lastMessageAt: serverTimestamp(), title: "Pirate" })));
+  it("un non-membre ne touche pas à la date du dernier message", () =>
+    assertFails(updateDoc(doc(bob(), "conversations/c1"), { lastMessageAt: serverTimestamp() })));
+  it("l'admin met à jour la date du dernier message en envoyant un message", async () => {
+    const db = admin();
+    const batch = writeBatch(db);
+    batch.set(newMessageRef(db), message(ADMIN));
+    batch.update(doc(db, "conversations/c1"), { lastMessageAt: serverTimestamp() });
+    await assertSucceeds(batch.commit());
+  });
   it("seul l'admin supprime une conversation", async () => {
     await assertFails(deleteDoc(doc(alice(), "conversations/c1")));
     await assertSucceeds(deleteDoc(doc(admin(), "conversations/c1")));

@@ -172,6 +172,10 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .item-row { display: flex; align-items: center; gap: .5rem; }
 .item-row .item-title { flex: 1; min-width: 0; }
 .item.has-unread .item-title { font-weight: 700; }
+.item-time { flex-shrink: 0; font-size: .72rem; color: var(--muted); }
+.item.has-unread .item-time { color: var(--accent); font-weight: 600; }
+.item-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item.has-unread .item-preview { color: var(--text); }
 .unread {
   flex-shrink: 0; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
