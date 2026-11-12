@@ -5,6 +5,7 @@ Canal de communication pour suivre le développement d'un outil.
 - Connexion avec un compte Google (adresses `@gmail.com` uniquement).
 - Plusieurs conversations. Un utilisateur ne voit que celles auxquelles l'administrateur lui a donné accès, et peut y lire et écrire.
 - Seul l'administrateur crée/supprime les conversations et ajoute/retire des membres.
+- L'administrateur peut ranger les conversations dans des **projets** (ou les laisser « Sans projet ») et les déplacer de l'un à l'autre. Les membres voient le nom du projet de leurs conversations, jamais la liste des autres projets.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 
 Hébergement : GitHub Pages (fichiers statiques). Auth + données : Firebase (Authentication + Cloud Firestore, plan gratuit).
@@ -61,14 +62,15 @@ Sans cet index, « Télécharger mes données » et la suppression de compte éc
 3. Le site est servi sur <https://tomcavaliere.github.io/Canal-Dev/>.
 
 **À chaque publication qui modifie le JS ou le CSS**, incrémente le numéro de version des liens
-(`?v=2` → `?v=3`) pour que les navigateurs ne mélangent pas anciens et nouveaux fichiers
+(`?v=3` → `?v=4`) pour que les navigateurs ne mélangent pas anciens et nouveaux fichiers
 (GitHub Pages les garde 10 minutes en cache) :
 ```bash
-sed -i '' 's/?v=2"/?v=3"/g' index.html confidentialite.html js/*.js
+sed -i '' 's/?v=3"/?v=4"/g' index.html confidentialite.html js/*.js
 ```
 
 ## Utilisation (admin)
-1. **+ Nouvelle** : crée une conversation.
+1. **+ Projet** (facultatif) : crée un projet. Le ✎ à côté d'un projet le renomme ou le supprime (ses conversations sont conservées et passent « Sans projet »).
+1. **+ Conversation** (ou **+** à côté d'un projet) : crée une conversation, dans un projet ou non. **Déplacer** (en haut d'une conversation) la change de projet.
 2. Demande à la personne de se connecter une fois : elle apparaît dans **Utilisateurs** avec la mention « en attente ».
 3. Ouvre la conversation → **Membres** → coche la personne. Elle voit la conversation apparaître instantanément.
 4. Décoche pour retirer l'accès ; **Supprimer** efface la conversation et ses messages.
