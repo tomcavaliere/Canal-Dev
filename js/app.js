@@ -10,7 +10,7 @@ import { initAccount } from "./account.js";
 import { avatarEl, initials } from "./ui.js";
 import { prepareImage } from "./images.js";
 import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js";
-import { notificationState, toggleNotifications, showNotification } from "./notify.js";
+import { notificationState, toggleNotifications, showNotification, registerServiceWorker } from "./notify.js";
 import { startNames, stopNames, watchNames, displayName, displayText } from "./names.js";
 import { renderRichText } from "./richtext.js";
 import { confirmDialog, toast } from "./dialogs.js";
@@ -70,7 +70,21 @@ if (!isConfigured) {
   $("btn-login").addEventListener("click", login);
   document.querySelectorAll(".btn-logout").forEach((b) => b.addEventListener("click", () => signOut(auth)));
   initAccount();
+  registerServiceWorker(openFromNotification);
   onAuthStateChanged(auth, onAuth);
+}
+
+// Conversation à ouvrir dès qu'elle sera chargée : clic sur une notification
+// (application déjà ouverte, ou ouverte par ce clic avec #c=<id>).
+let requestedConv = (() => {
+  const id = new URLSearchParams(location.hash.slice(1)).get("c");
+  if (id) history.replaceState(null, "", location.pathname + location.search);
+  return id;
+})();
+
+function openFromNotification(id) {
+  if (state.conversations.has(id)) selectConversation(id);
+  else requestedConv = id;
 }
 
 document.querySelectorAll("dialog [data-close]").forEach((b) => {
@@ -240,6 +254,10 @@ function listenConversations() {
     if (state.selectedId && !state.conversations.has(state.selectedId)) {
       closeConversation();
     }
+    if (requestedConv && state.conversations.has(requestedConv)) {
+      selectConversation(requestedConv);
+      requestedConv = null;
+    }
     if (!state.selectedId && state.conversations.size > 0 && !isMobile()) {
       selectConversation(sortedConversations()[0][0]);
     }
@@ -401,6 +419,7 @@ function onIncomingMessage(convId, m) {
     title: `${displayText(m.authorUid, m.authorName)} · ${c?.title || "Canal Dev"}`,
     body: excerpt(m),
     tag: convId,
+    conv: convId,
     onClick: () => selectConversation(convId),
   });
 }

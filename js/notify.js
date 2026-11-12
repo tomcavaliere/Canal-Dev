@@ -36,18 +36,41 @@ export async function toggleNotifications() {
   save();
 }
 
+// Service worker (sw.js) : installation de l'application et notifications sur Android.
+// Pas sur l'ancienne adresse GitHub Pages, qui redirige aussitôt.
+let registration = Promise.resolve(null);
+export function registerServiceWorker(onOpenConversation) {
+  if (!("serviceWorker" in navigator) || location.hostname.endsWith("github.io")) return;
+  registration = navigator.serviceWorker.register("sw.js").catch((err) => {
+    console.warn("Service worker indisponible", err);
+    return null;
+  });
+  // Clic sur une notification alors que l'application est déjà ouverte.
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "open-conversation" && typeof event.data.id === "string") {
+      onOpenConversation(event.data.id);
+    }
+  });
+}
+
 // `tag` : une seule notification par conversation (la nouvelle remplace l'ancienne).
-export function showNotification({ title, body, tag, onClick }) {
+// Le clic est géré par le service worker s'il est actif (ouvre la conversation `conv`), sinon ici.
+export async function showNotification({ title, body, tag, conv, onClick }) {
   if (!enabled()) return;
+  const options = { body, tag, lang: "fr", icon: "icons/icon-192.png", data: { conv } };
   try {
-    const n = new Notification(title, { body, tag, lang: "fr" });
+    const reg = await registration;
+    if (reg?.active) {
+      await reg.showNotification(title, options);
+      return;
+    }
+    const n = new Notification(title, options);
     n.onclick = () => {
       window.focus();
       onClick?.();
       n.close();
     };
   } catch (err) {
-    // Chrome Android n'accepte que les notifications passant par un service worker.
     console.warn("Notification impossible", err);
   }
 }

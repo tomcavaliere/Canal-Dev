@@ -5,6 +5,9 @@ Canal de communication pour suivre le développement d'un outil.
 - Connexion avec un compte Google (adresses `@gmail.com` uniquement).
 - Plusieurs conversations. Un utilisateur ne voit que celles auxquelles l'administrateur lui a donné accès, et peut y lire et écrire.
 - Seul l'administrateur crée/supprime les conversations et ajoute/retire des membres.
+- Liste triée par dernière activité, non-lus synchronisés entre appareils, messages paginés par 100,
+  recherche dans les messages chargés, modification de ses messages, liens et `code` mis en forme.
+- Installable comme application (PWA) ; notifications tant que l'application est ouverte (pas de push : plan Spark).
 - L'administrateur peut ranger les conversations dans des **projets** (ou les laisser « Sans projet ») et les déplacer de l'un à l'autre. Les membres voient le nom du projet de leurs conversations, jamais la liste des autres projets.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
@@ -17,6 +20,9 @@ Le contrôle d'accès est appliqué côté serveur par [firestore.rules](firesto
 
 ```
 index.html              page unique
+manifest.webmanifest    installation comme application (PWA)
+sw.js                   service worker : installation et notifications (aucun cache, aucune donnée)
+icons/                  icônes de l'application (icon.svg est la source des PNG)
 css/style.css           styles (clair/sombre, responsive)
 js/firebase-config.js   config Firebase + ADMIN_UID  ← à remplir
 js/firebase.js          initialisation Firebase
@@ -26,6 +32,9 @@ js/admin.js             création de conversations, gestion des membres (admin)
 js/account.js           « Mon compte » : export et suppression des données (RGPD)
 js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'admin seul)
 js/ui.js                helpers d'affichage (avatar à initiales)
+js/dialogs.js           dialogue de confirmation et messages brefs (remplacent alert/confirm)
+js/richtext.js          liens cliquables et code dans les messages
+js/notify.js            notifications et enregistrement du service worker
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting
 confidentialite.html    politique de confidentialité
