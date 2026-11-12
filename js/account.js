@@ -17,9 +17,15 @@ import { $ } from "./ui.js";
 // supprime son nom de l'annuaire, son invitation éventuelle et son profil.
 // Utilisé par l'utilisateur lui-même et par l'admin.
 // Le compte Firebase Authentication est traité séparément.
+/**
+ * @param {string} uid
+ * @param {string} [email] adresse du compte, pour supprimer aussi son invitation éventuelle
+ */
 export async function purgeUserData(uid, email) {
   // Photos, messages puis accusés de lecture. Les photos sont lues par petits lots (jusqu'à ~900 Ko chacune).
-  for (const [group, field, size] of [["images", "authorUid", 10], ["messages", "authorUid", 400], ["reads", "uid", 400]]) {
+  /** @type {[string, string, number][]} */
+  const groups = [["images", "authorUid", 10], ["messages", "authorUid", 400], ["reads", "uid", 400]];
+  for (const [group, field, size] of groups) {
     const q = query(collectionGroup(db, group), where(field, "==", uid), limit(size));
     for (;;) {
       const snap = await getDocs(q);

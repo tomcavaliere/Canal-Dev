@@ -30,6 +30,11 @@ function confirmElement() {
 
 // Résout true si la personne confirme, false si elle annule (bouton, Échap).
 // `cancel: false` : simple information, avec un seul bouton.
+/**
+ * @param {string} message
+ * @param {{ ok?: string, danger?: boolean, cancel?: boolean }} [options]
+ * @returns {Promise<boolean>}
+ */
 export function confirmDialog(message, { ok = "Confirmer", danger = false, cancel = true } = {}) {
   const d = confirmElement();
   if (d.open) d.close();
@@ -65,6 +70,10 @@ function toastBox() {
 }
 
 // Message bref en bas de l'écran, qui disparaît seul (les erreurs restent plus longtemps).
+/**
+ * @param {string} message
+ * @param {{ error?: boolean, timeout?: number }} [options] durée d'affichage en millisecondes
+ */
 export function toast(message, { error = false, timeout = error ? 10000 : 5000 } = {}) {
   const el = document.createElement("div");
   el.className = "toast" + (error ? " error" : "");

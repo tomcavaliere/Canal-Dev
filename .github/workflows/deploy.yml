@@ -26,6 +26,10 @@ jobs:
       - run: npm ci
       - name: Syntaxe des scripts du site
         run: npm run check
+      - name: Lint (ESLint)
+        run: npm run lint
+      - name: Vérification des types (tsc, JSDoc)
+        run: npm run typecheck
       - name: Tests des règles Firestore (émulateur)
         run: npm test
 

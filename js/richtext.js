@@ -7,6 +7,10 @@
 const FENCE_RE = /```(?:[^\n`]*\n)?([\s\S]*?)```/g; // la 1re ligne peut nommer un langage (ignoré)
 const INLINE_RE = /`([^`\n]+)`|\bhttps?:\/\/[^\s<>"'`]+/gi;
 
+/**
+ * @param {string} text
+ * @returns {DocumentFragment}
+ */
 export function renderRichText(text) {
   const frag = document.createDocumentFragment();
   let last = 0;

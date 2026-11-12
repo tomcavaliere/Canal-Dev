@@ -57,6 +57,10 @@ export function watchNames(uids) {
 }
 
 // Nom de l'annuaire, null s'il n'y figure pas, undefined tant qu'il n'est pas chargé.
+/**
+ * @param {string} uid
+ * @returns {string | null | undefined}
+ */
 export function nameOf(uid) {
   if (names.has(uid)) return names.get(uid);
   return loadedAll ? null : undefined;
@@ -78,6 +82,11 @@ export function isNameTaken(name, uid) {
 // Nom à afficher pour un auteur. `claimed` est le nom qu'il a lui-même enregistré (non fiable) :
 // utilisé tant que l'annuaire n'est pas chargé, puis marqué « non vérifié » s'il n'y figure pas.
 // L'admin est reconnu à son UID (badge « Admin ») : son nom n'a pas besoin de cette marque.
+/**
+ * @param {string} uid
+ * @param {string} [claimed] nom saisi par l'auteur (non fiable)
+ * @returns {{ name: string, unverified: boolean }}
+ */
 export function displayName(uid, claimed) {
   const n = nameOf(uid);
   if (typeof n === "string") return { name: n, unverified: false };
@@ -85,6 +94,11 @@ export function displayName(uid, claimed) {
 }
 
 // Variante texte (notifications, citations, « Vu par … », textes alternatifs).
+/**
+ * @param {string} uid
+ * @param {string} [claimed]
+ * @returns {string}
+ */
 export function displayText(uid, claimed) {
   const { name, unverified } = displayName(uid, claimed);
   return unverified ? `${name} (non vérifié)` : name;

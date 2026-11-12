@@ -5,6 +5,8 @@
   "description": "Outils de développement de Canal Dev. Le site n'a pas d'étape de build : ces dépendances ne servent qu'aux tests et au déploiement.",
   "scripts": {
     "check": "for f in js/*.js js/sdk/*.js sw.js; do node --check \"$f\" || exit 1; done",
+    "lint": "eslint .",
+    "typecheck": "tsc -p jsconfig.json",
     "test": "sh scripts/test-rules.sh",
     "deploy": "firebase deploy --only hosting,firestore --project canal-dev-c18d7"
   },
@@ -12,8 +14,12 @@
     "node": ">=24.12.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@firebase/rules-unit-testing": "^6.0.0",
+    "eslint": "^9.39.5",
     "firebase": "^13.3.0",
-    "firebase-tools": "^15.36.0"
+    "firebase-tools": "^15.36.0",
+    "globals": "^17.14.0",
+    "typescript": "^5.9.3"
   }
 }

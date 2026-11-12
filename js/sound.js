@@ -12,7 +12,7 @@ let ctx = null;
 function unlock() {
   if (!enabled) return;
   try {
-    ctx ??= new (window.AudioContext || window.webkitAudioContext)();
+    ctx ??= new (window.AudioContext || /** @type {any} */ (window).webkitAudioContext)();
     if (ctx.state === "suspended") ctx.resume();
   } catch { /* audio indisponible */ }
 }

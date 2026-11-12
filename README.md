@@ -26,7 +26,7 @@ icons/                  icônes de l'application (icon.svg est la source des PNG
 css/style.css           styles (clair/sombre, responsive)
 js/firebase-config.js   config Firebase + ADMIN_UID  ← à remplir
 js/firebase.js          initialisation Firebase
-js/sdk/                 SDK Firebase chargé depuis gstatic (seul endroit où figure sa version)
+js/sdk/                 SDK Firebase chargé depuis gstatic (seul endroit où figure sa version) + types pour tsc
 js/app.js               point d'entrée : connexion, session, conversations, projets
 js/state.js             état partagé de la session
 js/sidebar.js           barre latérale (conversations par projet, tri par activité)
@@ -50,7 +50,9 @@ firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
 firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid et reads.uid, requis pour l'export/la suppression)
 firebase.json           hébergement (en-têtes HTTP, fichiers exclus), règles, index, émulateur des tests
 .firebaserc             projet Firebase par défaut
-package.json            outils de test et de déploiement (le site ne charge aucune de ces dépendances)
+package.json            outils de test, de qualité et de déploiement (le site ne charge aucune de ces dépendances)
+eslint.config.js        règles ESLint
+jsconfig.json           vérification des types par tsc (JSDoc)
 .github/workflows/      tests à chaque push, déploiement automatique depuis main
 scripts/test-rules.sh   lance l'émulateur Firestore et les tests
 tests/rules.test.mjs    tests des règles de sécurité
@@ -131,6 +133,14 @@ python3 -m http.server 8000
 # puis http://localhost:8000
 ```
 Les modules ES ne fonctionnent pas en ouvrant `index.html` directement (`file://`) : il faut un serveur.
+
+## Qualité du code
+```bash
+npm run lint        # ESLint (eslint.config.js)
+npm run typecheck   # tsc vérifie les types à partir de la JSDoc (jsconfig.json), sans rien compiler
+```
+Les deux tournent dans la CI avant les tests. L'éditeur (VS Code) lit `jsconfig.json` et signale les mêmes erreurs.
+Les fichiers `js/sdk/*.d.ts` donnent à `tsc` les types du SDK Firebase installé par npm (même version que gstatic).
 
 ## Tests des règles de sécurité
 Toute la sécurité repose sur [firestore.rules](firestore.rules) : toute modification des règles doit passer les tests,

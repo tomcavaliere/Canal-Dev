@@ -39,6 +39,7 @@ export async function toggleNotifications() {
 // Service worker (sw.js) : installation de l'application et notifications sur Android.
 // Pas sur l'ancienne adresse GitHub Pages, qui redirige aussitôt.
 let registration = Promise.resolve(null);
+/** @param {(convId: string) => void} onOpenConversation */
 export function registerServiceWorker(onOpenConversation) {
   if (!("serviceWorker" in navigator) || location.hostname.endsWith("github.io")) return;
   registration = navigator.serviceWorker.register("sw.js").catch((err) => {
@@ -55,6 +56,14 @@ export function registerServiceWorker(onOpenConversation) {
 
 // `tag` : une seule notification par conversation (la nouvelle remplace l'ancienne).
 // Le clic est géré par le service worker s'il est actif (ouvre la conversation `conv`), sinon ici.
+/**
+ * @param {object} n
+ * @param {string} n.title
+ * @param {string} n.body
+ * @param {string} n.tag
+ * @param {string} [n.conv] conversation à ouvrir au clic
+ * @param {() => void} [n.onClick] clic, quand le service worker n'est pas actif
+ */
 export async function showNotification({ title, body, tag, conv, onClick }) {
   if (!enabled()) return;
   const options = { body, tag, lang: "fr", icon: "icons/icon-192.png", data: { conv } };

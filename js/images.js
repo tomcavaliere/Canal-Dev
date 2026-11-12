@@ -7,6 +7,10 @@ const MAX_INPUT_BYTES = 30 * 1024 * 1024;
 const SIDES = [1600, 1280, 1024, 800];
 const QUALITIES = [0.82, 0.7, 0.55];
 
+/**
+ * @param {File} file
+ * @returns {Promise<{ data: string, w: number, h: number }>} JPEG en data URL et dimensions
+ */
 export async function prepareImage(file) {
   if (!file?.type?.startsWith("image/")) throw new Error("Ce fichier n'est pas une image.");
   if (file.size > MAX_INPUT_BYTES) throw new Error("Image trop lourde (30 Mo maximum).");

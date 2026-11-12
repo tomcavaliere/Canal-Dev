@@ -16,7 +16,10 @@
       "**/.*",
       "**/node_modules/**",
       "tests/**",
-      "scripts/**"
+      "scripts/**",
+      "jsconfig.json",
+      "eslint.config.js",
+      "**/*.d.ts"
     ],
     "headers": [
       {

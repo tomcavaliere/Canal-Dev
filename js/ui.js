@@ -1,6 +1,11 @@
 // Petits utilitaires d'affichage partagés par tous les modules.
 
-// Élément de la page par son identifiant.
+/**
+ * Élément de la page par son identifiant. Typé `any` : selon l'identifiant, c'est un champ,
+ * un dialogue, un bouton… (le vérificateur de types ne peut pas le savoir).
+ * @param {string} id
+ * @returns {any}
+ */
 export const $ = (id) => document.getElementById(id);
 
 // Initiales à partir d'un nom (ou d'une adresse email).
