@@ -8,7 +8,7 @@ import { db } from "./firebase.js";
 import { displayText } from "./names.js";
 import { showNotification } from "./notify.js";
 import { playMessageSound } from "./sound.js";
-import { $ } from "./ui.js";
+import { $, announce } from "./ui.js";
 import { selectConversation } from "./app.js";
 import { excerpt } from "./messages.js";
 import { syncMyRead } from "./receipts.js";
@@ -61,10 +61,16 @@ export function syncMessageWatchers() {
 
 function onIncomingMessage(convId, m) {
   playMessageSound();
-  if (isViewing(convId)) return;
+  const who = displayText(m.authorUid, m.authorName);
   const c = state.conversations.get(convId);
+  // Seuls les messages qui arrivent sont annoncés (pas le chargement d'une conversation).
+  if (isViewing(convId)) {
+    announce(`${who} : ${excerpt(m)}`);
+    return;
+  }
+  announce(`Nouveau message de ${who} dans « ${c?.title || "une conversation"} »`);
   showNotification({
-    title: `${displayText(m.authorUid, m.authorName)} · ${c?.title || "Canal Dev"}`,
+    title: `${who} · ${c?.title || "Canal Dev"}`,
     body: excerpt(m),
     tag: convId,
     conv: convId,
@@ -192,6 +198,7 @@ export function renderUnreadTotal() {
   for (const n of state.unread.values()) total += n;
   document.title = total ? `(${formatCount(total)}) Canal Dev` : "Canal Dev";
   $("btn-back").textContent = total ? `← ${formatCount(total)}` : "←";
+  $("btn-back").setAttribute("aria-label", "Retour aux conversations" + (total ? ` (${unreadLabel(total)})` : ""));
   try {
     if (total) navigator.setAppBadge?.(total)?.catch(() => {});
     else navigator.clearAppBadge?.()?.catch(() => {});

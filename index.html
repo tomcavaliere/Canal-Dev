@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://www.gstatic.com; frame-src https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="no-referrer">
   <title>Canal Dev</title>
@@ -112,7 +112,8 @@
           <span id="search-count" class="muted small" role="status"></span>
           <button id="btn-search-close" type="button" class="btn small">Fermer</button>
         </div>
-        <ol id="messages" class="messages"></ol>
+        <ol id="messages" class="messages" aria-label="Messages de la conversation" tabindex="-1"></ol>
+        <p id="announcer" class="visually-hidden" role="status" aria-live="polite"></p>
         <div id="reply-preview" class="reply-preview" hidden>
           <div class="reply-info small">
             <p>Réponse à <strong id="reply-author"></strong></p>

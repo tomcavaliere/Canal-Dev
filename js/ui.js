@@ -8,6 +8,18 @@
  */
 export const $ = (id) => document.getElementById(id);
 
+/**
+ * Fait lire un texte par les lecteurs d'écran (zone #announcer, invisible). Le contenu est
+ * vidé puis remis au tour suivant, pour qu'un même texte soit relu.
+ * @param {string} text
+ */
+export function announce(text) {
+  const el = $("announcer");
+  if (!el) return;
+  el.textContent = "";
+  setTimeout(() => { el.textContent = text; }, 50);
+}
+
 // Initiales à partir d'un nom (ou d'une adresse email).
 export function initials(name) {
   const base = String(name || "?").split("@")[0].trim();

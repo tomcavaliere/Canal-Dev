@@ -107,7 +107,8 @@ async function revealMessage(targetId) {
 function flashMessage(targetId) {
   const el = document.getElementById("msg-" + targetId);
   if (!el) return;
-  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "center" });
   el.classList.remove("flash");
   void el.offsetWidth; // relance l'animation
   el.classList.add("flash");
