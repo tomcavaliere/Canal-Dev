@@ -3,7 +3,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
-  orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField,
+  orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField, Timestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=5";
 import { initAccount } from "./account.js?v=5";
@@ -24,7 +24,9 @@ const state = {
   unsubProjects: null, // admin : écoute de toute la collection
   projectSubs: new Map(), // non-admin : id -> unsubscribe (un écouteur par projet visible)
   unsubMessages: null,
-  msgWatchers: new Map(), // id de conversation -> unsubscribe (écoute du dernier message)
+  msgWatchers: new Map(), // id de conversation -> unsubscribe (écoute des messages non lus)
+  recent: new Map(), // id de conversation -> [{ t, authorUid }] messages reçus depuis la dernière lecture
+  unread: new Map(), // id de conversation -> nombre de messages non lus
   msgById: new Map(), // messages chargés de la conversation ouverte : id -> data
   replyTo: null, // identifiant du message auquel on répond
   admin: null, // API renvoyée par admin.js
@@ -100,6 +102,7 @@ async function startSession(user) {
 
   state.user = user;
   state.isAdmin = user.uid === ADMIN_UID;
+  loadLastRead(user.uid);
   show("screen-loading");
 
   await upsertUser(user);
@@ -131,10 +134,12 @@ function teardown() {
   Object.assign(state, {
     user: null, isAdmin: false, conversations: new Map(), projects: new Map(), selectedId: null,
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
+    recent: new Map(), unread: new Map(),
     msgById: new Map(),
   });
   $("conv-list").replaceChildren();
   $("messages").replaceChildren();
+  renderUnreadTotal();
   $("chat-view").hidden = true;
   $("chat-empty").hidden = false;
 }
@@ -190,6 +195,7 @@ function listenConversations() {
     }
     if (!state.isAdmin) syncProjectListeners();
     syncMessageWatchers();
+    pruneLastRead();
     renderConversationList();
     if (state.selectedId) renderChatHeader();
     state.admin?.onConversationsChanged();
@@ -260,30 +266,41 @@ function toggleCollapsed(id) {
 
 /* ---------- Nouveaux messages : son et notifications ---------- */
 
-// Écoute du dernier message de chacune de ses conversations (une lecture par message reçu),
-// pour être prévenu même quand la conversation n'est pas ouverte.
+// Écoute des messages postérieurs à la dernière lecture de chacune de ses conversations
+// (une lecture Firestore par message reçu) : compteur de non-lus, son et notification,
+// même quand la conversation n'est pas ouverte.
 function syncMessageWatchers() {
   for (const [id, unsub] of state.msgWatchers) {
     if (state.conversations.has(id)) continue;
     unsub();
     state.msgWatchers.delete(id);
+    state.recent.delete(id);
+    state.unread.delete(id);
   }
   for (const id of state.conversations.keys()) {
     if (state.msgWatchers.has(id)) continue;
     let first = true;
     let latest = 0; // date du message le plus récent déjà vu
-    const q = query(collection(db, "conversations", id, "messages"), orderBy("createdAt"), limitToLast(1));
+    const since = Timestamp.fromMillis(lastReadOf(id));
+    const q = query(collection(db, "conversations", id, "messages"),
+      where("createdAt", ">", since), orderBy("createdAt"), limitToLast(100));
     state.msgWatchers.set(id, onSnapshot(q, (snap) => {
       for (const ch of snap.docChanges()) {
         if (ch.type !== "added") continue;
         const m = ch.doc.data({ serverTimestamps: "estimate" });
         const t = m.createdAt?.toMillis?.() ?? 0;
         // Ni au chargement, ni pour ses propres messages, ni pour un ancien message
-        // qui redevient le dernier après une suppression.
+        // qui redevient visible après une suppression.
         if (!first && t > latest && m.authorUid !== state.user.uid) onIncomingMessage(id, m);
         latest = Math.max(latest, t);
       }
       first = false;
+      state.recent.set(id, snap.docs.map((d) => {
+        const m = d.data({ serverTimestamps: "estimate" });
+        return { t: m.createdAt?.toMillis?.() ?? 0, authorUid: m.authorUid };
+      }));
+      if (isViewing(id)) markRead(id);
+      else updateUnread(id);
     }, (err) => console.error("Écoute des nouveaux messages impossible", err)));
   }
 }
@@ -305,18 +322,113 @@ function onIncomingMessage(convId, m) {
   });
 }
 
+/* ---------- Messages non lus ---------- */
+
+// Date du dernier message lu, par conversation, gardée dans ce navigateur (une clé par compte).
+// Une conversation inconnue est considérée comme lue jusqu'à maintenant la toute première fois
+// (pas de rafale de non-lus à la mise en service), puis entièrement non lue ensuite
+// (nouvelle conversation à laquelle on vient d'être ajouté).
+const read = { key: null, map: {} };
+
+function loadLastRead(uid) {
+  read.key = "canal-dev.lastRead." + uid;
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem(read.key)); } catch { /* ignoré */ }
+  read.map = stored && typeof stored === "object" ? stored : { "*": Date.now() };
+}
+
+function saveLastRead() {
+  try { localStorage.setItem(read.key, JSON.stringify(read.map)); } catch { /* ignoré */ }
+}
+
+function lastReadOf(id) {
+  if (!(id in read.map)) {
+    read.map[id] = read.map["*"] ?? 0;
+    saveLastRead();
+  }
+  return read.map[id];
+}
+
+// Oublie les conversations auxquelles on n'a plus accès.
+function pruneLastRead() {
+  let changed = false;
+  for (const id of Object.keys(read.map)) {
+    if (id !== "*" && !state.conversations.has(id)) { delete read.map[id]; changed = true; }
+  }
+  // Après le premier chargement, une conversation inconnue est entièrement non lue.
+  if (read.map["*"]) { read.map["*"] = 0; changed = true; }
+  if (changed) saveLastRead();
+}
+
+function updateUnread(id) {
+  const since = lastReadOf(id);
+  const n = (state.recent.get(id) || []).filter((m) => m.t > since && m.authorUid !== state.user.uid).length;
+  if ((state.unread.get(id) || 0) === n) return;
+  if (n) state.unread.set(id, n); else state.unread.delete(id);
+  renderConversationList();
+  renderUnreadTotal();
+}
+
+function markRead(id) {
+  const latest = Math.max(lastReadOf(id), ...(state.recent.get(id) || []).map((m) => m.t));
+  if (latest > read.map[id]) {
+    read.map[id] = latest;
+    saveLastRead();
+  }
+  updateUnread(id);
+}
+
+function markViewedRead() {
+  if (state.selectedId && isViewing(state.selectedId)) markRead(state.selectedId);
+}
+document.addEventListener("visibilitychange", markViewedRead);
+
+function formatCount(n) {
+  return n > 99 ? "99+" : String(n);
+}
+
+function unreadBadge(n, label) {
+  const b = document.createElement("span");
+  b.className = "unread";
+  b.textContent = formatCount(n);
+  b.title = label;
+  b.setAttribute("aria-label", label);
+  return b;
+}
+
+function unreadLabel(n) {
+  return `${n} message${n > 1 ? "s" : ""} non lu${n > 1 ? "s" : ""}`;
+}
+
+// Total dans le titre de l'onglet, le bouton retour (mobile) et l'icône de l'app installée.
+function renderUnreadTotal() {
+  let total = 0;
+  for (const n of state.unread.values()) total += n;
+  document.title = total ? `(${formatCount(total)}) Canal Dev` : "Canal Dev";
+  $("btn-back").textContent = total ? `← ${formatCount(total)}` : "←";
+  try {
+    if (total) navigator.setAppBadge?.(total)?.catch(() => {});
+    else navigator.clearAppBadge?.()?.catch(() => {});
+  } catch { /* non pris en charge */ }
+}
+
 /* ---------- Barre latérale ---------- */
 
 function conversationItem(id, c) {
   const li = document.createElement("li");
   const btn = document.createElement("button");
-  btn.className = "item" + (id === state.selectedId ? " active" : "");
+  const unread = state.unread.get(id) || 0;
+  btn.className = "item" + (id === state.selectedId ? " active" : "") + (unread ? " has-unread" : "");
   btn.addEventListener("click", () => selectConversation(id));
 
+  const row = document.createElement("span");
+  row.className = "item-row";
   const title = document.createElement("span");
   title.className = "item-title";
   title.textContent = c.title || "(sans titre)";
-  btn.append(title);
+  row.append(title);
+  if (unread) row.append(unreadBadge(unread, unreadLabel(unread)));
+  btn.append(row);
 
   if (state.isAdmin) {
     const sub = document.createElement("span");
@@ -375,6 +487,9 @@ function projectGroup(projectId, title, convs) {
   count.className = "group-count";
   count.textContent = String(convs.length);
   toggle.append(caret, name, count);
+  // Projet replié : ses non-lus restent visibles sur l'en-tête.
+  const groupUnread = isOpen ? 0 : convs.reduce((sum, [id]) => sum + (state.unread.get(id) || 0), 0);
+  if (groupUnread) toggle.append(unreadBadge(groupUnread, unreadLabel(groupUnread)));
   toggle.addEventListener("click", () => toggleCollapsed(projectId));
   head.append(toggle);
 
@@ -429,7 +544,10 @@ function renderConversationList() {
 function selectConversation(id) {
   if (!state.conversations.has(id)) return;
   $("screen-app").classList.add("show-chat");
-  if (state.selectedId === id) return;
+  if (state.selectedId === id) {
+    markViewedRead(); // mobile : retour sur la conversation déjà sélectionnée
+    return;
+  }
 
   state.unsubMessages?.();
   resetImages();
@@ -442,6 +560,7 @@ function selectConversation(id) {
   $("chat-admin-actions").hidden = !state.isAdmin;
   $("messages").replaceChildren();
   renderChatHeader();
+  if (state.recent.has(id)) markRead(id);
   renderConversationList();
 
   let first = true;
