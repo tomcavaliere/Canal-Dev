@@ -147,6 +147,23 @@ service cloud.firestore {
         allow delete: if isAdmin()
           || (canAccess(convId) && resource.data.authorUid == request.auth.uid);
       }
+
+      // ---------- Accusés de lecture (un par membre, identifiant = UID) ----------
+      // Date à laquelle le membre a vu pour la dernière fois la conversation, visible
+      // par les autres membres (« Vu par … » sous le dernier message envoyé).
+      match /reads/{uid} {
+        function validRead() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['uid', 'name', 'lastRead'])
+            && d.uid == uid
+            && d.lastRead == request.time
+            && d.name is string && d.name.size() <= 200;
+        }
+
+        allow read: if canAccess(convId);
+        allow create, update: if canAccess(convId) && request.auth.uid == uid && validRead();
+        allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      }
     }
 
     // ---------- Droits RGPD : accès / portabilité / effacement ----------
@@ -159,6 +176,10 @@ service cloud.firestore {
     match /{path=**}/images/{imgId} {
       allow read, delete: if isAdmin()
         || (signedIn() && resource.data.authorUid == request.auth.uid);
+    }
+    match /{path=**}/reads/{readId} {
+      allow read, delete: if isAdmin()
+        || (signedIn() && resource.data.uid == request.auth.uid);
     }
 
     // Tout le reste est interdit.
