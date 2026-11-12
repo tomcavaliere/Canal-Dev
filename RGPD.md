@@ -17,7 +17,7 @@ Dernière revue : 12 novembre 2026.
 | Données | Email, nom du compte Google (profil), nom affiché aux membres (annuaire `names/{uid}` tenu par l'admin), UID Firebase, date de création et de dernière connexion, contenu et date des messages, photos jointes aux messages (sans métadonnées), appartenance aux conversations, date de dernière lecture de chaque conversation (accusés de lecture). URL de la photo Google : enregistrée automatiquement par Firebase Authentication dans le compte de connexion, jamais copiée dans Firestore, utilisée ni affichée (incluse dans l'export). Données techniques (IP) chez les hébergeurs. Pas de donnée sensible (art. 9) demandée |
 | Personnes concernées indirectement | Personnes pouvant apparaître sur les photos partagées (voir § 10) |
 | Destinataires | Administrateur (tout) ; membres d'une conversation (nom affiché, messages, photos et date de dernière lecture de cette conversation) ; utilisateurs connectés connaissant l'UID d'une personne, en pratique ses co-membres (nom affiché seul) ; sous-traitants (§ 3) |
-| Transferts hors UE | Firebase Authentication et GitHub Pages (États-Unis) : EU-US Data Privacy Framework + clauses contractuelles types. Firestore : région UE |
+| Transferts hors UE | Firebase Authentication et Firebase Hosting (réseau mondial, dont États-Unis), GitHub Pages tant que l'ancienne adresse redirige : EU-US Data Privacy Framework + clauses contractuelles types. Firestore : région UE |
 | Durées | Compte/profil/nom affiché : jusqu'à suppression, max. 12 mois après la dernière connexion. Compte de connexion d'une adresse refusée (non Gmail) : supprimé immédiatement par l'application. Messages, photos et accusés de lecture : durée de vie de la conversation, ou jusqu'à suppression par l'auteur / suppression du compte |
 | Sécurité | § 5 |
 
@@ -37,7 +37,8 @@ Conclusion : l'intérêt légitime n'est pas supplanté par les droits des perso
 | Google (Firebase Authentication) | Comptes de connexion | États-Unis | DPF + CCT, *Firebase Data Processing and Security Terms* |
 | Google (Cloud Firestore) | Profils, conversations, messages, photos | UE | *Firebase Data Processing and Security Terms* |
 | Google (gstatic.com) | Distribution du SDK Firebase | Mondial | Idem |
-| GitHub Pages | Hébergement des fichiers statiques | États-Unis | DPF + CCT, *GitHub Data Protection Agreement* |
+| Google (Firebase Hosting) | Hébergement des fichiers statiques | Mondial (CDN), dont États-Unis | DPF + CCT, *Firebase Data Processing and Security Terms* |
+| GitHub Pages | Redirection de l'ancienne adresse vers Firebase Hosting (à fermer) | États-Unis | DPF + CCT, *GitHub Data Protection Agreement* |
 
 À faire une fois dans la console (voir [README.md](README.md#rgpd)) : accepter les conditions de traitement des données de Firebase.
 
@@ -60,8 +61,10 @@ Le compte administrateur ne peut pas se supprimer depuis l'application (son UID 
 - Authentification Google, email vérifié, domaine `@gmail.com` imposé côté serveur.
 - Contrôle d'accès dans [firestore.rules](firestore.rules) : lecture limitée aux membres, écriture des messages au seul nom de l'auteur, gestion des membres réservée à l'admin (un membre peut seulement se retirer lui-même), tout le reste interdit. Ces règles sont vérifiées par des tests automatiques (`npm test`, émulateur Firestore).
 - Identité : le nom affiché vient d'un annuaire (`names/{uid}`) que seul l'admin peut écrire, et les messages de l'admin portent un badge lié à son UID. Un membre ne peut donc pas se faire passer pour un autre ; le nom saisi par l'auteur (`authorName`) n'est plus affiché qu'en dernier recours, marqué « non vérifié ».
-- HTTPS (GitHub Pages, Google) ; chiffrement au repos par Google.
+- HTTPS avec HSTS (Firebase Hosting) ; chiffrement au repos par Google.
 - Content-Security-Policy dans les pages : scripts limités au site, gstatic.com et apis.google.com ; aucune image externe ; `referrer` désactivé.
+- En-têtes HTTP ([firebase.json](firebase.json)) : le site ne peut pas être affiché dans un cadre d'un autre site (`frame-ancestors 'none'`, `X-Frame-Options`), `nosniff`, caméra/micro/position désactivés.
+- Déploiement automatique ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) : les règles ne sont publiées que si leurs tests passent, en même temps que le code qui en dépend.
 - Pas de clé secrète dans le dépôt (la configuration Firebase web est publique par conception).
 - Pas d'outil de mesure d'audience ni de traceur.
 

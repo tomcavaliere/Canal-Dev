@@ -20,6 +20,7 @@ index.html              page unique
 css/style.css           styles (clair/sombre, responsive)
 js/firebase-config.js   config Firebase + ADMIN_UID  ← à remplir
 js/firebase.js          initialisation Firebase
+js/sdk/                 SDK Firebase chargé depuis gstatic (seul endroit où figure sa version)
 js/app.js               connexion, conversations, messages
 js/admin.js             création de conversations, gestion des membres (admin)
 js/account.js           « Mon compte » : export et suppression des données (RGPD)
@@ -131,7 +132,7 @@ Le détail est dans [RGPD.md](RGPD.md) (registre, base légale, procédures) et 
 - [ ] **Paramètres du projet → Confidentialité** (ou *Data privacy*) : accepter les *Data Processing Terms*.
 - [x] Vérifier que Firestore est bien en région UE (`eur3` ou `europe-*`) — `eur3`, vérifié le 12 novembre 2026.
 - [ ] **Paramètres du projet → Intégrations → Google Analytics** : désactivé (le site n'en utilise pas).
-- [ ] Déployer règles **et** index (`firebase deploy --only firestore`).
+- [ ] Déployer site, règles **et** index (`npm run deploy`, ou automatiquement par la CI).
 
 Au quotidien :
 - Un utilisateur exporte ou supprime ses données depuis **Mon compte**.
