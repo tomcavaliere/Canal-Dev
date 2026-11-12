@@ -44,6 +44,7 @@ const state = {
   loadingMore: false,
   revealId: null, // message cité à montrer dès qu'il sera chargé
   replyTo: null, // identifiant du message auquel on répond
+  editing: null, // { id, draft } : son message en cours de modification
   admin: null, // API renvoyée par admin.js
 };
 
@@ -183,7 +184,7 @@ function teardown() {
     unsubReads: null, reads: null, readWrite: 0, myReads: null, unsubMyReads: null,
     recent: new Map(), unread: new Map(),
     msgById: new Map(), msgDocs: null, pending: new Set(),
-    msgLimit: 0, hasMore: false, loadingMore: false, revealId: null,
+    msgLimit: 0, hasMore: false, loadingMore: false, revealId: null, editing: null,
   });
   $("conv-list").replaceChildren();
   $("messages").replaceChildren();
@@ -706,6 +707,7 @@ function selectConversation(id) {
   state.hasMore = false;
   state.loadingMore = false;
   state.revealId = null;
+  state.editing = null;
   state.selectedId = id;
   $("chat-empty").hidden = true;
   $("chat-view").hidden = false;
@@ -856,6 +858,7 @@ function closeConversation() {
   state.msgById = new Map();
   state.msgDocs = null;
   state.pending = new Set();
+  state.editing = null;
   state.selectedId = null;
   $("chat-view").hidden = true;
   $("chat-empty").hidden = false;
@@ -963,6 +966,9 @@ function renderMessages(docs, forceScroll) {
   const list = $("messages");
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
   const anchor = forceScroll || nearBottom ? null : scrollAnchor(list);
+  // Modification en cours : le curseur est remis en place après le nouveau rendu.
+  const editor = list.querySelector(".msg-edit textarea");
+  const caret = editor && document.activeElement === editor ? [editor.selectionStart, editor.selectionEnd] : null;
 
   state.msgById = new Map(docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
   // Messages écrits localement mais pas encore confirmés par le serveur (hors ligne, réseau lent).
@@ -970,6 +976,7 @@ function renderMessages(docs, forceScroll) {
   syncNames();
   // Le message auquel on répondait a été supprimé : on abandonne la réponse.
   if (state.replyTo && !state.msgById.has(state.replyTo)) clearReply();
+  if (state.editing && !state.msgById.has(state.editing.id)) state.editing = null;
 
   if (docs.length === 0) {
     const li = document.createElement("li");
@@ -983,6 +990,11 @@ function renderMessages(docs, forceScroll) {
   renderReceipt();
   if (forceScroll || nearBottom) list.scrollTop = list.scrollHeight;
   else restoreAnchor(list, anchor);
+  if (caret) {
+    const ta = list.querySelector(".msg-edit textarea");
+    ta?.focus({ preventScroll: true });
+    ta?.setSelectionRange(...caret);
+  }
   syncMyRead();
 }
 
@@ -1086,6 +1098,8 @@ function renderMessage(id, m) {
     time.title = fullFmt.format(date);
   }
   head.append(time);
+  const edited = m.editedAt?.toDate?.();
+  if (edited) head.append(tag("edited", "modifié", "Modifié le " + fullFmt.format(edited)));
 
   const actions = document.createElement("div");
   actions.className = "msg-actions";
@@ -1096,6 +1110,13 @@ function renderMessage(id, m) {
   actions.append(reply);
   head.append(actions);
 
+  if (mine) {
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Modifier";
+    edit.addEventListener("click", () => startEdit(id));
+    actions.append(edit);
+  }
   if (mine || state.isAdmin) {
     const del = document.createElement("button");
     del.className = "del";
@@ -1120,7 +1141,9 @@ function renderMessage(id, m) {
   bubble.append(head);
   if (m.replyTo) bubble.append(renderQuote(m.replyTo));
   if (m.image) bubble.append(renderImage(id, m));
-  if (m.text) {
+  if (state.editing?.id === id) {
+    bubble.append(renderEditor(id, m));
+  } else if (m.text) {
     const text = document.createElement("div");
     text.className = "msg-text";
     text.append(renderRichText(m.text));
@@ -1130,6 +1153,87 @@ function renderMessage(id, m) {
   if (mine) li.append(bubble);
   else li.append(avatar, bubble);
   return li;
+}
+
+/* ---------- Modification de ses messages ---------- */
+
+// Le brouillon est gardé dans `state.editing` : un nouveau rendu (message reçu, nom mis à jour)
+// recrée l'éditeur sans perdre la saisie.
+function startEdit(id) {
+  const m = state.msgById.get(id);
+  if (!m || m.authorUid !== state.user.uid) return;
+  state.editing = { id, draft: m.text || "" };
+  renderMessages(state.msgDocs, false);
+  const ta = $("messages").querySelector(".msg-edit textarea");
+  if (!ta) return;
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+function cancelEdit() {
+  state.editing = null;
+  renderMessages(state.msgDocs, false);
+}
+
+function renderEditor(id, m) {
+  const form = document.createElement("form");
+  form.className = "msg-edit";
+  const ta = document.createElement("textarea");
+  ta.maxLength = 4000;
+  ta.value = state.editing.draft;
+  ta.rows = Math.min(8, Math.max(2, ta.value.split("\n").length));
+  ta.setAttribute("aria-label", "Modifier le message");
+  ta.addEventListener("input", () => { if (state.editing) state.editing.draft = ta.value; });
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+    } else if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  const row = document.createElement("div");
+  row.className = "row end";
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "btn small";
+  cancel.textContent = "Annuler";
+  cancel.addEventListener("click", cancelEdit);
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.className = "btn small primary";
+  save.textContent = "Enregistrer";
+  row.append(cancel, save);
+  form.append(ta, row);
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    saveEdit(id, m);
+  });
+  return form;
+}
+
+function saveEdit(id, m) {
+  const text = (state.editing?.draft ?? "").trim();
+  if (!text && !m.image) {
+    toast("Un message sans photo ne peut pas être vide : supprime-le plutôt.", { error: true });
+    return;
+  }
+  const convId = state.selectedId;
+  state.editing = null;
+  if (text !== (m.text || "")) {
+    // Comme pour l'envoi : affiché aussitôt, confirmé par le serveur ensuite.
+    updateDoc(doc(db, "conversations", convId, "messages", id), { text, editedAt: serverTimestamp() })
+      .catch((err) => {
+        console.error(err);
+        toast("Modification impossible : " + err.message, { error: true });
+        if (state.selectedId === convId && !state.editing && state.msgById.has(id)) {
+          state.editing = { id, draft: text };
+          renderMessages(state.msgDocs, false);
+        }
+      });
+  }
+  renderMessages(state.msgDocs, false);
 }
 
 /* ---------- Réponses ---------- */

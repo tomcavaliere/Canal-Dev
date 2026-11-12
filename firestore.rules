@@ -146,9 +146,19 @@ service cloud.firestore {
             && d.authorName.size() <= 200;
         }
 
+        // Modification par son auteur : le texte seul, daté par le serveur (mention « modifié »).
+        function validEdit() {
+          let d = request.resource.data;
+          return d.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+            && d.editedAt == request.time
+            && d.text is string
+            && d.text.size() <= 4000
+            && (d.text.size() > 0 || 'image' in d);
+        }
+
         allow read: if canAccess(convId);
         allow create: if canAccess(convId) && validMessage();
-        allow update: if false;
+        allow update: if canAccess(convId) && resource.data.authorUid == request.auth.uid && validEdit();
         allow delete: if isAdmin()
           || (canAccess(convId) && resource.data.authorUid == request.auth.uid);
       }

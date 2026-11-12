@@ -173,8 +173,36 @@ describe("Messages", () => {
     assertFails(setDoc(newMessageRef(alice()), message("alice", { text: "x".repeat(4001) }))));
   it("un champ inconnu est refusé", () =>
     assertFails(setDoc(newMessageRef(alice()), message("alice", { pinned: true }))));
-  it("un message ne peut pas être modifié", () =>
-    assertFails(updateDoc(doc(alice(), "conversations/c1/messages/m1"), { text: "modifié" })));
+  const edit = (text, extra = {}) => ({ text, editedAt: serverTimestamp(), ...extra });
+  it("l'auteur modifie le texte de son message", () =>
+    assertSucceeds(updateDoc(doc(alice(), "conversations/c1/messages/m1"), edit("Bonjour à tous"))));
+  it("une modification sans date serveur est refusée", async () => {
+    await assertFails(updateDoc(doc(alice(), "conversations/c1/messages/m1"), { text: "modifié" }));
+    await assertFails(updateDoc(doc(alice(), "conversations/c1/messages/m1"), edit("x", { editedAt: Timestamp.now() })));
+  });
+  it("un membre ne modifie pas le message d'un autre, l'admin non plus", async () => {
+    await assertFails(updateDoc(doc(alice(), "conversations/c1/messages/m2"), edit("piraté")));
+    await assertFails(updateDoc(doc(admin(), "conversations/c1/messages/m2"), edit("piraté")));
+  });
+  it("seul le texte peut changer (pas l'auteur, le nom, la date ni la réponse)", async () => {
+    const ref = doc(alice(), "conversations/c1/messages/m1");
+    await assertFails(updateDoc(ref, edit("x", { authorUid: "carol" })));
+    await assertFails(updateDoc(ref, edit("x", { authorName: "Admin" })));
+    await assertFails(updateDoc(ref, edit("x", { createdAt: serverTimestamp() })));
+    await assertFails(updateDoc(ref, edit("x", { replyTo: "m2" })));
+  });
+  it("un texte vidé est refusé, sauf pour un message avec photo", async () => {
+    const db = alice();
+    await assertFails(updateDoc(doc(db, "conversations/c1/messages/m1"), edit("")));
+    const ref = newMessageRef(db);
+    const batch = writeBatch(db);
+    batch.set(ref, message("alice", { image: { w: 10, h: 10 } }));
+    batch.set(doc(db, `conversations/c1/images/${ref.id}`), { data: JPEG, authorUid: "alice", createdAt: serverTimestamp() });
+    await batch.commit();
+    await assertSucceeds(updateDoc(ref, edit("")));
+  });
+  it("un ancien membre ne modifie plus ses messages", () =>
+    assertFails(updateDoc(doc(dave(), "conversations/c1/messages/m3"), edit("tardif"))));
   it("une réponse à un message existant est acceptée", () =>
     assertSucceeds(setDoc(newMessageRef(alice()), message("alice", { replyTo: "m2" }))));
   it("une réponse à un message inexistant est refusée", () =>

@@ -293,6 +293,9 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .reply-info p { margin: 0; }
 .reply-excerpt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-edit { display: flex; flex-direction: column; gap: .4rem; margin-top: .3rem; min-width: min(420px, 70vw); }
+.msg-edit textarea { resize: vertical; }
+.msg-head .edited { font-style: italic; cursor: help; }
 .msg-text a { overflow-wrap: anywhere; }
 .msg-text code { word-break: normal; overflow-wrap: anywhere; }
 .msg-text pre {
