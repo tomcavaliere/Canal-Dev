@@ -207,12 +207,14 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 
 .user-row { display: flex; align-items: center; gap: .5rem; padding: .4rem 1rem; }
 .user-row .avatar { width: 24px; height: 24px; font-size: .62rem; }
-.del-user { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: .8rem; }
+.del-user, .edit-user { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: .8rem; }
 .del-user:hover { color: var(--danger); }
+.edit-user:hover { color: var(--accent); }
 .sidebar-foot { padding: 1.5rem 1rem 0; margin: 0; }
 .user-row .info { min-width: 0; flex: 1; }
 .user-row .info span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tag-pending { font-size: .7rem; color: var(--danger); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.tag-pending, .unverified { font-size: .7rem; color: var(--danger); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.row.wrap-end { flex-wrap: wrap; }
 
 /* Chat */
 .chat { grid-area: chat; min-height: 0; display: flex; flex-direction: column; }
@@ -258,6 +260,8 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 @keyframes flash { from { box-shadow: 0 0 0 3px var(--accent); } to { box-shadow: 0 0 0 3px transparent; } }
 .msg-head { display: flex; flex-wrap: wrap; gap: .1rem .5rem; align-items: baseline; font-size: .8rem; color: var(--muted); }
 .msg-head strong { color: var(--text); font-size: .85rem; }
+.msg-head .badge { font-size: .68rem; padding: 0 6px; }
+.msg-head .unverified { cursor: help; }
 .msg-actions { margin-left: auto; padding-left: .5rem; display: flex; gap: .6rem; }
 .msg-actions button { background: none; border: none; color: var(--muted); cursor: pointer; font: inherit; font-size: .8rem; padding: 0; }
 .msg-actions button:hover { color: var(--accent); }

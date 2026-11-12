@@ -181,6 +181,27 @@
     </form>
   </dialog>
 
+  <!-- Dialogue : nom affiché d'un utilisateur (admin) -->
+  <dialog id="dlg-user">
+    <form id="form-user" method="dialog" class="stack">
+      <h2>Nom affiché</h2>
+      <p class="muted small"><span id="user-dlg-email"></span><br>
+        Nom Google : <span id="user-dlg-google"></span></p>
+      <label>Nom visible par les membres
+        <input id="user-dlg-name" maxlength="200" required autocomplete="off">
+      </label>
+      <p id="user-dlg-error" class="error small" role="alert" hidden></p>
+      <p class="muted small">C'est le seul nom affiché à côté de ses messages. Le nom Google n'est pas
+        repris automatiquement : la personne peut le changer elle-même.</p>
+      <div class="row end wrap-end">
+        <button id="btn-user-google" type="button" class="btn">Reprendre le nom Google</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button type="submit" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Dialogue : membres (admin) -->
   <dialog id="dlg-members">
     <div class="stack">

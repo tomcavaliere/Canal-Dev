@@ -1,12 +1,13 @@
 // Fonctions réservées à l'administrateur. Chargé uniquement si l'UID connecté
 // correspond à ADMIN_UID — mais la vraie protection est dans firestore.rules.
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, limit,
+  collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, limit,
   onSnapshot, arrayUnion, arrayRemove, serverTimestamp, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db, ADMIN_UID } from "./firebase.js?v=8";
 import { purgeUserData } from "./account.js?v=8";
 import { avatarEl } from "./ui.js?v=8";
+import { nameOf, namesLoaded, isNameTaken } from "./names.js?v=8";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -23,12 +24,95 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   };
 
   /* --- Utilisateurs inscrits --- */
+  let usersLoaded = false;
   const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
     users = new Map(snap.docs.map((d) => [d.id, d.data()]));
+    usersLoaded = true;
     renderUsers();
     if ($("dlg-members").open) renderMembers();
+    ensureNames();
   }, (err) => console.error("Lecture des utilisateurs impossible", err));
   cleanups.push(unsubUsers);
+
+  /* --- Annuaire des noms (names/{uid}) --- */
+  // Chaque membre (et l'admin) doit y figurer, sinon ses messages sont marqués « non vérifié ».
+  // L'entrée est créée une seule fois à partir du nom Google ; ensuite seul l'admin la modifie,
+  // car la personne peut changer elle-même son nom Google (et donc celui de son profil).
+  const naming = new Set(); // UID en cours d'écriture, ou en échec (pas de nouvel essai)
+
+  // Nom par défaut : le nom Google, sans jamais exposer l'adresse email aux membres.
+  function googleName(u) {
+    const n = (u?.displayName || "").trim();
+    return n && !n.includes("@") ? n.slice(0, 190) : "";
+  }
+
+  // Deux personnes ne doivent pas apparaître sous le même nom : « Nom (2) », « Nom (3) »…
+  function uniqueName(base, uid, reserved = new Set()) {
+    const taken = (n) => isNameTaken(n, uid) || reserved.has(n.toLocaleLowerCase("fr"));
+    let name = base;
+    for (let i = 2; taken(name); i++) name = `${base} (${i})`;
+    return name;
+  }
+
+  function nameEntry(name) {
+    return { name, updatedAt: serverTimestamp() };
+  }
+
+  function ensureNames() {
+    if (!usersLoaded || !namesLoaded()) return;
+    const needed = new Set([ADMIN_UID]);
+    for (const c of getConversations().values()) for (const uid of c.members || []) needed.add(uid);
+    const reserved = new Set(); // noms attribués dans ce passage, pas encore revenus de l'annuaire
+    for (const uid of needed) {
+      if (nameOf(uid) != null || naming.has(uid) || !users.has(uid)) continue;
+      const name = uniqueName(googleName(users.get(uid)) || "Membre sans nom", uid, reserved);
+      reserved.add(name.toLocaleLowerCase("fr"));
+      naming.add(uid);
+      setDoc(doc(db, "names", uid), nameEntry(name))
+        .then(() => naming.delete(uid))
+        .catch((err) => console.error("Ajout à l'annuaire impossible", uid, err));
+    }
+  }
+
+  /* --- Nom affiché d'un utilisateur (rectification) --- */
+  const dlgUser = $("dlg-user");
+  let editingUid = null;
+
+  function openUserDialog(uid) {
+    const u = users.get(uid);
+    if (!u) return;
+    editingUid = uid;
+    $("user-dlg-email").textContent = u.email;
+    $("user-dlg-google").textContent = googleName(u) || "—";
+    $("btn-user-google").disabled = !googleName(u);
+    $("user-dlg-name").value = nameOf(uid) || googleName(u);
+    $("user-dlg-error").hidden = true;
+    dlgUser.showModal();
+  }
+  on($("btn-user-google"), "click", () => {
+    $("user-dlg-name").value = googleName(users.get(editingUid));
+  });
+  on($("form-user"), "submit", async (e) => {
+    e.preventDefault();
+    const name = $("user-dlg-name").value.trim();
+    if (!name || !editingUid) return;
+    if (isNameTaken(name, editingUid)) {
+      $("user-dlg-error").textContent = "Ce nom est déjà celui d'une autre personne.";
+      $("user-dlg-error").hidden = false;
+      return;
+    }
+    try {
+      await setDoc(doc(db, "names", editingUid), nameEntry(name));
+      dlgUser.close();
+    } catch (err) {
+      console.error(err);
+      alert("Enregistrement impossible : " + err.message);
+    }
+  });
+
+  function displayedName(uid, u) {
+    return nameOf(uid) || u.displayName || u.email;
+  }
 
   function accessCount(uid) {
     let n = 0;
@@ -45,11 +129,11 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   function userRow([uid, u], extra) {
     const wrap = document.createElement("div");
     wrap.className = "user-row";
-    const avatar = avatarEl(u.displayName || u.email);
+    const avatar = avatarEl(displayedName(uid, u));
     const info = document.createElement("div");
     info.className = "info";
     const name = document.createElement("span");
-    name.textContent = u.displayName || u.email;
+    name.textContent = displayedName(uid, u);
     const email = document.createElement("span");
     email.className = "muted small";
     email.textContent = u.email;
@@ -84,7 +168,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         old.title = "Durée de conservation dépassée : supprimer ce compte.";
         extras.unshift(old);
       }
-      extras.push(deleteUserButton(entry));
+      extras.push(editUserButton(entry), deleteUserButton(entry));
       li.append(userRow(entry, extras));
       return li;
     });
@@ -96,6 +180,17 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       items.push(li);
     }
     $("user-list").replaceChildren(...items);
+  }
+
+  function editUserButton([uid, u]) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "edit-user";
+    btn.textContent = "✎";
+    btn.title = "Modifier le nom affiché aux membres";
+    btn.setAttribute("aria-label", `Modifier le nom affiché de ${u.email}`);
+    btn.addEventListener("click", () => openUserDialog(uid));
+    return btn;
   }
 
   /* --- Suppression d'un utilisateur (conservation / droit à l'effacement) --- */
@@ -297,21 +392,31 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       cb.checked = members.has(uid);
       cb.addEventListener("change", async () => {
         cb.disabled = true;
+        // Nouveau membre absent de l'annuaire : son entrée est créée dans le même batch,
+        // pour que ses messages ne soient jamais marqués « non vérifié ».
+        const addName = cb.checked && namesLoaded() && nameOf(uid) == null && !naming.has(uid);
+        if (addName) naming.add(uid);
         try {
-          await updateDoc(doc(db, "conversations", conv.id), {
+          const batch = writeBatch(db);
+          batch.update(doc(db, "conversations", conv.id), {
             members: cb.checked ? arrayUnion(uid) : arrayRemove(uid),
             updatedAt: serverTimestamp(),
           });
+          if (addName) {
+            batch.set(doc(db, "names", uid), nameEntry(uniqueName(googleName(u) || "Membre sans nom", uid)));
+          }
+          await batch.commit();
         } catch (err) {
           console.error(err);
           cb.checked = !cb.checked;
           alert("Modification impossible : " + err.message);
         } finally {
+          if (addName) naming.delete(uid);
           cb.disabled = false;
         }
       });
       const text = document.createElement("span");
-      text.textContent = `${u.displayName || u.email} — ${u.email}`;
+      text.textContent = `${displayedName(uid, u)} — ${u.email}`;
       label.append(cb, text);
       li.append(label);
       return li;
@@ -363,6 +468,12 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       if (dlgNew.open && editingConvId && !getConversations().has(editingConvId)) dlgNew.close();
       renderUsers();
       if (dlgMembers.open) renderMembers();
+      ensureNames(); // nouveau membre : entrée dans l'annuaire
+    },
+    onNamesChanged() {
+      renderUsers();
+      if (dlgMembers.open) renderMembers();
+      ensureNames();
     },
     teardown() {
       cleanups.forEach((fn) => fn());
@@ -370,6 +481,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       if (dlgMembers.open) dlgMembers.close();
       if (dlgProject.open) dlgProject.close();
       if (dlgMove.open) dlgMove.close();
+      if (dlgUser.open) dlgUser.close();
       $("user-list").replaceChildren();
     },
   };

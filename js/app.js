@@ -11,6 +11,7 @@ import { avatarEl, initials } from "./ui.js?v=8";
 import { prepareImage } from "./images.js?v=8";
 import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js?v=8";
 import { notificationState, toggleNotifications, showNotification } from "./notify.js?v=8";
+import { startNames, stopNames, watchNames, displayName, displayText } from "./names.js?v=8";
 
 const $ = (id) => document.getElementById(id);
 
@@ -31,6 +32,7 @@ const state = {
   recent: new Map(), // id de conversation -> [{ t, authorUid }] messages reçus depuis la dernière lecture
   unread: new Map(), // id de conversation -> nombre de messages non lus
   msgById: new Map(), // messages chargés de la conversation ouverte : id -> data
+  msgDocs: null, // derniers documents affichés (pour réafficher quand l'annuaire des noms change)
   replyTo: null, // identifiant du message auquel on répond
   admin: null, // API renvoyée par admin.js
 };
@@ -106,6 +108,7 @@ async function startSession(user) {
   state.user = user;
   state.isAdmin = user.uid === ADMIN_UID;
   loadLastRead(user.uid);
+  startNames({ isAdmin: state.isAdmin, onChange: scheduleNamesRender });
   show("screen-loading");
 
   await upsertUser(user);
@@ -132,6 +135,7 @@ function teardown() {
   state.unsubReads?.();
   state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
+  stopNames();
   resetImages();
   clearAttachment();
   clearReply();
@@ -140,7 +144,7 @@ function teardown() {
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
     unsubReads: null, reads: null, readWrite: 0,
     recent: new Map(), unread: new Map(),
-    msgById: new Map(),
+    msgById: new Map(), msgDocs: null,
   });
   $("conv-list").replaceChildren();
   $("messages").replaceChildren();
@@ -199,6 +203,7 @@ function listenConversations() {
       selectConversation(sortedConversations()[0][0]);
     }
     if (!state.isAdmin) syncProjectListeners();
+    syncNames();
     syncMessageWatchers();
     pruneLastRead();
     renderConversationList();
@@ -256,6 +261,32 @@ function syncProjectListeners() {
 // Projet réel d'une conversation, ou null si elle n'en a pas (ou s'il a disparu).
 function projectOf(c) {
   return c.projectId && state.projects.get(c.projectId) ? c.projectId : null;
+}
+
+/* ---------- Annuaire des noms ---------- */
+
+// Noms à suivre : membres de ses conversations, l'admin, et les auteurs des messages
+// affichés (y compris d'anciens membres). L'admin, lui, écoute tout l'annuaire.
+function syncNames() {
+  if (state.isAdmin || !state.user) return;
+  const uids = new Set([ADMIN_UID]);
+  for (const c of state.conversations.values()) for (const uid of c.members || []) uids.add(uid);
+  for (const m of state.msgById.values()) uids.add(m.authorUid);
+  watchNames(uids);
+}
+
+// Les noms arrivent après les messages : on réaffiche quand l'annuaire change
+// (une seule fois par image, même si plusieurs noms arrivent ensemble).
+let namesFrame = 0;
+function scheduleNamesRender() {
+  if (namesFrame) return;
+  namesFrame = requestAnimationFrame(() => {
+    namesFrame = 0;
+    if (state.selectedId && state.msgDocs) renderMessages(state.msgDocs, false);
+    const replied = state.replyTo && state.msgById.get(state.replyTo);
+    if (replied) $("reply-author").textContent = displayText(replied.authorUid, replied.authorName);
+    state.admin?.onNamesChanged();
+  });
 }
 
 // Projets repliés dans la barre latérale (préférence locale, sans importance si perdue).
@@ -320,7 +351,7 @@ function onIncomingMessage(convId, m) {
   if (isViewing(convId)) return;
   const c = state.conversations.get(convId);
   showNotification({
-    title: `${m.authorName || "?"} · ${c?.title || "Canal Dev"}`,
+    title: `${displayText(m.authorUid, m.authorName)} · ${c?.title || "Canal Dev"}`,
     body: excerpt(m),
     tag: convId,
     onClick: () => selectConversation(convId),
@@ -561,6 +592,7 @@ function selectConversation(id) {
   clearAttachment();
   clearReply();
   state.msgById = new Map();
+  state.msgDocs = null;
   state.reads = null;
   state.readWrite = 0;
   state.selectedId = id;
@@ -575,6 +607,7 @@ function selectConversation(id) {
   let first = true;
   const q = query(collection(db, "conversations", id, "messages"), orderBy("createdAt"), limitToLast(300));
   state.unsubMessages = onSnapshot(q, (snap) => {
+    state.msgDocs = snap.docs;
     renderMessages(snap.docs, first);
     first = false;
   }, (err) => {
@@ -600,6 +633,7 @@ function closeConversation() {
   clearAttachment();
   clearReply();
   state.msgById = new Map();
+  state.msgDocs = null;
   state.selectedId = null;
   $("chat-view").hidden = true;
   $("chat-empty").hidden = false;
@@ -666,6 +700,7 @@ function renderMessages(docs, forceScroll) {
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
 
   state.msgById = new Map(docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+  syncNames();
   // Le message auquel on répondait a été supprimé : on abandonne la réponse.
   if (state.replyTo && !state.msgById.has(state.replyTo)) clearReply();
 
@@ -709,7 +744,7 @@ function renderReceipt() {
   const participants = new Set([...(c?.members || []), ADMIN_UID]); // anciens membres exclus
   const names = [...state.reads]
     .filter(([uid, r]) => uid !== state.user.uid && participants.has(uid) && r.t >= t)
-    .map(([, r]) => r.name || "?");
+    .map(([uid, r]) => displayText(uid, r.name)); // r.name : anciens accusés uniquement
 
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
   const p = document.createElement("p");
@@ -731,11 +766,19 @@ function syncMyRead() {
   const mine = state.reads.get(state.user.uid)?.t ?? 0;
   if (!latest || latest <= mine || latest <= state.readWrite) return;
   state.readWrite = latest;
+  // Pas de nom : les autres membres le lisent dans l'annuaire.
   setDoc(doc(db, "conversations", id, "reads", state.user.uid), {
     uid: state.user.uid,
-    name: state.user.displayName || state.user.email,
     lastRead: serverTimestamp(),
   }).catch((err) => console.error("Accusé de lecture impossible", err)); // réessayé au prochain message
+}
+
+function tag(className, text, title) {
+  const s = document.createElement("span");
+  s.className = className;
+  s.textContent = text;
+  s.title = title;
+  return s;
 }
 
 function renderMessage(id, m) {
@@ -744,7 +787,9 @@ function renderMessage(id, m) {
   li.className = "msg" + (mine ? " mine" : "");
   li.id = "msg-" + id;
 
-  const avatar = avatarEl(m.authorName);
+  // Nom tiré de l'annuaire (authorName n'est pas fiable : saisi par l'auteur).
+  const who = displayName(m.authorUid, m.authorName);
+  const avatar = avatarEl(who.name);
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
@@ -752,14 +797,21 @@ function renderMessage(id, m) {
   const head = document.createElement("div");
   head.className = "msg-head";
   const name = document.createElement("strong");
-  name.textContent = m.authorName || "?";
+  name.textContent = who.name;
+  head.append(name);
+  // L'UID de l'auteur est garanti par les règles : ce badge ne peut pas être imité.
+  if (m.authorUid === ADMIN_UID) head.append(tag("badge", "Admin", "Administrateur du canal"));
+  if (who.unverified) {
+    head.append(tag("unverified", "non vérifié",
+      "Ce nom ne figure pas dans l'annuaire tenu par l'administrateur : il a été saisi par l'auteur du message."));
+  }
   const time = document.createElement("time");
   const date = m.createdAt?.toDate?.();
   if (date) {
     time.dateTime = date.toISOString();
     time.textContent = timeFmt.format(date);
   }
-  head.append(name, time);
+  head.append(time);
 
   const actions = document.createElement("div");
   actions.className = "msg-actions";
@@ -827,7 +879,7 @@ function renderQuote(targetId) {
     return q;
   }
   const who = document.createElement("strong");
-  who.textContent = target.authorName || "?";
+  who.textContent = displayText(target.authorUid, target.authorName);
   const txt = document.createElement("span");
   txt.textContent = excerpt(target);
   q.append(who, txt);
@@ -847,7 +899,7 @@ function startReply(id) {
   const m = state.msgById.get(id);
   if (!m) return;
   state.replyTo = id;
-  $("reply-author").textContent = m.authorName || "?";
+  $("reply-author").textContent = displayText(m.authorUid, m.authorName);
   $("reply-excerpt").textContent = excerpt(m);
   $("reply-preview").hidden = false;
   $("msg-input").focus();
@@ -910,10 +962,11 @@ function renderImage(id, m) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "msg-img-btn";
-  btn.setAttribute("aria-label", `Agrandir la photo envoyée par ${m.authorName || "?"}`);
+  const author = displayText(m.authorUid, m.authorName);
+  btn.setAttribute("aria-label", `Agrandir la photo envoyée par ${author}`);
   const img = document.createElement("img");
   img.className = "msg-img";
-  img.alt = `Photo envoyée par ${m.authorName || "?"}`;
+  img.alt = `Photo envoyée par ${author}`;
   img.width = m.image.w;
   img.height = m.image.h;
   img.dataset.id = id;

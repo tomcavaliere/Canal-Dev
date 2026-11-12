@@ -13,8 +13,8 @@ const $ = (id) => document.getElementById(id);
 
 /* ---------- Suppression des données d'un utilisateur ---------- */
 
-// Supprime tous les messages de `uid`, le retire de toutes les conversations
-// et supprime son profil. Utilisé par l'utilisateur lui-même et par l'admin.
+// Supprime tous les messages de `uid`, le retire de toutes les conversations,
+// supprime son nom de l'annuaire et son profil. Utilisé par l'utilisateur lui-même et par l'admin.
 // Le compte Firebase Authentication est traité séparément.
 export async function purgeUserData(uid) {
   // Photos, messages puis accusés de lecture. Les photos sont lues par petits lots (jusqu'à ~900 Ko chacune).
@@ -34,6 +34,7 @@ export async function purgeUserData(uid) {
     await updateDoc(c.ref, { members: arrayRemove(uid) });
   }
 
+  await deleteDoc(doc(db, "names", uid));
   await deleteDoc(doc(db, "users", uid));
 }
 
