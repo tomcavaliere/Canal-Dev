@@ -12,6 +12,7 @@ import { prepareImage } from "./images.js";
 import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js";
 import { notificationState, toggleNotifications, showNotification } from "./notify.js";
 import { startNames, stopNames, watchNames, displayName, displayText } from "./names.js";
+import { renderRichText } from "./richtext.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -889,7 +890,7 @@ function renderMessage(id, m) {
   if (m.text) {
     const text = document.createElement("div");
     text.className = "msg-text";
-    text.textContent = m.text;
+    text.append(renderRichText(m.text));
     bubble.append(text);
   }
   // Ses propres messages sont à droite, sans avatar.

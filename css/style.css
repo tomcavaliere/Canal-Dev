@@ -289,6 +289,13 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .reply-info p { margin: 0; }
 .reply-excerpt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-text a { overflow-wrap: anywhere; }
+.msg-text code { word-break: normal; overflow-wrap: anywhere; }
+.msg-text pre {
+  margin: .3rem 0; padding: .45rem .6rem; border-radius: 6px;
+  background: var(--surface-2); overflow-x: auto; white-space: pre; font-size: .85em;
+}
+.msg-text pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
 .messages .empty { color: var(--muted); text-align: center; margin: auto; }
 
 .composer {
