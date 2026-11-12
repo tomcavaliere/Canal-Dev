@@ -3,7 +3,7 @@ import {
 } from "./sdk/firebase-auth.js";
 import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
-  orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField, Timestamp,
+  orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField, Timestamp, getCountFromServer,
 } from "./sdk/firebase-firestore.js";
 import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js";
 import { initAccount } from "./account.js";
@@ -36,6 +36,10 @@ const state = {
   msgById: new Map(), // messages chargés de la conversation ouverte : id -> data
   msgDocs: null, // derniers documents affichés (pour réafficher quand l'annuaire des noms change)
   pending: new Set(), // identifiants des messages de la conversation ouverte pas encore confirmés par le serveur
+  msgLimit: 0, // taille de la fenêtre de messages écoutée (agrandie par « Charger les messages précédents »)
+  hasMore: false, // la fenêtre est pleine : il existe peut-être des messages plus anciens
+  loadingMore: false,
+  revealId: null, // message cité à montrer dès qu'il sera chargé
   replyTo: null, // identifiant du message auquel on répond
   admin: null, // API renvoyée par admin.js
 };
@@ -174,6 +178,7 @@ function teardown() {
     unsubReads: null, reads: null, readWrite: 0,
     recent: new Map(), unread: new Map(),
     msgById: new Map(), msgDocs: null, pending: new Set(),
+    msgLimit: 0, hasMore: false, loadingMore: false, revealId: null,
   });
   $("conv-list").replaceChildren();
   $("messages").replaceChildren();
@@ -628,6 +633,11 @@ function selectConversation(id) {
   state.pending = new Set();
   state.reads = null;
   state.readWrite = 0;
+  state.unsubMessages = null;
+  state.msgLimit = PAGE;
+  state.hasMore = false;
+  state.loadingMore = false;
+  state.revealId = null;
   state.selectedId = id;
   $("chat-empty").hidden = true;
   $("chat-view").hidden = false;
@@ -637,16 +647,7 @@ function selectConversation(id) {
   if (state.recent.has(id)) markRead(id);
   renderConversationList();
 
-  let first = true;
-  const q = query(collection(db, "conversations", id, "messages"), orderBy("createdAt"), limitToLast(300));
-  // includeMetadataChanges : on est prévenu quand un message envoyé est confirmé par le serveur.
-  state.unsubMessages = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
-    state.msgDocs = snap.docs;
-    renderMessages(snap.docs, first);
-    first = false;
-  }, (err) => {
-    console.error(err);
-  });
+  listenMessages(id);
   state.unsubReads = onSnapshot(collection(db, "conversations", id, "reads"), (snap) => {
     state.reads = new Map(snap.docs.map((d) => {
       const r = d.data({ serverTimestamps: "estimate" });
@@ -655,6 +656,124 @@ function selectConversation(id) {
     renderReceipt();
     syncMyRead();
   }, (err) => console.error("Lecture des accusés de lecture impossible", err));
+}
+
+/* ---------- Fenêtre de messages (pagination) ---------- */
+
+// Une seule écoute en temps réel couvre les `msgLimit` derniers messages. « Charger les messages
+// précédents » l'agrandit de PAGE : tout ce qui est affiché reste à jour (suppressions comprises).
+const PAGE = 100;
+
+function listenMessages(id) {
+  const q = query(collection(db, "conversations", id, "messages"), orderBy("createdAt"), limitToLast(state.msgLimit));
+  const previous = state.unsubMessages;
+  let first = !previous; // première ouverture : on descend en bas de la conversation
+  // includeMetadataChanges : on est prévenu quand un message envoyé est confirmé par le serveur.
+  state.unsubMessages = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+    if (state.selectedId !== id) return;
+    const full = snap.size >= state.msgLimit;
+    // Fenêtre agrandie : le premier instantané vient du cache et n'a pas encore les anciens messages.
+    if (state.loadingMore && (!snap.metadata.fromCache || full)) state.loadingMore = false;
+    state.hasMore = full;
+    state.msgDocs = snap.docs;
+    renderMessages(snap.docs, first);
+    first = false;
+    if (state.revealId && !state.loadingMore) {
+      const target = state.revealId;
+      state.revealId = null;
+      flashMessage(target);
+    }
+  }, (err) => {
+    console.error(err);
+  });
+  // L'ancienne écoute est arrêtée après le branchement de la nouvelle : les messages déjà
+  // reçus restent dans le cache et ne sont pas relus.
+  previous?.();
+}
+
+function loadMore(extra = PAGE) {
+  if (!state.selectedId || state.loadingMore) return;
+  state.msgLimit += extra;
+  state.loadingMore = true;
+  renderLoadMore();
+  listenMessages(state.selectedId);
+}
+
+function loadMoreItem() {
+  const li = document.createElement("li");
+  li.className = "load-more";
+  if (state.loadingMore) {
+    li.textContent = "Chargement…";
+  } else if (state.hasMore) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn small";
+    b.textContent = "Charger les messages précédents";
+    b.addEventListener("click", () => loadMore());
+    li.append(b);
+  } else {
+    li.textContent = "Début de la conversation";
+  }
+  return li;
+}
+
+function renderLoadMore() {
+  $("messages").querySelector(".load-more")?.replaceWith(loadMoreItem());
+}
+
+// Montre un message cité (défilement + surbrillance), en agrandissant la fenêtre s'il est trop ancien.
+async function revealMessage(targetId) {
+  if (state.msgById.has(targetId)) {
+    flashMessage(targetId);
+    return;
+  }
+  const convId = state.selectedId;
+  try {
+    const ref = collection(db, "conversations", convId, "messages");
+    const target = await getDoc(doc(ref, targetId));
+    if (state.selectedId !== convId) return;
+    if (!target.exists()) {
+      toast("Ce message a été supprimé.");
+      return;
+    }
+    // Nombre de messages depuis le message cité (requête d'agrégation : 1 lecture par tranche de 1000).
+    const count = await getCountFromServer(query(ref, where("createdAt", ">=", target.data().createdAt)));
+    if (state.selectedId !== convId) return;
+    const needed = Math.ceil((count.data().count + 1) / PAGE) * PAGE;
+    if (needed <= state.msgLimit) return;
+    state.revealId = targetId;
+    loadMore(needed - state.msgLimit);
+  } catch (err) {
+    console.error(err);
+    toast("Impossible d'afficher ce message : " + err.message, { error: true });
+  }
+}
+
+function flashMessage(targetId) {
+  const el = document.getElementById("msg-" + targetId);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.remove("flash");
+  void el.offsetWidth; // relance l'animation
+  el.classList.add("flash");
+}
+
+// Premier élément visible en haut de la liste et sa position : le restaurer après un nouveau
+// rendu évite que l'affichage saute quand des messages sont ajoutés au-dessus.
+function scrollAnchor(list) {
+  const top = list.getBoundingClientRect().top;
+  for (const el of list.children) {
+    if (!el.id) continue;
+    const r = el.getBoundingClientRect();
+    if (r.bottom > top) return { id: el.id, offset: r.top - top };
+  }
+  return null;
+}
+
+function restoreAnchor(list, anchor) {
+  const el = anchor && document.getElementById(anchor.id);
+  if (!el) return;
+  list.scrollTop += el.getBoundingClientRect().top - list.getBoundingClientRect().top - anchor.offset;
 }
 
 function closeConversation() {
@@ -775,6 +894,7 @@ function messageItems(docs) {
 function renderMessages(docs, forceScroll) {
   const list = $("messages");
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+  const anchor = forceScroll || nearBottom ? null : scrollAnchor(list);
 
   state.msgById = new Map(docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
   // Messages écrits localement mais pas encore confirmés par le serveur (hors ligne, réseau lent).
@@ -791,9 +911,10 @@ function renderMessages(docs, forceScroll) {
     return;
   }
 
-  list.replaceChildren(...messageItems(docs));
+  list.replaceChildren(loadMoreItem(), ...messageItems(docs));
   renderReceipt();
   if (forceScroll || nearBottom) list.scrollTop = list.scrollHeight;
+  else restoreAnchor(list, anchor);
   syncMyRead();
 }
 
@@ -959,8 +1080,14 @@ function renderQuote(targetId) {
   q.type = "button";
   q.className = "msg-quote";
   if (!target) {
-    q.disabled = true;
-    q.textContent = "Message supprimé ou trop ancien";
+    // Pas dans la fenêtre chargée : supprimé, ou plus ancien (s'il reste des messages à charger).
+    if (state.hasMore) {
+      q.textContent = "Message plus ancien : cliquer pour l'afficher";
+      q.addEventListener("click", () => revealMessage(targetId));
+    } else {
+      q.disabled = true;
+      q.textContent = "Message supprimé";
+    }
     return q;
   }
   const who = document.createElement("strong");
@@ -969,14 +1096,7 @@ function renderQuote(targetId) {
   txt.textContent = excerpt(target);
   q.append(who, txt);
   q.title = "Voir le message d'origine";
-  q.addEventListener("click", () => {
-    const el = document.getElementById("msg-" + targetId);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.remove("flash");
-    void el.offsetWidth; // relance l'animation
-    el.classList.add("flash");
-  });
+  q.addEventListener("click", () => flashMessage(targetId));
   return q;
 }
 
