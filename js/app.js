@@ -5,10 +5,10 @@ import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
   orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=4";
-import { initAccount } from "./account.js?v=4";
-import { avatarEl, initials } from "./ui.js?v=4";
-import { prepareImage } from "./images.js?v=4";
+import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=5";
+import { initAccount } from "./account.js?v=5";
+import { avatarEl, initials } from "./ui.js?v=5";
+import { prepareImage } from "./images.js?v=5";
 
 const $ = (id) => document.getElementById(id);
 
@@ -22,6 +22,8 @@ const state = {
   unsubProjects: null, // admin : écoute de toute la collection
   projectSubs: new Map(), // non-admin : id -> unsubscribe (un écouteur par projet visible)
   unsubMessages: null,
+  msgById: new Map(), // messages chargés de la conversation ouverte : id -> data
+  replyTo: null, // identifiant du message auquel on répond
   admin: null, // API renvoyée par admin.js
 };
 
@@ -101,7 +103,7 @@ async function startSession(user) {
   fillUserHeader(user);
 
   if (state.isAdmin) {
-    const { setupAdmin } = await import("./admin.js?v=4");
+    const { setupAdmin } = await import("./admin.js?v=5");
     state.admin = setupAdmin({
       getConversations: () => state.conversations,
       getProjects: () => state.projects,
@@ -121,9 +123,11 @@ function teardown() {
   state.admin?.teardown();
   resetImages();
   clearAttachment();
+  clearReply();
   Object.assign(state, {
     user: null, isAdmin: false, conversations: new Map(), projects: new Map(), selectedId: null,
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, admin: null,
+    msgById: new Map(),
   });
   $("conv-list").replaceChildren();
   $("messages").replaceChildren();
@@ -378,6 +382,8 @@ function selectConversation(id) {
   state.unsubMessages?.();
   resetImages();
   clearAttachment();
+  clearReply();
+  state.msgById = new Map();
   state.selectedId = id;
   $("chat-empty").hidden = true;
   $("chat-view").hidden = false;
@@ -401,6 +407,8 @@ function closeConversation() {
   state.unsubMessages = null;
   resetImages();
   clearAttachment();
+  clearReply();
+  state.msgById = new Map();
   state.selectedId = null;
   $("chat-view").hidden = true;
   $("chat-empty").hidden = false;
@@ -432,6 +440,10 @@ function renderMessages(docs, forceScroll) {
   const list = $("messages");
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
 
+  state.msgById = new Map(docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+  // Le message auquel on répondait a été supprimé : on abandonne la réponse.
+  if (state.replyTo && !state.msgById.has(state.replyTo)) clearReply();
+
   if (docs.length === 0) {
     const li = document.createElement("li");
     li.className = "empty";
@@ -440,7 +452,7 @@ function renderMessages(docs, forceScroll) {
     return;
   }
 
-  list.replaceChildren(...docs.map((d) => renderMessage(d.id, d.data({ serverTimestamps: "estimate" }))));
+  list.replaceChildren(...docs.map((d) => renderMessage(d.id, state.msgById.get(d.id))));
   if (forceScroll || nearBottom) list.scrollTop = list.scrollHeight;
 }
 
@@ -448,6 +460,7 @@ function renderMessage(id, m) {
   const mine = m.authorUid === state.user.uid;
   const li = document.createElement("li");
   li.className = "msg" + (mine ? " mine" : "");
+  li.id = "msg-" + id;
 
   const avatar = avatarEl(m.authorName);
 
@@ -465,6 +478,15 @@ function renderMessage(id, m) {
     time.textContent = timeFmt.format(date);
   }
   head.append(name, time);
+
+  const actions = document.createElement("div");
+  actions.className = "msg-actions";
+  const reply = document.createElement("button");
+  reply.type = "button";
+  reply.textContent = "Répondre";
+  reply.addEventListener("click", () => startReply(id));
+  actions.append(reply);
+  head.append(actions);
 
   if (mine || state.isAdmin) {
     const del = document.createElement("button");
@@ -484,10 +506,11 @@ function renderMessage(id, m) {
         alert("Suppression impossible : " + err.message);
       }
     });
-    head.append(del);
+    actions.append(del);
   }
 
   bubble.append(head);
+  if (m.replyTo) bubble.append(renderQuote(m.replyTo));
   if (m.image) bubble.append(renderImage(id, m));
   if (m.text) {
     const text = document.createElement("div");
@@ -495,9 +518,70 @@ function renderMessage(id, m) {
     text.textContent = m.text;
     bubble.append(text);
   }
-  li.append(avatar, bubble);
+  // Ses propres messages sont à droite, sans avatar.
+  if (mine) li.append(bubble);
+  else li.append(avatar, bubble);
   return li;
 }
+
+/* ---------- Réponses ---------- */
+
+// Seul l'identifiant du message cité est enregistré : si l'original est supprimé,
+// son contenu disparaît aussi de la citation.
+function excerpt(m) {
+  const t = (m.text || "").replace(/\s+/g, " ").trim();
+  if (t) return t.length > 140 ? t.slice(0, 140) + "…" : t;
+  return m.image ? "📷 Photo" : "";
+}
+
+function renderQuote(targetId) {
+  const target = state.msgById.get(targetId);
+  const q = document.createElement("button");
+  q.type = "button";
+  q.className = "msg-quote";
+  if (!target) {
+    q.disabled = true;
+    q.textContent = "Message supprimé ou trop ancien";
+    return q;
+  }
+  const who = document.createElement("strong");
+  who.textContent = target.authorName || "?";
+  const txt = document.createElement("span");
+  txt.textContent = excerpt(target);
+  q.append(who, txt);
+  q.title = "Voir le message d'origine";
+  q.addEventListener("click", () => {
+    const el = document.getElementById("msg-" + targetId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.remove("flash");
+    void el.offsetWidth; // relance l'animation
+    el.classList.add("flash");
+  });
+  return q;
+}
+
+function startReply(id) {
+  const m = state.msgById.get(id);
+  if (!m) return;
+  state.replyTo = id;
+  $("reply-author").textContent = m.authorName || "?";
+  $("reply-excerpt").textContent = excerpt(m);
+  $("reply-preview").hidden = false;
+  $("msg-input").focus();
+}
+
+function clearReply() {
+  state.replyTo = null;
+  $("reply-preview").hidden = true;
+  $("reply-author").textContent = "";
+  $("reply-excerpt").textContent = "";
+}
+
+$("btn-reply-cancel").addEventListener("click", () => {
+  clearReply();
+  $("msg-input").focus();
+});
 
 /* ---------- Photos : affichage ---------- */
 
@@ -615,6 +699,7 @@ $("composer").addEventListener("submit", async (e) => {
   const input = $("msg-input");
   const text = input.value.trim();
   const image = attachment;
+  const replyTo = state.replyTo;
   if ((!text && !image) || !state.selectedId) return;
 
   const convId = state.selectedId;
@@ -630,6 +715,7 @@ $("composer").addEventListener("submit", async (e) => {
       authorName: state.user.displayName || state.user.email,
       createdAt: serverTimestamp(),
       ...(image ? { image: { w: image.w, h: image.h } } : {}),
+      ...(replyTo ? { replyTo } : {}),
     });
     if (image) {
       // La photo est rangée à part (même identifiant) pour ne pas alourdir la liste des messages.
@@ -642,6 +728,7 @@ $("composer").addEventListener("submit", async (e) => {
     }
     await batch.commit();
     if (image && attachment === image) clearAttachment();
+    if (replyTo && state.replyTo === replyTo) clearReply();
   } catch (err) {
     console.error(err);
     input.value = text;
@@ -652,6 +739,11 @@ $("composer").addEventListener("submit", async (e) => {
 });
 
 $("msg-input").addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && state.replyTo) {
+    e.preventDefault();
+    clearReply();
+    return;
+  }
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     $("composer").requestSubmit();

@@ -7,7 +7,7 @@ import {
   collection, collectionGroup, doc, getDoc, getDocs, deleteDoc, updateDoc, writeBatch,
   query, where, limit, arrayRemove, Timestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db, ADMIN_UID } from "./firebase.js?v=4";
+import { auth, db, ADMIN_UID } from "./firebase.js?v=5";
 
 const $ = (id) => document.getElementById(id);
 
