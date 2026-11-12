@@ -6,8 +6,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://www.gstatic.com; frame-src https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="no-referrer">
   <title>Canal Dev</title>
-  <link rel="stylesheet" href="css/style.css?v=3">
-  <script type="module" src="js/app.js?v=3"></script>
+  <link rel="stylesheet" href="css/style.css?v=4">
+  <script type="module" src="js/app.js?v=4"></script>
 </head>
 <body>
   <!-- Chargement -->
@@ -59,12 +59,12 @@
     </header>
 
     <aside class="sidebar">
+      <div id="sidebar-admin-actions" class="sidebar-actions" hidden>
+        <button id="btn-new-conv" class="btn small">+ Conversation</button>
+        <button id="btn-new-project" class="btn small">+ Projet</button>
+      </div>
       <div class="sidebar-head">
         <h2>Conversations</h2>
-        <div id="sidebar-admin-actions" class="row" hidden>
-          <button id="btn-new-project" class="btn small">+ Projet</button>
-          <button id="btn-new-conv" class="btn small">+ Conversation</button>
-        </div>
       </div>
       <ul id="conv-list" class="list"></ul>
 
@@ -89,6 +89,7 @@
           </div>
           <div id="chat-admin-actions" class="row" hidden>
             <button id="btn-members" class="btn small">Membres</button>
+            <button id="btn-edit-conv" class="btn small">Renommer</button>
             <button id="btn-move-conv" class="btn small">Déplacer</button>
             <button id="btn-delete-conv" class="btn small danger">Supprimer</button>
           </div>
@@ -117,22 +118,22 @@
     </main>
   </div>
 
-  <!-- Dialogue : nouvelle conversation (admin) -->
+  <!-- Dialogue : nouvelle conversation / renommer une conversation (admin) -->
   <dialog id="dlg-new-conv">
     <form id="form-new-conv" method="dialog" class="stack">
-      <h2>Nouvelle conversation</h2>
+      <h2 id="conv-dlg-title">Nouvelle conversation</h2>
       <label>Titre
         <input id="new-conv-title" maxlength="120" required>
       </label>
       <label>Description
         <textarea id="new-conv-desc" maxlength="500" rows="3"></textarea>
       </label>
-      <label>Projet
+      <label id="new-conv-project-label">Projet
         <select id="new-conv-project"></select>
       </label>
       <div class="row end">
         <button type="button" class="btn" data-close>Annuler</button>
-        <button type="submit" class="btn primary">Créer</button>
+        <button id="conv-dlg-submit" type="submit" class="btn primary">Créer</button>
       </div>
     </form>
   </dialog>

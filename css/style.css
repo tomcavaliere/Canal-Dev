@@ -152,7 +152,8 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 }
 .sidebar-head h2 { margin: 0; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 #admin-users { margin-top: 1rem; }
-#sidebar-admin-actions { gap: .35rem; }
+.sidebar-actions { display: flex; gap: .5rem; padding: 0 1rem .75rem; }
+.sidebar-actions .btn { flex: 1; white-space: nowrap; }
 
 .list { list-style: none; margin: 0; padding: 0; }
 .list li > button.item {

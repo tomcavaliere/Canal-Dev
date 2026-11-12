@@ -4,9 +4,9 @@ import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, limit,
   onSnapshot, arrayUnion, arrayRemove, serverTimestamp, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db, ADMIN_UID } from "./firebase.js?v=3";
-import { purgeUserData } from "./account.js?v=3";
-import { avatarEl } from "./ui.js?v=3";
+import { db, ADMIN_UID } from "./firebase.js?v=4";
+import { purgeUserData } from "./account.js?v=4";
+import { avatarEl } from "./ui.js?v=4";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -131,20 +131,45 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     select.value = selectedId && getProjects().has(selectedId) ? selectedId : "";
   }
 
-  /* --- Nouvelle conversation --- */
+  /* --- Nouvelle conversation / renommer une conversation --- */
+  // Même dialogue : editingConvId est null pour une création.
   const dlgNew = $("dlg-new-conv");
-  function newConversation(projectId = "") {
+  let editingConvId = null;
+
+  function openConversationDialog(conv = null, projectId = "") {
+    editingConvId = conv?.id ?? null;
     $("form-new-conv").reset();
+    $("conv-dlg-title").textContent = conv ? "Renommer la conversation" : "Nouvelle conversation";
+    $("conv-dlg-submit").textContent = conv ? "Enregistrer" : "Créer";
+    $("new-conv-title").value = conv?.title || "";
+    $("new-conv-desc").value = conv?.description || "";
+    // Le changement de projet d'une conversation existante passe par « Déplacer ».
+    $("new-conv-project-label").hidden = !!conv;
     fillProjectSelect($("new-conv-project"), projectId);
     dlgNew.showModal();
   }
+  const newConversation = (projectId = "") => openConversationDialog(null, projectId);
   on($("btn-new-conv"), "click", () => newConversation());
+  on($("btn-edit-conv"), "click", () => {
+    const conv = getSelected();
+    if (conv) openConversationDialog(conv);
+  });
   on($("form-new-conv"), "submit", async (e) => {
     e.preventDefault();
     const title = $("new-conv-title").value.trim();
     const description = $("new-conv-desc").value.trim();
     const projectId = $("new-conv-project").value;
     if (!title) return;
+    if (editingConvId) {
+      try {
+        await updateDoc(doc(db, "conversations", editingConvId), { title, description, updatedAt: serverTimestamp() });
+        dlgNew.close();
+      } catch (err) {
+        console.error(err);
+        alert("Modification impossible : " + err.message);
+      }
+      return;
+    }
     try {
       const ref = await addDoc(collection(db, "conversations"), {
         title,
@@ -172,7 +197,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     if (projectId && !p) return;
     editingProjectId = projectId;
     $("form-project").reset();
-    $("project-dlg-title").textContent = p ? "Modifier le projet" : "Nouveau projet";
+    $("project-dlg-title").textContent = p ? "Renommer le projet" : "Nouveau projet";
     $("project-title").value = p?.title || "";
     $("project-desc").value = p?.description || "";
     $("btn-delete-project").hidden = !p;
@@ -333,6 +358,8 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       if (dlgProject.open && editingProjectId && !getProjects().has(editingProjectId)) dlgProject.close();
     },
     onConversationsChanged() {
+      // Conversation supprimée pendant qu'on la renomme : on ferme le dialogue.
+      if (dlgNew.open && editingConvId && !getConversations().has(editingConvId)) dlgNew.close();
       renderUsers();
       if (dlgMembers.open) renderMembers();
     },

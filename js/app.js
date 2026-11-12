@@ -5,10 +5,10 @@ import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
   orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=3";
-import { initAccount } from "./account.js?v=3";
-import { avatarEl, initials } from "./ui.js?v=3";
-import { prepareImage } from "./images.js?v=3";
+import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=4";
+import { initAccount } from "./account.js?v=4";
+import { avatarEl, initials } from "./ui.js?v=4";
+import { prepareImage } from "./images.js?v=4";
 
 const $ = (id) => document.getElementById(id);
 
@@ -101,7 +101,7 @@ async function startSession(user) {
   fillUserHeader(user);
 
   if (state.isAdmin) {
-    const { setupAdmin } = await import("./admin.js?v=3");
+    const { setupAdmin } = await import("./admin.js?v=4");
     state.admin = setupAdmin({
       getConversations: () => state.conversations,
       getProjects: () => state.projects,
@@ -325,7 +325,7 @@ function projectGroup(projectId, title, convs) {
   if (state.isAdmin && projectId) {
     head.append(
       smallButton("+", `Nouvelle conversation dans « ${title} »`, () => state.admin?.newConversation(projectId)),
-      smallButton("✎", `Modifier le projet « ${title} »`, () => state.admin?.editProject(projectId)),
+      smallButton("✎", `Renommer ou supprimer le projet « ${title} »`, () => state.admin?.editProject(projectId)),
     );
   }
   li.append(head);
