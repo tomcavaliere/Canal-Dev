@@ -129,10 +129,10 @@ aucun compte Firebase ni connexion n'est nécessaire.
 Le détail est dans [RGPD.md](RGPD.md) (registre, base légale, procédures) et l'information des utilisateurs dans [confidentialite.html](confidentialite.html).
 
 À faire une fois dans la console Firebase :
-- [ ] **Paramètres du projet → Confidentialité** (ou *Data privacy*) : accepter les *Data Processing Terms*.
+- [x] **Paramètres du projet → Confidentialité** (ou *Data privacy*) : accepter les *Data Processing Terms*.
 - [x] Vérifier que Firestore est bien en région UE (`eur3` ou `europe-*`) — `eur3`, vérifié le 12 novembre 2026.
-- [ ] **Paramètres du projet → Intégrations → Google Analytics** : désactivé (le site n'en utilise pas).
-- [ ] Déployer site, règles **et** index (`npm run deploy`, ou automatiquement par la CI).
+- [x] **Paramètres du projet → Intégrations → Google Analytics** : désactivé (le site n'en utilise pas).
+- [x] Déployer site, règles **et** index (`npm run deploy`, ou automatiquement par la CI).
 
 Au quotidien :
 - Un utilisateur exporte ou supprime ses données depuis **Mon compte**.
