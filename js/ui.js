@@ -1,4 +1,7 @@
-// Petits utilitaires d'affichage partagés par app.js, admin.js et account.js.
+// Petits utilitaires d'affichage partagés par tous les modules.
+
+// Élément de la page par son identifiant.
+export const $ = (id) => document.getElementById(id);
 
 // Initiales à partir d'un nom (ou d'une adresse email).
 export function initials(name) {

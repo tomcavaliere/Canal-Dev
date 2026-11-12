@@ -9,8 +9,7 @@ import {
 } from "./sdk/firebase-firestore.js";
 import { auth, db, ADMIN_UID } from "./firebase.js";
 import { toast } from "./dialogs.js";
-
-const $ = (id) => document.getElementById(id);
+import { $ } from "./ui.js";
 
 /* ---------- Suppression des données d'un utilisateur ---------- */
 

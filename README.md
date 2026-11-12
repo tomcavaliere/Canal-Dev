@@ -27,7 +27,14 @@ css/style.css           styles (clair/sombre, responsive)
 js/firebase-config.js   config Firebase + ADMIN_UID  ← à remplir
 js/firebase.js          initialisation Firebase
 js/sdk/                 SDK Firebase chargé depuis gstatic (seul endroit où figure sa version)
-js/app.js               connexion, conversations, messages
+js/app.js               point d'entrée : connexion, session, conversations, projets
+js/state.js             état partagé de la session
+js/sidebar.js           barre latérale (conversations par projet, tri par activité)
+js/unread.js            non-lus, nouveaux messages, son et notifications
+js/messages.js          conversation ouverte : messages paginés, réponses, modification, photos
+js/receipts.js          accusés de lecture (« Vu par … »)
+js/search.js            recherche dans les messages chargés
+js/composer.js          saisie, photo jointe, envoi
 js/admin.js             création de conversations, gestion des membres (admin)
 js/account.js           « Mon compte » : export et suppression des données (RGPD)
 js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'admin seul)

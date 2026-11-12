@@ -6,7 +6,7 @@ import {
 } from "./sdk/firebase-firestore.js";
 import { db, ADMIN_UID } from "./firebase.js";
 import { purgeUserData } from "./account.js";
-import { avatarEl } from "./ui.js";
+import { $, avatarEl } from "./ui.js";
 import { nameOf, namesLoaded, isNameTaken } from "./names.js";
 import { confirmDialog, toast } from "./dialogs.js";
 import { playMessageSound } from "./sound.js";
@@ -18,8 +18,6 @@ const INACTIVE_MS = 365 * 24 * 3600 * 1000;
 const INVITE_MS = 90 * 24 * 3600 * 1000;
 const INVITE_EMAIL_RE = /^[a-z0-9._+-]+@gmail\.com$/;
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
-
-const $ = (id) => document.getElementById(id);
 
 export function setupAdmin({ getConversations, getProjects, getSelected, selectConversation }) {
   let users = new Map(); // uid -> data
