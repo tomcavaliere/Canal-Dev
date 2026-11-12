@@ -27,7 +27,10 @@ confidentialite.html    politique de confidentialité
 RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
 firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid et reads.uid, requis pour l'export/la suppression)
-firebase.json           pour déployer les règles et index avec la CLI Firebase
+firebase.json           pour déployer les règles et index avec la CLI Firebase (+ émulateur des tests)
+package.json            outils de test uniquement (le site ne charge aucune de ces dépendances)
+scripts/test-rules.sh   lance l'émulateur Firestore et les tests
+tests/rules.test.mjs    tests des règles de sécurité
 ```
 
 ## Mise en place
@@ -81,6 +84,17 @@ python3 -m http.server 8000
 # puis http://localhost:8000
 ```
 Les modules ES ne fonctionnent pas en ouvrant `index.html` directement (`file://`) : il faut un serveur.
+
+## Tests des règles de sécurité
+Toute la sécurité repose sur [firestore.rules](firestore.rules) : toute modification des règles doit passer les tests,
+et chaque nouvelle règle doit avoir les siens dans [tests/rules.test.mjs](tests/rules.test.mjs).
+```bash
+npm install   # une fois
+npm test      # démarre l'émulateur Firestore, lance les tests, l'arrête
+```
+Prérequis : Node 24.12+ et Java 21+. Sur macOS, `brew install openjdk@21` suffit : le script l'utilise
+sans changer le Java par défaut de la machine. Les tests tournent sur un projet fictif (`demo-canal-dev`) :
+aucun compte Firebase ni connexion n'est nécessaire.
 
 ## RGPD
 Le détail est dans [RGPD.md](RGPD.md) (registre, base légale, procédures) et l'information des utilisateurs dans [confidentialite.html](confidentialite.html).
