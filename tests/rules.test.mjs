@@ -38,6 +38,7 @@ async function seed(ctx) {
   const set = (path, data) => setDoc(doc(db, path), data);
   await Promise.all([
     set("users/alice", { email: "alice@gmail.com", displayName: "Alice", createdAt: T0, lastLogin: T0 }),
+    set("names/alice", { name: "Alice", updatedAt: T0 }),
     set("projects/p1", { title: "Projet", description: "", createdAt: T0, updatedAt: T0 }),
     set("conversations/c1", {
       title: "Conv 1", description: "", members: ["alice", "carol"], projectId: "p1", createdAt: T0, updatedAt: T0,
@@ -49,7 +50,8 @@ async function seed(ctx) {
       text: "", authorUid: "dave", authorName: "Dave", image: { w: 10, h: 10 }, createdAt: T0,
     }),
     set("conversations/c1/images/m3", { data: JPEG, authorUid: "dave", createdAt: T0 }),
-    set("conversations/c1/reads/carol", { uid: "carol", name: "Carol", lastRead: T0 }),
+    set("conversations/c1/reads/carol", { uid: "carol", lastRead: T0 }),
+    // Ancien format (avec un nom) : doit rester lisible et supprimable.
     set("conversations/c1/reads/dave", { uid: "dave", name: "Dave", lastRead: T0 }),
     set("conversations/c2/messages/m4", { text: "Privé", authorUid: "bob", authorName: "Bob", createdAt: T0 }),
   ]);
@@ -205,16 +207,50 @@ describe("Photos", () => {
 });
 
 describe("Accusés de lecture", () => {
-  const read = (uid, extra = {}) => ({ uid, name: "Nom", lastRead: serverTimestamp(), ...extra });
+  const read = (uid, extra = {}) => ({ uid, lastRead: serverTimestamp(), ...extra });
 
   it("un membre enregistre sa lecture", () =>
     assertSucceeds(setDoc(doc(alice(), "conversations/c1/reads/alice"), read("alice"))));
+  it("un nom dans l'accusé est refusé (il vient de l'annuaire)", () =>
+    assertFails(setDoc(doc(alice(), "conversations/c1/reads/alice"), read("alice", { name: "Admin" }))));
   it("enregistrer la lecture d'un autre est refusé", () =>
     assertFails(setDoc(doc(alice(), "conversations/c1/reads/carol"), read("carol"))));
   it("une date fixée par le client est refusée", () =>
     assertFails(setDoc(doc(alice(), "conversations/c1/reads/alice"), read("alice", { lastRead: Timestamp.now() }))));
   it("un non-membre ne lit pas les accusés", () =>
     assertFails(getDocs(collection(bob(), "conversations/c1/reads"))));
+});
+
+describe("Annuaire des noms (names)", () => {
+  const entry = (name, extra = {}) => ({ name, updatedAt: serverTimestamp(), ...extra });
+
+  it("un utilisateur connecté lit une entrée par son UID, pas un visiteur", async () => {
+    await assertSucceeds(getDoc(doc(bob(), "names/alice")));
+    await assertFails(getDoc(doc(anonymous(), "names/alice")));
+  });
+  it("seul l'admin liste l'annuaire", async () => {
+    await assertFails(getDocs(collection(alice(), "names")));
+    await assertSucceeds(getDocs(collection(admin(), "names")));
+  });
+  it("un membre ne change pas son propre nom", () =>
+    assertFails(setDoc(doc(alice(), "names/alice"), entry("Administrateur"))));
+  it("un membre ne s'attribue pas le nom d'un autre", () =>
+    assertFails(setDoc(doc(bob(), "names/carol"), entry("Carol"))));
+  it("l'admin crée et renomme une entrée", async () => {
+    await assertSucceeds(setDoc(doc(admin(), "names/carol"), entry("Carol")));
+    await assertSucceeds(setDoc(doc(admin(), "names/alice"), entry("Alice Martin")));
+  });
+  it("un nom vide, trop long ou un champ inconnu est refusé", async () => {
+    await assertFails(setDoc(doc(admin(), "names/carol"), entry("")));
+    await assertFails(setDoc(doc(admin(), "names/carol"), entry("x".repeat(201))));
+    await assertFails(setDoc(doc(admin(), "names/carol"), entry("Carol", { email: "carol@gmail.com" })));
+  });
+  it("une date fixée par le client est refusée", () =>
+    assertFails(setDoc(doc(admin(), "names/carol"), entry("Carol", { updatedAt: Timestamp.now() }))));
+  it("un utilisateur supprime sa propre entrée, pas celle d'un autre", async () => {
+    await assertFails(deleteDoc(doc(bob(), "names/alice")));
+    await assertSucceeds(deleteDoc(doc(alice(), "names/alice")));
+  });
 });
 
 describe("Projets", () => {

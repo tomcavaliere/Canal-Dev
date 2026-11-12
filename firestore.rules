@@ -50,6 +50,26 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
+    // ---------- Annuaire des noms affichés (tenu par l'administrateur) ----------
+    // Seule source fiable du nom d'un auteur : `authorName` (messages) est saisi librement
+    // par l'auteur et le nom du profil Google peut être changé par la personne elle-même.
+    // Lire UNE entrée par son UID (identifiant aléatoire, connu seulement des membres d'une
+    // conversation commune) : tout utilisateur connecté. Lister : admin uniquement.
+    match /names/{uid} {
+      function validName() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['name', 'updatedAt'])
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 200
+          && d.updatedAt == request.time;
+      }
+
+      allow get: if signedIn();
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && validName();
+      // Droit à l'effacement : l'utilisateur peut supprimer sa propre entrée.
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
     // ---------- Projets (regroupent des conversations) ----------
     match /projects/{projectId} {
       function validProject() {
@@ -151,13 +171,14 @@ service cloud.firestore {
       // ---------- Accusés de lecture (un par membre, identifiant = UID) ----------
       // Date à laquelle le membre a vu pour la dernière fois la conversation, visible
       // par les autres membres (« Vu par … » sous le dernier message envoyé).
+      // Pas de nom : il est lu dans l'annuaire (names/{uid}). Les anciens accusés qui en
+      // contiennent un le perdent à leur prochaine écriture.
       match /reads/{uid} {
         function validRead() {
           let d = request.resource.data;
-          return d.keys().hasOnly(['uid', 'name', 'lastRead'])
+          return d.keys().hasOnly(['uid', 'lastRead'])
             && d.uid == uid
-            && d.lastRead == request.time
-            && d.name is string && d.name.size() <= 200;
+            && d.lastRead == request.time;
         }
 
         allow read: if canAccess(convId);
