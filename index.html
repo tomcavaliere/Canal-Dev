@@ -90,12 +90,22 @@
             <h2 id="chat-title"></h2>
             <p id="chat-desc" class="muted small"></p>
           </div>
-          <div id="chat-admin-actions" class="row" hidden>
-            <button id="btn-members" class="btn small">Membres</button>
-            <button id="btn-edit-conv" class="btn small">Renommer</button>
-            <button id="btn-move-conv" class="btn small">Déplacer</button>
-            <button id="btn-delete-conv" class="btn small danger">Supprimer</button>
+          <div class="row chat-tools">
+            <button id="btn-search" class="btn small" type="button" title="Rechercher dans la conversation"
+              aria-label="Rechercher dans la conversation" aria-expanded="false" aria-controls="search-bar">🔍</button>
+            <div id="chat-admin-actions" class="row" hidden>
+              <button id="btn-members" class="btn small">Membres</button>
+              <button id="btn-edit-conv" class="btn small">Renommer</button>
+              <button id="btn-move-conv" class="btn small">Déplacer</button>
+              <button id="btn-delete-conv" class="btn small danger">Supprimer</button>
+            </div>
           </div>
+        </div>
+        <div id="search-bar" class="search-bar" role="search" hidden>
+          <input id="search-input" type="search" placeholder="Rechercher dans les messages chargés"
+            aria-label="Rechercher dans les messages chargés" autocomplete="off">
+          <span id="search-count" class="muted small" role="status"></span>
+          <button id="btn-search-close" type="button" class="btn small">Fermer</button>
         </div>
         <ol id="messages" class="messages"></ol>
         <div id="reply-preview" class="reply-preview" hidden>
