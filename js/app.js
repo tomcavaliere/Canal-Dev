@@ -727,7 +727,49 @@ function isMobile() {
 
 /* ---------- Messages ---------- */
 
-const timeFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const timeFmt = new Intl.DateTimeFormat("fr-FR", { timeStyle: "short" });
+const fullFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "full", timeStyle: "short" });
+const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+const dayYearFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+function dayKey(date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function dayLabel(date) {
+  const today = new Date();
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  if (dayKey(date) === dayKey(today)) return "Aujourd'hui";
+  if (dayKey(date) === dayKey(yesterday)) return "Hier";
+  const label = (date.getFullYear() === today.getFullYear() ? dayFmt : dayYearFmt).format(date);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function daySeparator(date) {
+  const li = document.createElement("li");
+  li.className = "day-sep";
+  li.setAttribute("role", "separator");
+  const span = document.createElement("span");
+  span.textContent = dayLabel(date);
+  li.append(span);
+  return li;
+}
+
+// Messages précédés d'un séparateur à chaque changement de jour.
+function messageItems(docs) {
+  const items = [];
+  let day = null;
+  for (const d of docs) {
+    const m = state.msgById.get(d.id);
+    const date = m.createdAt?.toDate?.();
+    if (date && dayKey(date) !== day) {
+      day = dayKey(date);
+      items.push(daySeparator(date));
+    }
+    items.push(renderMessage(d.id, m));
+  }
+  return items;
+}
 
 function renderMessages(docs, forceScroll) {
   const list = $("messages");
@@ -748,7 +790,7 @@ function renderMessages(docs, forceScroll) {
     return;
   }
 
-  list.replaceChildren(...docs.map((d) => renderMessage(d.id, state.msgById.get(d.id))));
+  list.replaceChildren(...messageItems(docs));
   renderReceipt();
   if (forceScroll || nearBottom) list.scrollTop = list.scrollHeight;
   syncMyRead();
@@ -851,6 +893,7 @@ function renderMessage(id, m) {
   if (date) {
     time.dateTime = date.toISOString();
     time.textContent = timeFmt.format(date);
+    time.title = fullFmt.format(date);
   }
   head.append(time);
 
