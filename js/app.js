@@ -1467,6 +1467,35 @@ async function attachFile(file) {
   }
 }
 
+// Glisser-déposer une photo sur la conversation (ordinateur).
+const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+let dragDepth = 0; // dragenter/dragleave se déclenchent aussi sur chaque élément survolé
+$("chat-view").addEventListener("dragenter", (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth++;
+  $("chat-view").classList.add("dragging");
+});
+$("chat-view").addEventListener("dragover", (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "copy";
+});
+$("chat-view").addEventListener("dragleave", () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) $("chat-view").classList.remove("dragging");
+});
+$("chat-view").addEventListener("drop", (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  $("chat-view").classList.remove("dragging");
+  const files = [...e.dataTransfer.files];
+  const file = files.find((f) => f.type.startsWith("image/"));
+  if (file) attachFile(file);
+  else if (files.length) toast("Seules les photos peuvent être jointes.", { error: true });
+});
+
 $("btn-attach").addEventListener("click", () => $("file-input").click());
 $("file-input").addEventListener("change", () => attachFile($("file-input").files[0]));
 $("btn-attach-remove").addEventListener("click", clearAttachment);
