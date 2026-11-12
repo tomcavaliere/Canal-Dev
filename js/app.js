@@ -81,11 +81,18 @@ async function login() {
   }
 }
 
+// Numéro de la session en cours : une session remplacée pendant son démarrage (déconnexion
+// ou changement de compte pendant un `await`) s'arrête au lieu de brancher ses écoutes.
+let sessionId = 0;
+class StaleSession extends Error {}
+
 // Une erreur au démarrage ne doit jamais laisser la page bloquée sur « Chargement… ».
 async function onAuth(user) {
+  const id = ++sessionId;
   try {
-    await startSession(user);
+    await startSession(user, id);
   } catch (err) {
+    if (err instanceof StaleSession || id !== sessionId) return; // une autre session a pris la main
     console.error(err);
     $("pending-error").textContent = "Erreur de chargement : " + (err.message || err)
       + ". Recharge la page (Cmd/Ctrl + Maj + R).";
@@ -94,7 +101,8 @@ async function onAuth(user) {
   }
 }
 
-async function startSession(user) {
+async function startSession(user, id) {
+  const current = () => { if (id !== sessionId) throw new StaleSession(); };
   teardown();
   if (!user) {
     show("screen-login");
@@ -113,10 +121,12 @@ async function startSession(user) {
   show("screen-loading");
 
   await upsertUser(user);
+  current();
   fillUserHeader(user);
 
   if (state.isAdmin) {
     const { setupAdmin } = await import("./admin.js");
+    current();
     state.admin = setupAdmin({
       getConversations: () => state.conversations,
       getProjects: () => state.projects,
@@ -332,12 +342,15 @@ function syncMessageWatchers() {
   }
   for (const id of state.conversations.keys()) {
     if (state.msgWatchers.has(id)) continue;
+    // Chargement initial tant qu'aucun instantané n'est venu du serveur : au démarrage hors
+    // ligne, le premier vient du cache et tout ce qui arrive au retour du réseau n'est pas « nouveau ».
     let first = true;
     let latest = 0; // date du message le plus récent déjà vu
     const since = Timestamp.fromMillis(lastReadOf(id));
     const q = query(collection(db, "conversations", id, "messages"),
       where("createdAt", ">", since), orderBy("createdAt"), limitToLast(100));
-    state.msgWatchers.set(id, onSnapshot(q, (snap) => {
+    // includeMetadataChanges : être prévenu du passage « cache → serveur » même sans nouveau message.
+    state.msgWatchers.set(id, onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
       for (const ch of snap.docChanges()) {
         if (ch.type !== "added") continue;
         const m = ch.doc.data({ serverTimestamps: "estimate" });
@@ -347,7 +360,7 @@ function syncMessageWatchers() {
         if (!first && t > latest && m.authorUid !== state.user.uid) onIncomingMessage(id, m);
         latest = Math.max(latest, t);
       }
-      first = false;
+      if (!snap.metadata.fromCache) first = false;
       state.recent.set(id, snap.docs.map((d) => {
         const m = d.data({ serverTimestamps: "estimate" });
         return { t: m.createdAt?.toMillis?.() ?? 0, authorUid: m.authorUid };

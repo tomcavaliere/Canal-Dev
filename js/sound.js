@@ -29,10 +29,14 @@ export function setSoundEnabled(on) {
   if (on) unlock();
 }
 
-// Petit « ding » à deux notes.
+// Petit « ding » à deux notes, au plus un par seconde : une rafale de messages
+// (retour du réseau, plusieurs conversations) ne produit qu'un seul son.
+let lastPlayed = -Infinity;
 export function playMessageSound() {
   if (!enabled || !ctx || ctx.state !== "running") return;
   const now = ctx.currentTime;
+  if (now - lastPlayed < 1) return;
+  lastPlayed = now;
   [[880, 0], [1320, 0.09]].forEach(([freq, delay]) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
