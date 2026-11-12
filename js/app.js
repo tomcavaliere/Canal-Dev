@@ -5,12 +5,12 @@ import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
   orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField, Timestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=5";
-import { initAccount } from "./account.js?v=5";
-import { avatarEl, initials } from "./ui.js?v=5";
-import { prepareImage } from "./images.js?v=5";
-import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js?v=6";
-import { notificationState, toggleNotifications, showNotification } from "./notify.js?v=6";
+import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=8";
+import { initAccount } from "./account.js?v=8";
+import { avatarEl, initials } from "./ui.js?v=8";
+import { prepareImage } from "./images.js?v=8";
+import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js?v=8";
+import { notificationState, toggleNotifications, showNotification } from "./notify.js?v=8";
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,6 +24,9 @@ const state = {
   unsubProjects: null, // admin : écoute de toute la collection
   projectSubs: new Map(), // non-admin : id -> unsubscribe (un écouteur par projet visible)
   unsubMessages: null,
+  unsubReads: null,
+  reads: null, // conversation ouverte : uid -> { name, t } (null tant que non chargé)
+  readWrite: 0, // date du dernier message dont on a déjà envoyé l'accusé de lecture
   msgWatchers: new Map(), // id de conversation -> unsubscribe (écoute des messages non lus)
   recent: new Map(), // id de conversation -> [{ t, authorUid }] messages reçus depuis la dernière lecture
   unread: new Map(), // id de conversation -> nombre de messages non lus
@@ -109,7 +112,7 @@ async function startSession(user) {
   fillUserHeader(user);
 
   if (state.isAdmin) {
-    const { setupAdmin } = await import("./admin.js?v=5");
+    const { setupAdmin } = await import("./admin.js?v=8");
     state.admin = setupAdmin({
       getConversations: () => state.conversations,
       getProjects: () => state.projects,
@@ -126,6 +129,7 @@ function teardown() {
   state.unsubProjects?.();
   state.projectSubs.forEach((unsub) => unsub());
   state.unsubMessages?.();
+  state.unsubReads?.();
   state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
   resetImages();
@@ -134,6 +138,7 @@ function teardown() {
   Object.assign(state, {
     user: null, isAdmin: false, conversations: new Map(), projects: new Map(), selectedId: null,
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
+    unsubReads: null, reads: null, readWrite: 0,
     recent: new Map(), unread: new Map(),
     msgById: new Map(),
   });
@@ -380,6 +385,7 @@ function markRead(id) {
 
 function markViewedRead() {
   if (state.selectedId && isViewing(state.selectedId)) markRead(state.selectedId);
+  syncMyRead();
 }
 document.addEventListener("visibilitychange", markViewedRead);
 
@@ -550,10 +556,13 @@ function selectConversation(id) {
   }
 
   state.unsubMessages?.();
+  state.unsubReads?.();
   resetImages();
   clearAttachment();
   clearReply();
   state.msgById = new Map();
+  state.reads = null;
+  state.readWrite = 0;
   state.selectedId = id;
   $("chat-empty").hidden = true;
   $("chat-view").hidden = false;
@@ -571,11 +580,22 @@ function selectConversation(id) {
   }, (err) => {
     console.error(err);
   });
+  state.unsubReads = onSnapshot(collection(db, "conversations", id, "reads"), (snap) => {
+    state.reads = new Map(snap.docs.map((d) => {
+      const r = d.data({ serverTimestamps: "estimate" });
+      return [d.id, { name: r.name, t: r.lastRead?.toMillis?.() ?? 0 }];
+    }));
+    renderReceipt();
+    syncMyRead();
+  }, (err) => console.error("Lecture des accusés de lecture impossible", err));
 }
 
 function closeConversation() {
   state.unsubMessages?.();
   state.unsubMessages = null;
+  state.unsubReads?.();
+  state.unsubReads = null;
+  state.reads = null;
   resetImages();
   clearAttachment();
   clearReply();
@@ -658,7 +678,64 @@ function renderMessages(docs, forceScroll) {
   }
 
   list.replaceChildren(...docs.map((d) => renderMessage(d.id, state.msgById.get(d.id))));
+  renderReceipt();
   if (forceScroll || nearBottom) list.scrollTop = list.scrollHeight;
+  syncMyRead();
+}
+
+/* ---------- Accusés de lecture ---------- */
+
+// Chaque membre enregistre la date à laquelle il a vu la conversation pour la dernière fois ;
+// « Vu par … » est affiché sous son propre dernier message uniquement.
+function listNames(names) {
+  if (names.length === 1) return names[0];
+  if (names.length <= 3) return names.slice(0, -1).join(", ") + " et " + names.at(-1);
+  return `${names.slice(0, 2).join(", ")} et ${names.length - 2} autres`;
+}
+
+function renderReceipt() {
+  const list = $("messages");
+  list.querySelector(".receipt")?.remove();
+  if (!state.reads) return;
+
+  let last = null;
+  for (const [id, m] of state.msgById) if (m.authorUid === state.user.uid) last = [id, m];
+  if (!last) return;
+  const li = document.getElementById("msg-" + last[0]);
+  if (!li) return;
+
+  const t = last[1].createdAt?.toMillis?.() ?? 0;
+  const c = state.conversations.get(state.selectedId);
+  const participants = new Set([...(c?.members || []), ADMIN_UID]); // anciens membres exclus
+  const names = [...state.reads]
+    .filter(([uid, r]) => uid !== state.user.uid && participants.has(uid) && r.t >= t)
+    .map(([, r]) => r.name || "?");
+
+  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+  const p = document.createElement("p");
+  p.className = "receipt";
+  p.textContent = names.length ? "Vu par " + listNames(names) : "Envoyé";
+  if (names.length > 3) p.title = names.join(", ");
+  li.append(p);
+  if (nearBottom) list.scrollTop = list.scrollHeight;
+}
+
+// Enregistre qu'on a vu le dernier message des autres, si ce n'est pas déjà fait.
+function syncMyRead() {
+  const id = state.selectedId;
+  if (!id || !state.reads || !isViewing(id)) return;
+  let latest = 0;
+  for (const m of state.msgById.values()) {
+    if (m.authorUid !== state.user.uid) latest = Math.max(latest, m.createdAt?.toMillis?.() ?? 0);
+  }
+  const mine = state.reads.get(state.user.uid)?.t ?? 0;
+  if (!latest || latest <= mine || latest <= state.readWrite) return;
+  state.readWrite = latest;
+  setDoc(doc(db, "conversations", id, "reads", state.user.uid), {
+    uid: state.user.uid,
+    name: state.user.displayName || state.user.email,
+    lastRead: serverTimestamp(),
+  }).catch((err) => console.error("Accusé de lecture impossible", err)); // réessayé au prochain message
 }
 
 function renderMessage(id, m) {

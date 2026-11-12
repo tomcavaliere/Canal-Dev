@@ -4,9 +4,9 @@ import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, limit,
   onSnapshot, arrayUnion, arrayRemove, serverTimestamp, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db, ADMIN_UID } from "./firebase.js?v=5";
-import { purgeUserData } from "./account.js?v=5";
-import { avatarEl } from "./ui.js?v=5";
+import { db, ADMIN_UID } from "./firebase.js?v=8";
+import { purgeUserData } from "./account.js?v=8";
+import { avatarEl } from "./ui.js?v=8";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -332,8 +332,9 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     if (!conv) return;
     if (!confirm(`Supprimer définitivement « ${conv.title} », tous ses messages et toutes ses photos ?`)) return;
     try {
-      // Photos d'abord, lues par petits lots (jusqu'à ~900 Ko chacune), puis les messages.
-      for (const [sub, size] of [["images", 10], ["messages", 400]]) {
+      // Photos d'abord, lues par petits lots (jusqu'à ~900 Ko chacune), puis les messages
+      // et les accusés de lecture.
+      for (const [sub, size] of [["images", 10], ["messages", 400], ["reads", 400]]) {
         const ref = collection(db, "conversations", conv.id, sub);
         for (;;) {
           const snap = await getDocs(query(ref, limit(size)));

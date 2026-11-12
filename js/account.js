@@ -7,7 +7,7 @@ import {
   collection, collectionGroup, doc, getDoc, getDocs, deleteDoc, updateDoc, writeBatch,
   query, where, limit, arrayRemove, Timestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db, ADMIN_UID } from "./firebase.js?v=5";
+import { auth, db, ADMIN_UID } from "./firebase.js?v=8";
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,9 +17,9 @@ const $ = (id) => document.getElementById(id);
 // et supprime son profil. Utilisé par l'utilisateur lui-même et par l'admin.
 // Le compte Firebase Authentication est traité séparément.
 export async function purgeUserData(uid) {
-  // Photos puis messages. Les photos sont lues par petits lots (jusqu'à ~900 Ko chacune).
-  for (const [group, size] of [["images", 10], ["messages", 400]]) {
-    const q = query(collectionGroup(db, group), where("authorUid", "==", uid), limit(size));
+  // Photos, messages puis accusés de lecture. Les photos sont lues par petits lots (jusqu'à ~900 Ko chacune).
+  for (const [group, field, size] of [["images", "authorUid", 10], ["messages", "authorUid", 400], ["reads", "uid", 400]]) {
+    const q = query(collectionGroup(db, group), where(field, "==", uid), limit(size));
     for (;;) {
       const snap = await getDocs(q);
       if (snap.empty) break;
@@ -49,11 +49,12 @@ function plain(value) {
 }
 
 async function collectMyData(user) {
-  const [profile, convs, msgs, imgs] = await Promise.all([
+  const [profile, convs, msgs, imgs, reads] = await Promise.all([
     getDoc(doc(db, "users", user.uid)),
     getDocs(query(collection(db, "conversations"), where("members", "array-contains", user.uid))),
     getDocs(query(collectionGroup(db, "messages"), where("authorUid", "==", user.uid))),
     getDocs(query(collectionGroup(db, "images"), where("authorUid", "==", user.uid))),
+    getDocs(query(collectionGroup(db, "reads"), where("uid", "==", user.uid))),
   ]);
   return {
     exportedAt: new Date().toISOString(),
@@ -82,6 +83,11 @@ async function collectMyData(user) {
       messageId: d.id,
       createdAt: plain(d.data().createdAt),
       data: d.data().data,
+    })),
+    // Date de dernière lecture de chaque conversation, visible par ses autres membres.
+    readReceipts: reads.docs.map((d) => ({
+      conversationId: d.ref.parent.parent.id,
+      lastRead: plain(d.data().lastRead),
     })),
   };
 }
