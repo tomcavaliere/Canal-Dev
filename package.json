@@ -2,9 +2,11 @@
   "name": "canal-dev",
   "private": true,
   "type": "module",
-  "description": "Outils de développement de Canal Dev. Le site n'a pas d'étape de build : ces dépendances ne servent qu'aux tests.",
+  "description": "Outils de développement de Canal Dev. Le site n'a pas d'étape de build : ces dépendances ne servent qu'aux tests et au déploiement.",
   "scripts": {
-    "test": "sh scripts/test-rules.sh"
+    "check": "for f in js/*.js; do node --check \"$f\" || exit 1; done",
+    "test": "sh scripts/test-rules.sh",
+    "deploy": "firebase deploy --only hosting,firestore --project canal-dev-c18d7"
   },
   "engines": {
     "node": ">=24.12.0"

@@ -9,7 +9,8 @@ Canal de communication pour suivre le développement d'un outil.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
-Hébergement : GitHub Pages (fichiers statiques). Auth + données : Firebase (Authentication + Cloud Firestore, plan gratuit).
+Hébergement : Firebase Hosting (fichiers statiques, <https://canal-dev-c18d7.web.app>). Auth + données : Firebase (Authentication + Cloud Firestore, plan gratuit Spark).
+L'ancienne adresse GitHub Pages redirige vers la nouvelle ([js/redirect.js](js/redirect.js)).
 Le contrôle d'accès est appliqué côté serveur par [firestore.rules](firestore.rules).
 
 ## Structure
@@ -25,12 +26,14 @@ js/account.js           « Mon compte » : export et suppression des données (R
 js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'admin seul)
 js/ui.js                helpers d'affichage (avatar à initiales)
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
+js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting
 confidentialite.html    politique de confidentialité
 RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
 firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid et reads.uid, requis pour l'export/la suppression)
-firebase.json           pour déployer les règles et index avec la CLI Firebase (+ émulateur des tests)
-package.json            outils de test uniquement (le site ne charge aucune de ces dépendances)
+firebase.json           hébergement (en-têtes HTTP, fichiers exclus), règles, index, émulateur des tests
+.firebaserc             projet Firebase par défaut
+package.json            outils de test et de déploiement (le site ne charge aucune de ces dépendances)
 scripts/test-rules.sh   lance l'émulateur Firestore et les tests
 tests/rules.test.mjs    tests des règles de sécurité
 ```
@@ -41,7 +44,7 @@ tests/rules.test.mjs    tests des règles de sécurité
 1. Sur <https://console.firebase.google.com>, crée un projet.
 2. **Paramètres du projet → Vos applications → Web (`</>`)** : enregistre une app, copie l'objet `firebaseConfig` dans [js/firebase-config.js](js/firebase-config.js).
 3. **Authentication → Sign-in method** : active **Google**.
-4. **Authentication → Settings → Authorized domains** : ajoute `tomcavaliere.github.io` (`localhost` y est déjà).
+4. **Authentication → Settings → Authorized domains** : vérifie que `canal-dev-c18d7.web.app` y figure (`localhost` y est déjà).
 5. **Firestore Database** : crée la base en **mode production**.
 
 ### 2. Règles de sécurité (première version)
@@ -61,17 +64,13 @@ Sans cet index, « Télécharger mes données » et la suppression de compte éc
    - [firestore.rules](firestore.rules) (`adminUid()`)
 4. Redéploie les règles, recharge la page : tu as le badge **Admin**.
 
-### 4. Publier sur GitHub Pages
-1. Commit + push sur `main`.
-2. GitHub → **Settings → Pages** → Source : *Deploy from a branch*, branche `main`, dossier `/ (root)`.
-3. Le site est servi sur <https://tomcavaliere.github.io/Canal-Dev/>.
+### 4. Publier sur Firebase Hosting
+À la main : `npx firebase login` (une fois), puis `npm run deploy` (site + règles + index).
 
-**À chaque publication qui modifie le JS ou le CSS**, incrémente le numéro de version des liens
-(`?v=9` → `?v=10`) pour que les navigateurs ne mélangent pas anciens et nouveaux fichiers
-(GitHub Pages les garde 10 minutes en cache) :
-```bash
-sed -i '' 's/?v=9"/?v=10"/g' index.html confidentialite.html js/*.js
-```
+Firebase Hosting envoie `Cache-Control: no-cache` : le navigateur revérifie chaque fichier à chaque visite
+(réponse 304 s'il n'a pas changé). Il n'y a donc plus de numéro de version `?v=` à incrémenter.
+Les en-têtes de sécurité (interdiction d'afficher le site dans un cadre, `nosniff`, etc.) sont dans
+[firebase.json](firebase.json) ; la politique de contenu (CSP) reste dans chaque page HTML.
 
 ## Utilisation (admin)
 1. **+ Projet** (facultatif) : crée un projet. Le ✎ à côté d'un projet permet de le renommer ou de le supprimer (ses conversations sont conservées et passent « Sans projet »).

@@ -5,13 +5,13 @@ import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
   orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField, Timestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=9";
-import { initAccount } from "./account.js?v=9";
-import { avatarEl, initials } from "./ui.js?v=9";
-import { prepareImage } from "./images.js?v=9";
-import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js?v=9";
-import { notificationState, toggleNotifications, showNotification } from "./notify.js?v=9";
-import { startNames, stopNames, watchNames, displayName, displayText } from "./names.js?v=9";
+import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js";
+import { initAccount } from "./account.js";
+import { avatarEl, initials } from "./ui.js";
+import { prepareImage } from "./images.js";
+import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js";
+import { notificationState, toggleNotifications, showNotification } from "./notify.js";
+import { startNames, stopNames, watchNames, displayName, displayText } from "./names.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -115,7 +115,7 @@ async function startSession(user) {
   fillUserHeader(user);
 
   if (state.isAdmin) {
-    const { setupAdmin } = await import("./admin.js?v=9");
+    const { setupAdmin } = await import("./admin.js");
     state.admin = setupAdmin({
       getConversations: () => state.conversations,
       getProjects: () => state.projects,
