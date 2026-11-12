@@ -1,5 +1,5 @@
 import {
-  GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+  GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, deleteUser,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
@@ -100,7 +100,7 @@ async function startSession(user) {
     return;
   }
   if (!user.email || !GMAIL_RE.test(user.email) || !user.emailVerified) {
-    await signOut(auth);
+    await refuseAccount(user);
     showLoginError("Seules les adresses Gmail (@gmail.com) sont acceptées.");
     return;
   }
@@ -125,6 +125,22 @@ async function startSession(user) {
   }
   if (state.isAdmin) listenAllProjects();
   listenConversations();
+}
+
+// Connexion refusée. Firebase Authentication a déjà créé un compte (email, nom, photo) :
+// pour une adresse non Gmail, il est supprimé aussitôt (minimisation RGPD) ; la connexion
+// vient d'avoir lieu, donc aucune réauthentification n'est nécessaire.
+async function refuseAccount(user) {
+  if (user.email && GMAIL_RE.test(user.email)) {
+    await signOut(auth); // Gmail à l'adresse non vérifiée : simple déconnexion
+    return;
+  }
+  try {
+    await deleteUser(user);
+  } catch (err) {
+    console.warn("Suppression du compte refusé impossible", err);
+    await signOut(auth);
+  }
 }
 
 function teardown() {
