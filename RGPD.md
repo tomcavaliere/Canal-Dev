@@ -14,11 +14,11 @@ Dernière revue : 12 novembre 2026.
 | Finalité | Authentifier les participants, gérer leurs accès aux conversations, échanger et conserver des messages |
 | Base légale | Intérêt légitime (art. 6.1.f) — voir § 2 |
 | Personnes concernées | Personnes invitées qui se connectent avec un compte Gmail ; l'administrateur |
-| Données | Email, nom affiché Google, UID Firebase, date de création et de dernière connexion, contenu et date des messages, photos jointes aux messages (sans métadonnées), appartenance aux conversations. Données techniques (IP) chez les hébergeurs. Pas de photo de profil, pas de donnée sensible (art. 9) demandée |
+| Données | Email, nom affiché Google, UID Firebase, date de création et de dernière connexion, contenu et date des messages, photos jointes aux messages (sans métadonnées), appartenance aux conversations, date de dernière lecture de chaque conversation (accusés de lecture). Données techniques (IP) chez les hébergeurs. Pas de photo de profil, pas de donnée sensible (art. 9) demandée |
 | Personnes concernées indirectement | Personnes pouvant apparaître sur les photos partagées (voir § 10) |
-| Destinataires | Administrateur (tout) ; membres d'une conversation (nom, messages et photos de cette conversation) ; sous-traitants (§ 3) |
+| Destinataires | Administrateur (tout) ; membres d'une conversation (nom, messages, photos et date de dernière lecture de cette conversation) ; sous-traitants (§ 3) |
 | Transferts hors UE | Firebase Authentication et GitHub Pages (États-Unis) : EU-US Data Privacy Framework + clauses contractuelles types. Firestore : région UE |
-| Durées | Compte/profil : jusqu'à suppression, max. 12 mois après la dernière connexion. Messages et photos : durée de vie de la conversation, ou jusqu'à suppression par l'auteur / suppression du compte |
+| Durées | Compte/profil : jusqu'à suppression, max. 12 mois après la dernière connexion. Messages, photos et accusés de lecture : durée de vie de la conversation, ou jusqu'à suppression par l'auteur / suppression du compte |
 | Sécurité | § 5 |
 
 ## 2. Base légale : mise en balance de l'intérêt légitime

@@ -26,7 +26,7 @@ js/images.js            préparation des photos (redimensionnement, suppression 
 confidentialite.html    politique de confidentialité
 RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
-firestore.indexes.json  index (collection groups messages.authorUid et images.authorUid, requis pour l'export/la suppression)
+firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid et reads.uid, requis pour l'export/la suppression)
 firebase.json           pour déployer les règles et index avec la CLI Firebase
 ```
 
@@ -45,7 +45,7 @@ Déploie [firestore.rules](firestore.rules) :
 - soit avec la CLI : `npm i -g firebase-tools && firebase login && firebase use --add && firebase deploy --only firestore`.
 
 La CLI déploie aussi [firestore.indexes.json](firestore.indexes.json). Si tu passes par la console, crée l'exemption d'index à la main :
-**Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour la collection `images`.
+**Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour la collection `images`, et pour la collection `reads` avec le champ `uid`.
 Sans cet index, « Télécharger mes données » et la suppression de compte échouent.
 
 ### 3. Devenir administrateur
