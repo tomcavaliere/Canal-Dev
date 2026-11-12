@@ -4,6 +4,7 @@
     "indexes": "firestore.indexes.json"
   },
   "hosting": {
+    "site": "canal-dev-c18d7",
     "public": ".",
     "ignore": [
       "firebase.json",
