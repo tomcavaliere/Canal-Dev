@@ -50,14 +50,33 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
+    // ---------- Projets (regroupent des conversations) ----------
+    match /projects/{projectId} {
+      function validProject() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['title', 'description', 'createdAt', 'updatedAt'])
+          && d.title is string && d.title.size() > 0 && d.title.size() <= 120
+          && d.description is string && d.description.size() <= 500;
+      }
+
+      // Lister les projets : admin uniquement. Lire UN projet par son identifiant
+      // (aléatoire, connu seulement via une conversation dont on est membre) :
+      // tout utilisateur connecté, pour afficher le nom du projet. Aucune donnée personnelle.
+      allow list: if isAdmin();
+      allow get: if signedIn();
+      allow create, update: if isAdmin() && validProject();
+      allow delete: if isAdmin();
+    }
+
     // ---------- Conversations ----------
     match /conversations/{convId} {
       function validConversation() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['title', 'description', 'members', 'createdAt', 'updatedAt'])
+        return d.keys().hasOnly(['title', 'description', 'members', 'projectId', 'createdAt', 'updatedAt'])
           && d.title is string && d.title.size() > 0 && d.title.size() <= 120
           && d.description is string && d.description.size() <= 500
-          && d.members is list;
+          && d.members is list
+          && (!('projectId' in d) || (d.projectId is string && d.projectId.size() > 0 && d.projectId.size() <= 128));
       }
 
       // Lecture : l'admin, ou les membres de la conversation.
