@@ -50,8 +50,9 @@ function plain(value) {
 }
 
 async function collectMyData(user) {
-  const [profile, convs, msgs, imgs, reads] = await Promise.all([
+  const [profile, name, convs, msgs, imgs, reads] = await Promise.all([
     getDoc(doc(db, "users", user.uid)),
+    getDoc(doc(db, "names", user.uid)),
     getDocs(query(collection(db, "conversations"), where("members", "array-contains", user.uid))),
     getDocs(query(collectionGroup(db, "messages"), where("authorUid", "==", user.uid))),
     getDocs(query(collectionGroup(db, "images"), where("authorUid", "==", user.uid))),
@@ -61,16 +62,27 @@ async function collectMyData(user) {
     exportedAt: new Date().toISOString(),
     service: "Canal Dev",
     privacyPolicy: new URL("confidentialite.html", location.href).href,
+    // Compte Firebase Authentication. La photo Google y est enregistrée automatiquement :
+    // Canal Dev ne la copie, ne l'utilise ni ne l'affiche jamais.
     account: {
       uid: user.uid,
       email: user.email,
       emailVerified: user.emailVerified,
       displayName: user.displayName,
-      providers: user.providerData.map((p) => p.providerId),
+      photoURL: user.photoURL,
+      providers: user.providerData.map((p) => ({
+        providerId: p.providerId,
+        uid: p.uid,
+        email: p.email,
+        displayName: p.displayName,
+        photoURL: p.photoURL,
+      })),
       createdAt: user.metadata.creationTime,
       lastSignInAt: user.metadata.lastSignInTime,
     },
     profile: profile.exists() ? plain(profile.data()) : null,
+    // Nom affiché aux autres membres, fixé par l'administrateur (annuaire).
+    displayedName: name.exists() ? plain(name.data()) : null,
     conversations: convs.docs.map((d) => ({
       id: d.id, title: d.data().title, description: d.data().description,
       projectId: d.data().projectId ?? null,
@@ -115,6 +127,10 @@ function openAccount() {
   const user = auth.currentUser;
   if (!user) return;
   $("account-email").textContent = user.email;
+  $("account-name").textContent = "…";
+  getDoc(doc(db, "names", user.uid))
+    .then((snap) => { $("account-name").textContent = snap.exists() ? snap.data().name : "pas encore attribué"; })
+    .catch(() => { $("account-name").textContent = "indisponible"; });
   $("account-delete").hidden = user.uid === ADMIN_UID;
   $("account-admin-note").hidden = user.uid !== ADMIN_UID;
   $("delete-confirm").value = "";
