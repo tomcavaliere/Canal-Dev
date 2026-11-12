@@ -225,6 +225,20 @@
       <h2>Membres de « <span id="members-conv-title"></span> »</h2>
       <p class="muted small">Coche un utilisateur pour lui donner accès (lecture et écriture).</p>
       <ul id="members-list" class="list members"></ul>
+      <form id="form-invite" class="stack tight">
+        <h3>Inviter par email</h3>
+        <p class="muted small">Pour une personne qui ne s'est pas encore connectée : elle rejoindra la conversation
+          à sa première connexion, sous le nom indiqué. Aucun email n'est envoyé : préviens-la toi-même.</p>
+        <div class="invite-fields">
+          <input id="invite-email" type="email" placeholder="adresse@gmail.com" aria-label="Adresse Gmail"
+            required autocomplete="off" spellcheck="false">
+          <input id="invite-name" placeholder="Nom affiché" aria-label="Nom affiché aux membres" maxlength="200"
+            required autocomplete="off">
+          <button class="btn" type="submit">Inviter</button>
+        </div>
+        <p id="invite-error" class="error small" role="alert" hidden></p>
+        <ul id="invite-list" class="list invites"></ul>
+      </form>
       <div class="row end">
         <button type="button" class="btn" data-close>Fermer</button>
       </div>

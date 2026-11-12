@@ -296,6 +296,74 @@ describe("Annuaire des noms (names)", () => {
   });
 });
 
+describe("Invitations", () => {
+  // erin n'est encore membre de rien ; l'admin l'a invitée dans c1.
+  const erin = () => as("erin");
+  const invite = (extra = {}) => ({
+    email: "erin@gmail.com", name: "Erin", convIds: ["c1"], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  });
+  beforeEach(() => env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), "invites/erin@gmail.com"), { ...invite(), createdAt: T0, updatedAt: T0 })));
+
+  function join(db, conv = "c1", { updateInvite = true } = {}) {
+    const batch = writeBatch(db);
+    batch.update(doc(db, `conversations/${conv}`), { members: arrayUnion("erin") });
+    if (updateInvite) batch.delete(doc(db, "invites/erin@gmail.com"));
+    return batch.commit();
+  }
+
+  it("seul l'admin crée une invitation", async () => {
+    await assertFails(setDoc(doc(alice(), "invites/frank@gmail.com"), invite({ email: "frank@gmail.com" })));
+    await assertSucceeds(setDoc(doc(admin(), "invites/frank@gmail.com"), invite({ email: "frank@gmail.com" })));
+  });
+  it("une adresse non Gmail, en majuscules ou différente de l'identifiant est refusée", async () => {
+    await assertFails(setDoc(doc(admin(), "invites/frank@example.com"), invite({ email: "frank@example.com" })));
+    await assertFails(setDoc(doc(admin(), "invites/Frank@gmail.com"), invite({ email: "Frank@gmail.com" })));
+    await assertFails(setDoc(doc(admin(), "invites/frank@gmail.com"), invite()));
+  });
+  it("la personne invitée lit son invitation, personne d'autre (sauf l'admin)", async () => {
+    await assertSucceeds(getDoc(doc(erin(), "invites/erin@gmail.com")));
+    await assertFails(getDoc(doc(bob(), "invites/erin@gmail.com")));
+    await assertFails(getDocs(collection(erin(), "invites")));
+    await assertSucceeds(getDocs(collection(admin(), "invites")));
+  });
+  it("la personne invitée rejoint la conversation en consommant l'invitation", () => assertSucceeds(join(erin())));
+  it("invitée dans deux conversations, elle retire de l'invitation celle qu'elle rejoint", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "invites/erin@gmail.com"), { convIds: ["c1", "c2"] }));
+    const db = erin();
+    const wrong = writeBatch(db);
+    wrong.update(doc(db, "conversations/c1"), { members: arrayUnion("erin") });
+    wrong.update(doc(db, "invites/erin@gmail.com"), { convIds: arrayRemove("c2") });
+    await assertFails(wrong.commit());
+    const batch = writeBatch(db);
+    batch.update(doc(db, "conversations/c1"), { members: arrayUnion("erin") });
+    batch.update(doc(db, "invites/erin@gmail.com"), { convIds: arrayRemove("c1") });
+    await assertSucceeds(batch.commit());
+  });
+  it("rejoindre sans consommer l'invitation est refusé", () =>
+    assertFails(join(erin(), "c1", { updateInvite: false })));
+  it("une conversation absente de l'invitation est refusée", () => assertFails(join(erin(), "c2")));
+  it("sans invitation, impossible de s'ajouter", async () => {
+    const db = as("frank");
+    const batch = writeBatch(db);
+    batch.update(doc(db, "conversations/c1"), { members: arrayUnion("frank") });
+    await assertFails(batch.commit());
+  });
+  it("la personne invitée n'ajoute pas de conversation à son invitation", () =>
+    assertFails(updateDoc(doc(erin(), "invites/erin@gmail.com"), { convIds: ["c1", "c2"] })));
+  it("elle crée son entrée d'annuaire avec le nom choisi par l'admin, pas un autre", async () => {
+    const entry = (name) => ({ name, updatedAt: serverTimestamp() });
+    await assertFails(setDoc(doc(erin(), "names/erin"), entry("Administrateur")));
+    await assertSucceeds(setDoc(doc(erin(), "names/erin"), entry("Erin")));
+    await assertFails(setDoc(doc(bob(), "names/bob"), entry("Bob")));
+  });
+  it("la personne invitée ou l'admin supprime l'invitation", async () => {
+    await assertFails(deleteDoc(doc(bob(), "invites/erin@gmail.com")));
+    await assertSucceeds(deleteDoc(doc(erin(), "invites/erin@gmail.com")));
+  });
+});
+
 describe("Projets", () => {
   const project = { title: "P", description: "", createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
 

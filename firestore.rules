@@ -28,6 +28,11 @@ service cloud.firestore {
       return signedIn() && (isAdmin() || isMember(convId));
     }
 
+    // Invitation adressée à l'utilisateur connecté (identifiant = son email en minuscules).
+    function myInvite() {
+      return /databases/$(database)/documents/invites/$(request.auth.token.email.lower());
+    }
+
     // ---------- Profils utilisateurs ----------
     match /users/{uid} {
       function validProfile() {
@@ -66,8 +71,41 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if isAdmin();
       allow create, update: if isAdmin() && validName();
+      // Personne invitée : crée sa propre entrée, avec le nom choisi par l'admin dans l'invitation.
+      allow create: if signedIn() && request.auth.uid == uid && validName()
+        && exists(myInvite())
+        && request.resource.data.name == get(myInvite()).data.name;
       // Droit à l'effacement : l'utilisateur peut supprimer sa propre entrée.
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    // ---------- Invitations (une par email, créées par l'admin) ----------
+    // La personne invitée la lit à sa connexion, s'ajoute aux conversations listées et retire
+    // chacune de l'invitation dans le même batch : une invitation ne sert qu'une fois.
+    match /invites/{email} {
+      function validInvite() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['email', 'name', 'convIds', 'createdAt', 'updatedAt'])
+          && d.email == email
+          && email.matches('[a-z0-9._+-]+@gmail[.]com')
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 200
+          && d.convIds is list && d.convIds.size() > 0 && d.convIds.size() <= 50
+          && d.updatedAt == request.time;
+      }
+      function isInvitee() {
+        return signedIn() && request.auth.token.email.lower() == email;
+      }
+
+      allow get: if isAdmin() || isInvitee();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && validInvite() && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin() && validInvite() && request.resource.data.createdAt == resource.data.createdAt;
+      // La personne invitée ne peut que retirer des conversations (acceptées, ou disparues).
+      allow update: if isInvitee()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['convIds'])
+        && resource.data.convIds.hasAll(request.resource.data.convIds)
+        && request.resource.data.convIds.size() < resource.data.convIds.size();
+      allow delete: if isAdmin() || isInvitee();
     }
 
     // ---------- Projets (regroupent des conversations) ----------
@@ -115,6 +153,15 @@ service cloud.firestore {
         && request.auth.uid in resource.data.members
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt'])
         && request.resource.data.lastMessageAt == request.time;
+      // Invitation : la personne invitée s'ajoute elle-même (et rien d'autre), à condition que la
+      // conversation figure dans son invitation et qu'elle l'en retire dans le même batch.
+      allow update: if signedIn()
+        && exists(myInvite())
+        && convId in get(myInvite()).data.convIds
+        && !(request.auth.uid in resource.data.members)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+        && request.resource.data.members == resource.data.members.concat([request.auth.uid])
+        && (!existsAfter(myInvite()) || !(convId in getAfter(myInvite()).data.convIds));
       allow delete: if isAdmin();
 
       // ---------- Messages ----------

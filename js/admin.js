@@ -12,6 +12,10 @@ import { confirmDialog, toast } from "./dialogs.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
+// Durée de conservation d'une invitation jamais utilisée.
+const INVITE_MS = 90 * 24 * 3600 * 1000;
+const INVITE_EMAIL_RE = /^[a-z0-9._+-]+@gmail\.com$/;
+const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
 
 const $ = (id) => document.getElementById(id);
 
@@ -34,6 +38,100 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     ensureNames();
   }, (err) => console.error("Lecture des utilisateurs impossible", err));
   cleanups.push(unsubUsers);
+
+  /* --- Invitations (invites/{email}) --- */
+  let invites = new Map(); // email -> data
+  const unsubInvites = onSnapshot(collection(db, "invites"), (snap) => {
+    invites = new Map(snap.docs.map((d) => [d.id, d.data()]));
+    renderUsers();
+    if ($("dlg-members").open) renderInvites();
+  }, (err) => console.error("Lecture des invitations impossible", err));
+  cleanups.push(unsubInvites);
+
+  // Nom déjà pris par une autre personne : inscrite (annuaire) ou invitée.
+  function nameInUse(name, { uid = "", email = "" } = {}) {
+    const key = name.trim().toLocaleLowerCase("fr");
+    return isNameTaken(name, uid)
+      || [...invites.values()].some((i) => i.email !== email && i.name.trim().toLocaleLowerCase("fr") === key);
+  }
+
+  function showInviteError(msg) {
+    $("invite-error").textContent = msg;
+    $("invite-error").hidden = !msg;
+  }
+
+  on($("form-invite"), "submit", async (e) => {
+    e.preventDefault();
+    const conv = getSelected();
+    if (!conv) return;
+    const email = $("invite-email").value.trim().toLowerCase();
+    const name = $("invite-name").value.trim();
+    if (!INVITE_EMAIL_RE.test(email)) return showInviteError("Il faut une adresse Gmail (…@gmail.com).");
+    if ([...users.values()].some((u) => (u.email || "").toLowerCase() === email)) {
+      return showInviteError("Cette personne est déjà inscrite : coche-la dans la liste ci-dessus.");
+    }
+    if (!name) return showInviteError("Indique le nom affiché aux membres.");
+    if (nameInUse(name, { email })) return showInviteError("Ce nom est déjà celui d'une autre personne.");
+    const existing = invites.get(email);
+    if (existing?.convIds?.length >= 50) return showInviteError("Cette invitation compte déjà 50 conversations.");
+    showInviteError("");
+    try {
+      const ref = doc(db, "invites", email);
+      if (existing) {
+        await updateDoc(ref, { name, convIds: arrayUnion(conv.id), updatedAt: serverTimestamp() });
+      } else {
+        await setDoc(ref, { email, name, convIds: [conv.id], createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      }
+      $("invite-email").value = "";
+      $("invite-name").value = "";
+      toast(`Invitation enregistrée : préviens ${name} de se connecter avec ${email}.`);
+    } catch (err) {
+      console.error(err);
+      showInviteError("Invitation impossible : " + err.message);
+    }
+  });
+
+  // Retire une conversation d'une invitation (supprimée si c'était la dernière).
+  function uninvite(email, convId) {
+    const inv = invites.get(email);
+    const ref = doc(db, "invites", email);
+    if (!inv || inv.convIds.every((id) => id === convId)) return deleteDoc(ref);
+    return updateDoc(ref, { convIds: arrayRemove(convId), updatedAt: serverTimestamp() });
+  }
+
+  function renderInvites() {
+    const conv = getSelected();
+    if (!conv) return;
+    const items = [...invites.values()]
+      .filter((i) => i.convIds?.includes(conv.id))
+      .sort((a, b) => a.email.localeCompare(b.email))
+      .map((i) => {
+        const li = document.createElement("li");
+        const text = document.createElement("span");
+        const since = i.createdAt?.toDate?.();
+        text.textContent = `${i.name} — ${i.email}` + (since ? ` (invitée le ${dateFmt.format(since)})` : "");
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "btn small";
+        cancel.textContent = "Annuler";
+        cancel.setAttribute("aria-label", `Annuler l'invitation de ${i.email}`);
+        cancel.addEventListener("click", () => uninvite(i.email, conv.id).catch((err) => {
+          console.error(err);
+          toast("Annulation impossible : " + err.message, { error: true });
+        }));
+        li.append(tagEl("tag-invite", "invitation"), text, cancel);
+        return li;
+      });
+    $("invite-list").replaceChildren(...items);
+  }
+
+  function tagEl(className, text, title = "") {
+    const t = document.createElement("span");
+    t.className = className;
+    t.textContent = text;
+    if (title) t.title = title;
+    return t;
+  }
 
   /* --- Annuaire des noms (names/{uid}) --- */
   // Chaque membre (et l'admin) doit y figurer, sinon ses messages sont marqués « non vérifié ».
@@ -173,6 +271,18 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       li.append(userRow(entry, extras));
       return li;
     });
+    // Invitations en attente (personnes qui ne se sont pas encore connectées).
+    for (const i of [...invites.values()].sort((a, b) => a.email.localeCompare(b.email))) {
+      const li = document.createElement("li");
+      const extras = [tagEl("tag-invite", "invitation", `${i.convIds.length} conversation(s)`)];
+      const created = i.createdAt?.toMillis?.();
+      if (created && Date.now() - created > INVITE_MS) {
+        extras.unshift(tagEl("tag-pending", "> 3 mois", "Invitation jamais utilisée : l'annuler."));
+      }
+      extras.push(cancelInviteButton(i));
+      li.append(userRow(["", { displayName: i.name, email: i.email }], extras));
+      items.push(li);
+    }
     if (items.length === 0) {
       const li = document.createElement("li");
       li.className = "muted small";
@@ -181,6 +291,26 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       items.push(li);
     }
     $("user-list").replaceChildren(...items);
+  }
+
+  function cancelInviteButton(i) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "del-user";
+    btn.textContent = "✕";
+    btn.title = "Annuler l'invitation";
+    btn.setAttribute("aria-label", `Annuler l'invitation de ${i.email}`);
+    btn.addEventListener("click", async () => {
+      if (!await confirmDialog(`Annuler l'invitation de ${i.email} (${i.convIds.length} conversation(s)) ?`,
+        { ok: "Annuler l'invitation", danger: true })) return;
+      try {
+        await deleteDoc(doc(db, "invites", i.email));
+      } catch (err) {
+        console.error(err);
+        toast("Annulation impossible : " + err.message, { error: true });
+      }
+    });
+    return btn;
   }
 
   function editUserButton([uid, u]) {
@@ -207,7 +337,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         { ok: "Supprimer", danger: true })) return;
       btn.disabled = true;
       try {
-        await purgeUserData(uid);
+        await purgeUserData(uid, u.email);
         await confirmDialog(`Données de ${u.email} supprimées.\n\nÀ faire aussi : Firebase Console → Authentication → Users → supprimer le compte ${uid}.`,
           { ok: "Compris", cancel: false });
       } catch (err) {
@@ -377,6 +507,8 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   /* --- Gestion des membres --- */
   const dlgMembers = $("dlg-members");
   on($("btn-members"), "click", () => {
+    $("form-invite").reset();
+    showInviteError("");
     renderMembers();
     dlgMembers.showModal();
   });
@@ -433,6 +565,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       items.push(li);
     }
     $("members-list").replaceChildren(...items);
+    renderInvites();
   }
 
   /* --- Suppression d'une conversation --- */
@@ -453,6 +586,10 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
           snap.docs.forEach((d) => batch.delete(d.ref));
           await batch.commit();
         }
+      }
+      // Les invitations ne doivent plus y mener.
+      for (const i of [...invites.values()].filter((inv) => inv.convIds?.includes(conv.id))) {
+        await uninvite(i.email, conv.id);
       }
       await deleteDoc(doc(db, "conversations", conv.id));
     } catch (err) {

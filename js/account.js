@@ -15,9 +15,10 @@ const $ = (id) => document.getElementById(id);
 /* ---------- Suppression des données d'un utilisateur ---------- */
 
 // Supprime tous les messages de `uid`, le retire de toutes les conversations,
-// supprime son nom de l'annuaire et son profil. Utilisé par l'utilisateur lui-même et par l'admin.
+// supprime son nom de l'annuaire, son invitation éventuelle et son profil.
+// Utilisé par l'utilisateur lui-même et par l'admin.
 // Le compte Firebase Authentication est traité séparément.
-export async function purgeUserData(uid) {
+export async function purgeUserData(uid, email) {
   // Photos, messages puis accusés de lecture. Les photos sont lues par petits lots (jusqu'à ~900 Ko chacune).
   for (const [group, field, size] of [["images", "authorUid", 10], ["messages", "authorUid", 400], ["reads", "uid", 400]]) {
     const q = query(collectionGroup(db, group), where(field, "==", uid), limit(size));
@@ -35,6 +36,7 @@ export async function purgeUserData(uid) {
     await updateDoc(c.ref, { members: arrayRemove(uid) });
   }
 
+  if (email) await deleteDoc(doc(db, "invites", email.toLowerCase()));
   await deleteDoc(doc(db, "names", uid));
   await deleteDoc(doc(db, "users", uid));
 }
@@ -51,9 +53,10 @@ function plain(value) {
 }
 
 async function collectMyData(user) {
-  const [profile, name, convs, msgs, imgs, reads] = await Promise.all([
+  const [profile, name, invite, convs, msgs, imgs, reads] = await Promise.all([
     getDoc(doc(db, "users", user.uid)),
     getDoc(doc(db, "names", user.uid)),
+    getDoc(doc(db, "invites", user.email.toLowerCase())),
     getDocs(query(collection(db, "conversations"), where("members", "array-contains", user.uid))),
     getDocs(query(collectionGroup(db, "messages"), where("authorUid", "==", user.uid))),
     getDocs(query(collectionGroup(db, "images"), where("authorUid", "==", user.uid))),
@@ -84,6 +87,8 @@ async function collectMyData(user) {
     profile: profile.exists() ? plain(profile.data()) : null,
     // Nom affiché aux autres membres, fixé par l'administrateur (annuaire).
     displayedName: name.exists() ? plain(name.data()) : null,
+    // Invitation pas encore utilisée (elle est supprimée dès qu'elle a servi).
+    invitation: invite.exists() ? plain(invite.data()) : null,
     conversations: convs.docs.map((d) => ({
       id: d.id, title: d.data().title, description: d.data().description,
       projectId: d.data().projectId ?? null,
@@ -175,7 +180,7 @@ async function deleteAccount() {
     await reauthenticateWithPopup(user, provider);
 
     setStatus("Suppression de tes messages, photos et accès…");
-    await purgeUserData(user.uid);
+    await purgeUserData(user.uid, user.email);
     await deleteUser(user);
     $("dlg-account").close();
     toast("Ton compte et toutes tes données ont été supprimés.", { timeout: 15000 });

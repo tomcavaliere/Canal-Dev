@@ -382,6 +382,12 @@ dialog::backdrop { background: rgb(0 0 0 / .4); }
 .members label { flex-direction: row; align-items: center; gap: .6rem; padding: .5rem .75rem; cursor: pointer; }
 .members label:hover { background: var(--surface-2); }
 .members input[type="checkbox"] { width: auto; }
+#form-invite { border-top: 1px solid var(--border); padding-top: .75rem; }
+.invite-fields { display: flex; flex-wrap: wrap; gap: .5rem; }
+.invite-fields input { flex: 1 1 10rem; }
+.invites li { display: flex; align-items: center; gap: .5rem; padding: .3rem 0; font-size: .85rem; }
+.invites li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tag-invite { font-size: .7rem; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
 
 /* Mobile */
 @media (max-width: 720px) {

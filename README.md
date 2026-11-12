@@ -106,6 +106,8 @@ puis retire `tomcavaliere.github.io` des domaines autorisés d'Authentication.
 1. **+ Projet** (facultatif) : crée un projet. Le ✎ à côté d'un projet permet de le renommer ou de le supprimer (ses conversations sont conservées et passent « Sans projet »).
 1. **+ Conversation** (ou **+** à côté d'un projet) : crée une conversation, dans un projet ou non. En haut d'une conversation : **Renommer** (titre et description) et **Déplacer** (changer de projet).
 2. Demande à la personne de se connecter une fois : elle apparaît dans **Utilisateurs** avec la mention « en attente ».
+   Ou, sans attendre : **Membres → Inviter par email** (adresse Gmail + nom affiché). À sa première connexion,
+   elle rejoint directement la conversation sous ce nom (aucun email n'est envoyé : préviens-la toi-même).
 3. Ouvre la conversation → **Membres** → coche la personne. Elle voit la conversation apparaître instantanément.
    Son **nom affiché** est repris de son compte Google à ce moment-là (un nom déjà pris devient « Nom (2) ») ;
    le ✎ à côté d'elle dans « Utilisateurs » permet de le corriger. Il n'est jamais mis à jour automatiquement,
@@ -145,7 +147,7 @@ Le détail est dans [RGPD.md](RGPD.md) (registre, base légale, procédures) et 
 
 Au quotidien :
 - Un utilisateur exporte ou supprime ses données depuis **Mon compte**.
-- Tous les trimestres, supprimer les comptes marqués **« inactif > 12 mois »** (✕ dans « Utilisateurs »), puis le compte correspondant dans **Authentication → Users**. Y supprimer aussi les comptes absents de « Utilisateurs » (voir [RGPD.md](RGPD.md#6-conservation--procédure)).
+- Tous les trimestres, annuler les invitations marquées **« > 3 mois »** et supprimer les comptes marqués **« inactif > 12 mois »** (✕ dans « Utilisateurs »), puis le compte correspondant dans **Authentication → Users**. Y supprimer aussi les comptes absents de « Utilisateurs » (voir [RGPD.md](RGPD.md#6-conservation--procédure)).
 - Une demande par email (opposition, effacement…) : répondre sous 1 mois, voir [RGPD.md](RGPD.md#4-exercice-des-droits-art-12-à-22).
 
 ## Sécurité

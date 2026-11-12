@@ -34,6 +34,7 @@
           <tr><td>Adresse email Gmail</td><td>Ton compte Google, à la connexion</td><td>Identification, gestion des accès par l'administrateur</td></tr>
           <tr><td>Nom de ton compte Google</td><td>Ton compte Google, à chaque connexion</td><td>Visible de l'administrateur seulement ; sert de base à ton nom affiché</td></tr>
           <tr><td>Nom affiché aux autres membres</td><td>Repris de ton compte Google quand l'administrateur te donne accès, puis fixé par lui</td><td>Affiché à côté de tes messages et dans « Vu par … ». Seul l'administrateur peut le modifier : personne ne peut se faire passer pour toi</td></tr>
+          <tr><td>Invitation : ton adresse Gmail, le nom affiché prévu et les conversations concernées</td><td>Saisie par l'administrateur avant ta première connexion</td><td>Te donner accès à ces conversations, sous ce nom, dès ta première connexion</td></tr>
           <tr><td>Identifiant technique (UID)</td><td>Généré par Firebase</td><td>Lier ton compte à tes accès et messages</td></tr>
           <tr><td>Date de création du compte et de dernière connexion</td><td>Générées automatiquement</td><td>Appliquer la durée de conservation (§ 6)</td></tr>
           <tr><td>Contenu et date de tes messages (et date de leur dernière modification)</td><td>Saisis par toi</td><td>Fonctionnement du canal</td></tr>
@@ -104,6 +105,8 @@
     <ul>
       <li><strong>Compte, profil et nom affiché</strong> : jusqu'à ce que tu supprimes ton compte, ou au plus tard
         <strong>12 mois après ta dernière connexion</strong> ; l'administrateur supprime alors le compte et les données associées.</li>
+      <li><strong>Invitation</strong> : supprimée dès ta première connexion (elle a servi), sinon annulée par
+        l'administrateur au plus tard 3 mois après sa création.</li>
       <li><strong>Connexion refusée</strong> (adresse qui n'est pas une adresse Gmail) : le compte de connexion
         créé automatiquement par Firebase est supprimé immédiatement.</li>
       <li><strong>Messages et photos</strong> : tant que la conversation existe. Ils sont supprimés si tu

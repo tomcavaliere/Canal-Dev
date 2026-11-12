@@ -13,12 +13,12 @@ Dernière revue : 12 novembre 2026.
 | Responsable | Tom Cavaliere — tomcavaliere66@gmail.com |
 | Finalité | Authentifier les participants, gérer leurs accès aux conversations, échanger et conserver des messages |
 | Base légale | Intérêt légitime (art. 6.1.f) — voir § 2 |
-| Personnes concernées | Personnes invitées qui se connectent avec un compte Gmail ; l'administrateur |
-| Données | Email, nom du compte Google (profil), nom affiché aux membres (annuaire `names/{uid}` tenu par l'admin), UID Firebase, date de création et de dernière connexion, contenu et date des messages (et de leur dernière modification), photos jointes aux messages (sans métadonnées), appartenance aux conversations, date de dernière lecture de chaque conversation (accusés de lecture, qui servent aussi à synchroniser les non-lus entre les appareils de la personne). URL de la photo Google : enregistrée automatiquement par Firebase Authentication dans le compte de connexion, jamais copiée dans Firestore, utilisée ni affichée (incluse dans l'export). Données techniques (IP) chez les hébergeurs. Pas de donnée sensible (art. 9) demandée |
+| Personnes concernées | Personnes invitées qui se connectent avec un compte Gmail (y compris avant leur première connexion, via une invitation) ; l'administrateur |
+| Données | Email, nom du compte Google (profil), nom affiché aux membres (annuaire `names/{uid}` tenu par l'admin), UID Firebase, date de création et de dernière connexion, contenu et date des messages (et de leur dernière modification), photos jointes aux messages (sans métadonnées), appartenance aux conversations, date de dernière lecture de chaque conversation (accusés de lecture, qui servent aussi à synchroniser les non-lus entre les appareils de la personne). Invitation (`invites/{email}`) : email, nom affiché prévu et conversations, saisis par l'admin avant la première connexion. URL de la photo Google : enregistrée automatiquement par Firebase Authentication dans le compte de connexion, jamais copiée dans Firestore, utilisée ni affichée (incluse dans l'export). Données techniques (IP) chez les hébergeurs. Pas de donnée sensible (art. 9) demandée |
 | Personnes concernées indirectement | Personnes pouvant apparaître sur les photos partagées (voir § 10) |
 | Destinataires | Administrateur (tout) ; membres d'une conversation (nom affiché, messages, photos et date de dernière lecture de cette conversation) ; utilisateurs connectés connaissant l'UID d'une personne, en pratique ses co-membres (nom affiché seul) ; sous-traitants (§ 3) |
 | Transferts hors UE | Firebase Authentication et Firebase Hosting (réseau mondial, dont États-Unis), GitHub Pages tant que l'ancienne adresse redirige : EU-US Data Privacy Framework + clauses contractuelles types. Firestore : région UE |
-| Durées | Compte/profil/nom affiché : jusqu'à suppression, max. 12 mois après la dernière connexion. Compte de connexion d'une adresse refusée (non Gmail) : supprimé immédiatement par l'application. Messages, photos et accusés de lecture : durée de vie de la conversation, ou jusqu'à suppression par l'auteur / suppression du compte |
+| Durées | Compte/profil/nom affiché : jusqu'à suppression, max. 12 mois après la dernière connexion. Compte de connexion d'une adresse refusée (non Gmail) : supprimé immédiatement par l'application. Invitation : supprimée dès la première connexion (elle a servi), sinon annulée par l'admin au plus tard 3 mois après sa création. Messages, photos et accusés de lecture : durée de vie de la conversation, ou jusqu'à suppression par l'auteur / suppression du compte |
 | Sécurité | § 5 |
 
 ## 2. Base légale : mise en balance de l'intérêt légitime
@@ -46,8 +46,8 @@ Conclusion : l'intérêt légitime n'est pas supplanté par les droits des perso
 
 | Droit | Moyen | Implémentation |
 |---|---|---|
-| Accès, portabilité | *Mon compte → Télécharger mes données* (JSON : compte de connexion dont l'URL de la photo Google, profil, nom affiché, messages, photos en data URL, accusés) | [js/account.js](js/account.js) `collectMyData` |
-| Effacement | *Mon compte → Supprimer mon compte* | `purgeUserData` (messages, photos, accusés, accès, nom affiché, profil) + `deleteUser` (après réauthentification) |
+| Accès, portabilité | *Mon compte → Télécharger mes données* (JSON : compte de connexion dont l'URL de la photo Google, profil, nom affiché, invitation en attente, messages, photos en data URL, accusés) | [js/account.js](js/account.js) `collectMyData` |
+| Effacement | *Mon compte → Supprimer mon compte* | `purgeUserData` (messages, photos, accusés, accès, invitation, nom affiché, profil) + `deleteUser` (après réauthentification) |
 | Effacement (sur demande email) | Admin : bouton ✕ dans « Utilisateurs », puis Firebase Console → Authentication → supprimer l'utilisateur | [js/admin.js](js/admin.js) |
 | Rectification | Nom affiché : l'admin le corrige (✎ dans « Utilisateurs ») ; la personne le voit dans *Mon compte*. Messages : *Modifier* (texte seul, mention « modifié », sans historique) ou supprimer et republier | [js/admin.js](js/admin.js) |
 | Opposition, limitation | Email au responsable | Retirer les accès / supprimer le compte selon la demande |
@@ -72,6 +72,7 @@ Le compte administrateur ne peut pas se supprimer depuis l'application (son UID 
 
 Pas de backend (plan gratuit Firebase) : la purge est manuelle.
 Au moins une fois par trimestre, l'admin ouvre l'application : les comptes sans connexion depuis plus de 12 mois sont marqués **« inactif > 12 mois »**. Les supprimer avec ✕, puis supprimer le compte correspondant dans Firebase Console → Authentication.
+Les invitations jamais utilisées depuis plus de 3 mois sont marquées **« > 3 mois »** : les annuler avec ✕.
 Dans Authentication → Users, supprimer aussi les comptes absents de la liste « Utilisateurs » de l'application : connexions refusées antérieures à leur suppression automatique, ou comptes dont les données ont déjà été effacées.
 
 ## 7. Violation de données (art. 33 et 34)

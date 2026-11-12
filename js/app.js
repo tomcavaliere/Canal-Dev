@@ -4,6 +4,7 @@ import {
 import {
   doc, getDoc, setDoc, updateDoc, collection, collectionGroup, query, where, writeBatch,
   orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField, Timestamp, getCountFromServer,
+  deleteDoc, arrayUnion, arrayRemove,
 } from "./sdk/firebase-firestore.js";
 import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js";
 import { initAccount } from "./account.js";
@@ -32,6 +33,7 @@ const state = {
   reads: null, // conversation ouverte : uid -> { name, t } (null tant que non chargé)
   myReads: null, // ses propres accusés, toutes conversations : id -> date de lecture (null tant que non chargé)
   unsubMyReads: null,
+  unsubInvite: null,
   readWrite: 0, // date du dernier message dont on a déjà envoyé l'accusé de lecture
   msgWatchers: new Map(), // id de conversation -> unsubscribe (écoute des messages non lus)
   recent: new Map(), // id de conversation -> [{ t, authorUid }] messages reçus depuis la dernière lecture
@@ -159,8 +161,70 @@ async function startSession(user, id) {
     });
   }
   if (state.isAdmin) listenAllProjects();
+  else listenInvite(user);
   listenMyReads();
   listenConversations();
+}
+
+/* ---------- Invitation ---------- */
+
+// L'admin peut inviter une adresse Gmail avant sa première connexion (invites/{email}).
+// À la connexion, la personne enregistre le nom prévu dans l'annuaire, puis rejoint les
+// conversations une par une, en retirant chacune de l'invitation dans le même batch (règles).
+// L'écoute couvre aussi une invitation reçue pendant qu'on attend sur l'écran « Accès en attente ».
+function listenInvite(user) {
+  const ref = doc(db, "invites", user.email.toLowerCase());
+  const tried = new Set(); // conversations déjà tentées dans cette session (pas de boucle en cas d'échec)
+  let latest = null;
+  let busy = false;
+  let named = false;
+
+  async function joinOne(inv) {
+    const convId = inv.convIds.find((id) => !tried.has(id));
+    if (!convId) return;
+    tried.add(convId);
+    if (!named) {
+      named = true;
+      try {
+        // Nom choisi par l'admin : ses messages ne seront jamais marqués « non vérifié ».
+        const mine = await getDoc(doc(db, "names", user.uid));
+        if (!mine.exists()) await setDoc(doc(db, "names", user.uid), { name: inv.name, updatedAt: serverTimestamp() });
+      } catch (err) {
+        console.warn("Nom de l'invitation non enregistré", err);
+      }
+    }
+    const last = inv.convIds.length === 1;
+    const batch = writeBatch(db);
+    batch.update(doc(db, "conversations", convId), { members: arrayUnion(user.uid) });
+    if (last) batch.delete(ref);
+    else batch.update(ref, { convIds: arrayRemove(convId) });
+    try {
+      await batch.commit();
+    } catch (err) {
+      // Conversation supprimée entre-temps, ou déjà membre : on la retire seulement de l'invitation.
+      console.warn("Invitation : conversation ignorée", convId, err);
+      await (last ? deleteDoc(ref) : updateDoc(ref, { convIds: arrayRemove(convId) })).catch(() => {});
+    }
+  }
+
+  async function process() {
+    if (busy) return;
+    busy = true;
+    try {
+      while (latest?.convIds?.some((id) => !tried.has(id))) {
+        const inv = latest;
+        latest = null;
+        await joinOne(inv);
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
+  state.unsubInvite = onSnapshot(ref, (snap) => {
+    latest = snap.exists() ? snap.data() : null;
+    process();
+  }, (err) => console.error("Lecture de l'invitation impossible", err));
 }
 
 // Connexion refusée. Firebase Authentication a déjà créé un compte (email, nom, photo) :
@@ -186,6 +250,7 @@ function teardown() {
   state.unsubMessages?.();
   state.unsubReads?.();
   state.unsubMyReads?.();
+  state.unsubInvite?.();
   state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
   stopNames();
@@ -195,7 +260,7 @@ function teardown() {
   Object.assign(state, {
     user: null, isAdmin: false, conversations: new Map(), convsLoaded: false, projects: new Map(), selectedId: null,
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
-    unsubReads: null, reads: null, readWrite: 0, myReads: null, unsubMyReads: null,
+    unsubReads: null, reads: null, readWrite: 0, myReads: null, unsubMyReads: null, unsubInvite: null,
     recent: new Map(), unread: new Map(),
     msgById: new Map(), msgDocs: null, pending: new Set(),
     msgLimit: 0, hasMore: false, loadingMore: false, revealId: null, editing: null,
@@ -241,8 +306,12 @@ function listenConversations() {
   const ref = collection(db, "conversations");
   const q = state.isAdmin ? query(ref) : query(ref, where("members", "array-contains", state.user.uid));
 
-  state.unsubConvs = onSnapshot(q, (snap) => {
-    state.conversations = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+  // includeMetadataChanges : être prévenu quand le serveur confirme une écriture locale.
+  state.unsubConvs = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+    // Une conversation rejointe par soi-même (invitation) apparaît d'abord localement : on attend
+    // que le serveur confirme l'ajout, sinon ses messages seraient demandés avant d'y avoir droit.
+    const docs = snap.docs.filter((d) => !d.metadata.hasPendingWrites || state.conversations.has(d.id));
+    state.conversations = new Map(docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
     state.convsLoaded = true;
 
     if (!state.isAdmin && state.conversations.size === 0) {
