@@ -100,15 +100,21 @@ service cloud.firestore {
             && img.h is int && img.h > 0 && img.h <= 1600
             && existsAfter(/databases/$(database)/documents/conversations/$(convId)/images/$(msgId));
         }
+        // `replyTo` (facultatif) : identifiant d'un message existant de la même conversation.
+        function validReplyTo(id) {
+          return id is string && id.matches('[A-Za-z0-9]{1,128}')
+            && exists(/databases/$(database)/documents/conversations/$(convId)/messages/$(id));
+        }
         function validMessage() {
           let d = request.resource.data;
-          return d.keys().hasOnly(['text', 'authorUid', 'authorName', 'createdAt', 'image'])
+          return d.keys().hasOnly(['text', 'authorUid', 'authorName', 'createdAt', 'image', 'replyTo'])
             && d.authorUid == request.auth.uid
             && d.createdAt == request.time
             && d.text is string
             && d.text.size() <= 4000
             && (d.text.size() > 0 || 'image' in d)
             && (!('image' in d) || validImageMeta(d.image))
+            && (!('replyTo' in d) || validReplyTo(d.replyTo))
             && d.authorName is string
             && d.authorName.size() <= 200;
         }
