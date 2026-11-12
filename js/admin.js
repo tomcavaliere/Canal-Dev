@@ -8,6 +8,7 @@ import { db, ADMIN_UID } from "./firebase.js";
 import { purgeUserData } from "./account.js";
 import { avatarEl } from "./ui.js";
 import { nameOf, namesLoaded, isNameTaken } from "./names.js";
+import { confirmDialog, toast } from "./dialogs.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -106,7 +107,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       dlgUser.close();
     } catch (err) {
       console.error(err);
-      alert("Enregistrement impossible : " + err.message);
+      toast("Enregistrement impossible : " + err.message, { error: true });
     }
   });
 
@@ -202,15 +203,17 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     btn.title = "Supprimer l'utilisateur et toutes ses données";
     btn.setAttribute("aria-label", `Supprimer ${u.email} et toutes ses données`);
     btn.addEventListener("click", async () => {
-      if (!confirm(`Supprimer ${u.email} : profil, tous ses messages et ses accès ? Action irréversible.`)) return;
+      if (!await confirmDialog(`Supprimer ${u.email} : profil, tous ses messages et ses accès ? Action irréversible.`,
+        { ok: "Supprimer", danger: true })) return;
       btn.disabled = true;
       try {
         await purgeUserData(uid);
-        alert(`Données de ${u.email} supprimées.\n\nÀ faire aussi : Firebase Console → Authentication → Users → supprimer le compte ${uid}.`);
+        await confirmDialog(`Données de ${u.email} supprimées.\n\nÀ faire aussi : Firebase Console → Authentication → Users → supprimer le compte ${uid}.`,
+          { ok: "Compris", cancel: false });
       } catch (err) {
         console.error(err);
         btn.disabled = false;
-        alert("Suppression impossible : " + err.message);
+        toast("Suppression impossible : " + err.message, { error: true });
       }
     });
     return btn;
@@ -261,7 +264,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         dlgNew.close();
       } catch (err) {
         console.error(err);
-        alert("Modification impossible : " + err.message);
+        toast("Modification impossible : " + err.message, { error: true });
       }
       return;
     }
@@ -279,7 +282,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       setTimeout(() => selectConversation(ref.id), 0);
     } catch (err) {
       console.error(err);
-      alert("Création impossible : " + err.message);
+      toast("Création impossible : " + err.message, { error: true });
     }
   });
 
@@ -316,7 +319,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       dlgProject.close();
     } catch (err) {
       console.error(err);
-      alert("Enregistrement impossible : " + err.message);
+      toast("Enregistrement impossible : " + err.message, { error: true });
     }
   });
 
@@ -325,7 +328,8 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     const id = editingProjectId;
     const p = id && getProjects().get(id);
     if (!p) return;
-    if (!confirm(`Supprimer le projet « ${p.title} » ? Ses conversations sont conservées et passent dans « Sans projet ».`)) return;
+    if (!await confirmDialog(`Supprimer le projet « ${p.title} » ? Ses conversations sont conservées et passent dans « Sans projet ».`,
+      { ok: "Supprimer", danger: true })) return;
     try {
       const convs = await getDocs(query(collection(db, "conversations"), where("projectId", "==", id)));
       for (let i = 0; i < convs.docs.length; i += 400) {
@@ -338,7 +342,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       dlgProject.close();
     } catch (err) {
       console.error(err);
-      alert("Suppression impossible : " + err.message);
+      toast("Suppression impossible : " + err.message, { error: true });
     }
   });
 
@@ -366,7 +370,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       dlgMove.close();
     } catch (err) {
       console.error(err);
-      alert("Déplacement impossible : " + err.message);
+      toast("Déplacement impossible : " + err.message, { error: true });
     }
   });
 
@@ -409,7 +413,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         } catch (err) {
           console.error(err);
           cb.checked = !cb.checked;
-          alert("Modification impossible : " + err.message);
+          toast("Modification impossible : " + err.message, { error: true });
         } finally {
           if (addName) naming.delete(uid);
           cb.disabled = false;
@@ -435,7 +439,8 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   on($("btn-delete-conv"), "click", async () => {
     const conv = getSelected();
     if (!conv) return;
-    if (!confirm(`Supprimer définitivement « ${conv.title} », tous ses messages et toutes ses photos ?`)) return;
+    if (!await confirmDialog(`Supprimer définitivement « ${conv.title} », tous ses messages et toutes ses photos ?`,
+      { ok: "Supprimer", danger: true })) return;
     try {
       // Photos d'abord, lues par petits lots (jusqu'à ~900 Ko chacune), puis les messages
       // et les accusés de lecture.
@@ -452,7 +457,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       await deleteDoc(doc(db, "conversations", conv.id));
     } catch (err) {
       console.error(err);
-      alert("Suppression impossible : " + err.message);
+      toast("Suppression impossible : " + err.message, { error: true });
     }
   });
 

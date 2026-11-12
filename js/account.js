@@ -8,6 +8,7 @@ import {
   query, where, limit, arrayRemove, Timestamp,
 } from "./sdk/firebase-firestore.js";
 import { auth, db, ADMIN_UID } from "./firebase.js";
+import { toast } from "./dialogs.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -177,7 +178,7 @@ async function deleteAccount() {
     await purgeUserData(user.uid);
     await deleteUser(user);
     $("dlg-account").close();
-    alert("Ton compte et toutes tes données ont été supprimés.");
+    toast("Ton compte et toutes tes données ont été supprimés.", { timeout: 15000 });
   } catch (err) {
     console.error(err);
     if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") {

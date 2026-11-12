@@ -13,6 +13,7 @@ import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js";
 import { notificationState, toggleNotifications, showNotification } from "./notify.js";
 import { startNames, stopNames, watchNames, displayName, displayText } from "./names.js";
 import { renderRichText } from "./richtext.js";
+import { confirmDialog, toast } from "./dialogs.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -912,7 +913,7 @@ function renderMessage(id, m) {
     del.type = "button";
     del.textContent = "Supprimer";
     del.addEventListener("click", async () => {
-      if (!confirm("Supprimer ce message ?")) return;
+      if (!await confirmDialog("Supprimer ce message ?", { ok: "Supprimer", danger: true })) return;
       try {
         // La photo éventuelle est supprimée en même temps que le message.
         const batch = writeBatch(db);
@@ -921,7 +922,7 @@ function renderMessage(id, m) {
         await batch.commit();
       } catch (err) {
         console.error(err);
-        alert("Suppression impossible : " + err.message);
+        toast("Suppression impossible : " + err.message, { error: true });
       }
     });
     actions.append(del);
@@ -1160,7 +1161,7 @@ $("composer").addEventListener("submit", (e) => {
       if (image && !attachment) setAttachment(image);
       if (replyTo && !state.replyTo) startReply(replyTo);
     }
-    alert("Envoi impossible : " + err.message);
+    toast("Envoi impossible : " + err.message, { error: true });
   });
 });
 

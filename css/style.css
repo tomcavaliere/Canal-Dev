@@ -342,6 +342,20 @@ dialog {
   width: min(460px, calc(100vw - 32px));
 }
 dialog::backdrop { background: rgb(0 0 0 / .4); }
+.confirm-text { white-space: pre-line; overflow-wrap: anywhere; margin: 0; }
+.toasts {
+  position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); z-index: 10;
+  display: flex; flex-direction: column; gap: .5rem; width: min(480px, calc(100vw - 32px));
+}
+.toast {
+  display: flex; gap: .75rem; align-items: flex-start; padding: .6rem .8rem;
+  background: var(--text); color: var(--bg); border-radius: 8px; font-size: .9rem;
+  box-shadow: 0 4px 16px rgb(0 0 0 / .2);
+}
+.toast span { flex: 1; overflow-wrap: anywhere; }
+.toast.error { background: var(--danger); color: #fff; }
+.toast button { background: none; border: none; color: inherit; cursor: pointer; font: inherit; padding: 0 .2rem; opacity: .8; }
+.toast button:hover { opacity: 1; }
 .members { max-height: 50vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
 .members label { flex-direction: row; align-items: center; gap: .6rem; padding: .5rem .75rem; cursor: pointer; }
 .members label:hover { background: var(--surface-2); }
