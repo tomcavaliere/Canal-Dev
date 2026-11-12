@@ -3,7 +3,7 @@
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, limit,
   onSnapshot, arrayUnion, arrayRemove, serverTimestamp, deleteField,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "./sdk/firebase-firestore.js";
 import { db, ADMIN_UID } from "./firebase.js";
 import { purgeUserData } from "./account.js";
 import { avatarEl } from "./ui.js";

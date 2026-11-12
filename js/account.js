@@ -2,11 +2,11 @@
 // et effacement (suppression du compte et de toutes ses données).
 import {
   GoogleAuthProvider, reauthenticateWithPopup, deleteUser,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+} from "./sdk/firebase-auth.js";
 import {
   collection, collectionGroup, doc, getDoc, getDocs, deleteDoc, updateDoc, writeBatch,
   query, where, limit, arrayRemove, Timestamp,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "./sdk/firebase-firestore.js";
 import { auth, db, ADMIN_UID } from "./firebase.js";
 
 const $ = (id) => document.getElementById(id);

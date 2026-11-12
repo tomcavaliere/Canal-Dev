@@ -3,7 +3,7 @@
 // alors que `authorName` (messages) est saisi librement par l'auteur lui-même.
 import {
   collection, doc, onSnapshot,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "./sdk/firebase-firestore.js";
 import { db, ADMIN_UID } from "./firebase.js";
 
 const names = new Map(); // uid -> nom, ou null si absent de l'annuaire (pas d'entrée = pas encore chargé)

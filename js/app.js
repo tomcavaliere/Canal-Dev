@@ -1,10 +1,10 @@
 import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, deleteUser,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+} from "./sdk/firebase-auth.js";
 import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
   orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField, Timestamp,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "./sdk/firebase-firestore.js";
 import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js";
 import { initAccount } from "./account.js";
 import { avatarEl, initials } from "./ui.js";
