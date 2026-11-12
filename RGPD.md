@@ -14,17 +14,17 @@ Dernière revue : 12 novembre 2026.
 | Finalité | Authentifier les participants, gérer leurs accès aux conversations, échanger et conserver des messages |
 | Base légale | Intérêt légitime (art. 6.1.f) — voir § 2 |
 | Personnes concernées | Personnes invitées qui se connectent avec un compte Gmail ; l'administrateur |
-| Données | Email, nom affiché Google, UID Firebase, date de création et de dernière connexion, contenu et date des messages, photos jointes aux messages (sans métadonnées), appartenance aux conversations, date de dernière lecture de chaque conversation (accusés de lecture). Données techniques (IP) chez les hébergeurs. Pas de photo de profil, pas de donnée sensible (art. 9) demandée |
+| Données | Email, nom du compte Google (profil), nom affiché aux membres (annuaire `names/{uid}` tenu par l'admin), UID Firebase, date de création et de dernière connexion, contenu et date des messages, photos jointes aux messages (sans métadonnées), appartenance aux conversations, date de dernière lecture de chaque conversation (accusés de lecture). URL de la photo Google : enregistrée automatiquement par Firebase Authentication dans le compte de connexion, jamais copiée dans Firestore, utilisée ni affichée (incluse dans l'export). Données techniques (IP) chez les hébergeurs. Pas de donnée sensible (art. 9) demandée |
 | Personnes concernées indirectement | Personnes pouvant apparaître sur les photos partagées (voir § 10) |
-| Destinataires | Administrateur (tout) ; membres d'une conversation (nom, messages, photos et date de dernière lecture de cette conversation) ; sous-traitants (§ 3) |
+| Destinataires | Administrateur (tout) ; membres d'une conversation (nom affiché, messages, photos et date de dernière lecture de cette conversation) ; utilisateurs connectés connaissant l'UID d'une personne, en pratique ses co-membres (nom affiché seul) ; sous-traitants (§ 3) |
 | Transferts hors UE | Firebase Authentication et GitHub Pages (États-Unis) : EU-US Data Privacy Framework + clauses contractuelles types. Firestore : région UE |
-| Durées | Compte/profil : jusqu'à suppression, max. 12 mois après la dernière connexion. Messages, photos et accusés de lecture : durée de vie de la conversation, ou jusqu'à suppression par l'auteur / suppression du compte |
+| Durées | Compte/profil/nom affiché : jusqu'à suppression, max. 12 mois après la dernière connexion. Compte de connexion d'une adresse refusée (non Gmail) : supprimé immédiatement par l'application. Messages, photos et accusés de lecture : durée de vie de la conversation, ou jusqu'à suppression par l'auteur / suppression du compte |
 | Sécurité | § 5 |
 
 ## 2. Base légale : mise en balance de l'intérêt légitime
 
 - **Intérêt poursuivi** : disposer d'un canal d'échange privé et sécurisé avec les participants du projet.
-- **Nécessité** : impossible de restreindre l'accès aux conversations sans identifier les personnes ; seules les données indispensables sont gardées (photo retirée, pas de téléphone, pas d'analytics).
+- **Nécessité** : impossible de restreindre l'accès aux conversations sans identifier les personnes ; seules les données indispensables sont gardées (photo Google jamais utilisée, pas de téléphone, pas d'analytics).
 - **Attentes raisonnables** : les personnes se connectent volontairement à un outil de messagerie et sont informées avant la connexion.
 - **Garanties** : export et suppression en libre-service, contrôle d'accès serveur, purge des comptes inactifs, pas de réutilisation.
 
@@ -45,10 +45,10 @@ Conclusion : l'intérêt légitime n'est pas supplanté par les droits des perso
 
 | Droit | Moyen | Implémentation |
 |---|---|---|
-| Accès, portabilité | *Mon compte → Télécharger mes données* (JSON, photos incluses en data URL) | [js/account.js](js/account.js) `collectMyData` |
-| Effacement | *Mon compte → Supprimer mon compte* | `purgeUserData` + `deleteUser` (après réauthentification) |
+| Accès, portabilité | *Mon compte → Télécharger mes données* (JSON : compte de connexion dont l'URL de la photo Google, profil, nom affiché, messages, photos en data URL, accusés) | [js/account.js](js/account.js) `collectMyData` |
+| Effacement | *Mon compte → Supprimer mon compte* | `purgeUserData` (messages, photos, accusés, accès, nom affiché, profil) + `deleteUser` (après réauthentification) |
 | Effacement (sur demande email) | Admin : bouton ✕ dans « Utilisateurs », puis Firebase Console → Authentication → supprimer l'utilisateur | [js/admin.js](js/admin.js) |
-| Rectification | Nom repris de Google à chaque connexion ; messages : supprimer et republier | — |
+| Rectification | Nom affiché : l'admin le corrige (✎ dans « Utilisateurs ») ; la personne le voit dans *Mon compte*. Messages : supprimer et republier | [js/admin.js](js/admin.js) |
 | Opposition, limitation | Email au responsable | Retirer les accès / supprimer le compte selon la demande |
 
 Délai de réponse : 1 mois (prolongeable de 2 mois si nécessaire, en informant la personne). Vérifier l'identité du demandeur (la demande doit venir de l'adresse Gmail concernée).
@@ -58,7 +58,8 @@ Le compte administrateur ne peut pas se supprimer depuis l'application (son UID 
 ## 5. Mesures de sécurité (art. 32)
 
 - Authentification Google, email vérifié, domaine `@gmail.com` imposé côté serveur.
-- Contrôle d'accès dans [firestore.rules](firestore.rules) : lecture limitée aux membres, écriture des messages au seul nom de l'auteur, gestion des membres réservée à l'admin (un membre peut seulement se retirer lui-même), tout le reste interdit.
+- Contrôle d'accès dans [firestore.rules](firestore.rules) : lecture limitée aux membres, écriture des messages au seul nom de l'auteur, gestion des membres réservée à l'admin (un membre peut seulement se retirer lui-même), tout le reste interdit. Ces règles sont vérifiées par des tests automatiques (`npm test`, émulateur Firestore).
+- Identité : le nom affiché vient d'un annuaire (`names/{uid}`) que seul l'admin peut écrire, et les messages de l'admin portent un badge lié à son UID. Un membre ne peut donc pas se faire passer pour un autre ; le nom saisi par l'auteur (`authorName`) n'est plus affiché qu'en dernier recours, marqué « non vérifié ».
 - HTTPS (GitHub Pages, Google) ; chiffrement au repos par Google.
 - Content-Security-Policy dans les pages : scripts limités au site, gstatic.com et apis.google.com ; aucune image externe ; `referrer` désactivé.
 - Pas de clé secrète dans le dépôt (la configuration Firebase web est publique par conception).
@@ -68,6 +69,7 @@ Le compte administrateur ne peut pas se supprimer depuis l'application (son UID 
 
 Pas de backend (plan gratuit Firebase) : la purge est manuelle.
 Au moins une fois par trimestre, l'admin ouvre l'application : les comptes sans connexion depuis plus de 12 mois sont marqués **« inactif > 12 mois »**. Les supprimer avec ✕, puis supprimer le compte correspondant dans Firebase Console → Authentication.
+Dans Authentication → Users, supprimer aussi les comptes absents de la liste « Utilisateurs » de l'application : connexions refusées antérieures à leur suppression automatique, ou comptes dont les données ont déjà été effacées.
 
 ## 7. Violation de données (art. 33 et 34)
 
@@ -88,6 +90,7 @@ Non requise : petit nombre de personnes, pas de donnée sensible, pas de surveil
 Les profils et messages créés avant la mise en conformité contenaient une URL de photo Google :
 - profils : la photo est effacée à la prochaine connexion de la personne (ou à la suppression du compte) ;
 - messages : l'ancien champ `authorPhoto` n'est plus affiché ; il disparaît avec la suppression du message, du compte ou de la conversation.
+- accusés de lecture : l'ancien champ `name` n'est plus affiché ni accepté ; il disparaît à la prochaine lecture de la conversation par la personne, ou avec la suppression du compte ou de la conversation.
 
 ## 10. Photos partagées
 

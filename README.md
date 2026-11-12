@@ -7,6 +7,7 @@ Canal de communication pour suivre le développement d'un outil.
 - Seul l'administrateur crée/supprime les conversations et ajoute/retire des membres.
 - L'administrateur peut ranger les conversations dans des **projets** (ou les laisser « Sans projet ») et les déplacer de l'un à l'autre. Les membres voient le nom du projet de leurs conversations, jamais la liste des autres projets.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
+- Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
 Hébergement : GitHub Pages (fichiers statiques). Auth + données : Firebase (Authentication + Cloud Firestore, plan gratuit).
 Le contrôle d'accès est appliqué côté serveur par [firestore.rules](firestore.rules).
@@ -21,6 +22,7 @@ js/firebase.js          initialisation Firebase
 js/app.js               connexion, conversations, messages
 js/admin.js             création de conversations, gestion des membres (admin)
 js/account.js           « Mon compte » : export et suppression des données (RGPD)
+js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'admin seul)
 js/ui.js                helpers d'affichage (avatar à initiales)
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 confidentialite.html    politique de confidentialité
@@ -76,7 +78,14 @@ sed -i '' 's/?v=4"/?v=5"/g' index.html confidentialite.html js/*.js
 1. **+ Conversation** (ou **+** à côté d'un projet) : crée une conversation, dans un projet ou non. En haut d'une conversation : **Renommer** (titre et description) et **Déplacer** (changer de projet).
 2. Demande à la personne de se connecter une fois : elle apparaît dans **Utilisateurs** avec la mention « en attente ».
 3. Ouvre la conversation → **Membres** → coche la personne. Elle voit la conversation apparaître instantanément.
+   Son **nom affiché** est repris de son compte Google à ce moment-là (un nom déjà pris devient « Nom (2) ») ;
+   le ✎ à côté d'elle dans « Utilisateurs » permet de le corriger. Il n'est jamais mis à jour automatiquement,
+   puisque chacun peut changer son nom Google.
 4. Décoche pour retirer l'accès ; **Supprimer** efface la conversation et ses messages.
+
+Les membres existants sont ajoutés à l'annuaire automatiquement dès que l'admin ouvre l'application.
+Un message dont l'auteur n'est pas dans l'annuaire (par exemple un ancien membre retiré avant sa mise en place)
+affiche le nom saisi par l'auteur, marqué « non vérifié » : le ✎ permet de l'y ajouter.
 
 ## Développement local
 ```bash
@@ -101,16 +110,17 @@ Le détail est dans [RGPD.md](RGPD.md) (registre, base légale, procédures) et 
 
 À faire une fois dans la console Firebase :
 - [ ] **Paramètres du projet → Confidentialité** (ou *Data privacy*) : accepter les *Data Processing Terms*.
-- [ ] Vérifier que Firestore est bien en région UE (`eur3` ou `europe-*`).
+- [x] Vérifier que Firestore est bien en région UE (`eur3` ou `europe-*`) — `eur3`, vérifié le 12 novembre 2026.
 - [ ] **Paramètres du projet → Intégrations → Google Analytics** : désactivé (le site n'en utilise pas).
 - [ ] Déployer règles **et** index (`firebase deploy --only firestore`).
 
 Au quotidien :
 - Un utilisateur exporte ou supprime ses données depuis **Mon compte**.
-- Tous les trimestres, supprimer les comptes marqués **« inactif > 12 mois »** (✕ dans « Utilisateurs »), puis le compte correspondant dans **Authentication → Users**.
+- Tous les trimestres, supprimer les comptes marqués **« inactif > 12 mois »** (✕ dans « Utilisateurs »), puis le compte correspondant dans **Authentication → Users**. Y supprimer aussi les comptes absents de « Utilisateurs » (voir [RGPD.md](RGPD.md#6-conservation--procédure)).
 - Une demande par email (opposition, effacement…) : répondre sous 1 mois, voir [RGPD.md](RGPD.md#4-exercice-des-droits-art-12-à-22).
 
 ## Sécurité
 - La clé `apiKey` Firebase est publique par conception ; elle n'ouvre aucun droit à elle seule.
-- Toutes les autorisations sont vérifiées par `firestore.rules` : un utilisateur ne peut ni lire une conversation dont il n'est pas membre, ni modifier la liste des membres, ni écrire un message au nom d'un autre.
-- Tester : dans **Firestore → Règles → Rules Playground**, ou en essayant depuis la console du navigateur d'un compte non admin (`permission-denied` attendu).
+- Toutes les autorisations sont vérifiées par `firestore.rules` : un utilisateur ne peut ni lire une conversation dont il n'est pas membre, ni modifier la liste des membres, ni écrire un message sous l'identifiant (UID) d'un autre.
+- Le nom affiché vient de l'annuaire `names/{uid}`, que seul l'admin peut écrire : le champ `authorName` d'un message est saisi par son auteur (il peut y mettre n'importe quoi depuis la console du navigateur) et n'est affiché qu'en dernier recours, marqué « non vérifié ». Le badge **Admin** dépend de l'UID, pas du nom.
+- Tester : `npm test` (voir plus haut), et pour un essai manuel la console du navigateur d'un compte non admin (`permission-denied` attendu).
