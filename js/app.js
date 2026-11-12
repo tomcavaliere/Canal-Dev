@@ -10,6 +10,7 @@ import { initAccount } from "./account.js?v=5";
 import { avatarEl, initials } from "./ui.js?v=5";
 import { prepareImage } from "./images.js?v=5";
 import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js?v=6";
+import { notificationState, toggleNotifications, showNotification } from "./notify.js?v=6";
 
 const $ = (id) => document.getElementById(id);
 
@@ -23,6 +24,7 @@ const state = {
   unsubProjects: null, // admin : écoute de toute la collection
   projectSubs: new Map(), // non-admin : id -> unsubscribe (un écouteur par projet visible)
   unsubMessages: null,
+  msgWatchers: new Map(), // id de conversation -> unsubscribe (écoute du dernier message)
   msgById: new Map(), // messages chargés de la conversation ouverte : id -> data
   replyTo: null, // identifiant du message auquel on répond
   admin: null, // API renvoyée par admin.js
@@ -121,13 +123,14 @@ function teardown() {
   state.unsubProjects?.();
   state.projectSubs.forEach((unsub) => unsub());
   state.unsubMessages?.();
+  state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
   resetImages();
   clearAttachment();
   clearReply();
   Object.assign(state, {
     user: null, isAdmin: false, conversations: new Map(), projects: new Map(), selectedId: null,
-    unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, admin: null,
+    unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
     msgById: new Map(),
   });
   $("conv-list").replaceChildren();
@@ -186,6 +189,7 @@ function listenConversations() {
       selectConversation(sortedConversations()[0][0]);
     }
     if (!state.isAdmin) syncProjectListeners();
+    syncMessageWatchers();
     renderConversationList();
     if (state.selectedId) renderChatHeader();
     state.admin?.onConversationsChanged();
@@ -252,6 +256,53 @@ function toggleCollapsed(id) {
   if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
   try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch { /* ignoré */ }
   renderConversationList();
+}
+
+/* ---------- Nouveaux messages : son et notifications ---------- */
+
+// Écoute du dernier message de chacune de ses conversations (une lecture par message reçu),
+// pour être prévenu même quand la conversation n'est pas ouverte.
+function syncMessageWatchers() {
+  for (const [id, unsub] of state.msgWatchers) {
+    if (state.conversations.has(id)) continue;
+    unsub();
+    state.msgWatchers.delete(id);
+  }
+  for (const id of state.conversations.keys()) {
+    if (state.msgWatchers.has(id)) continue;
+    let first = true;
+    let latest = 0; // date du message le plus récent déjà vu
+    const q = query(collection(db, "conversations", id, "messages"), orderBy("createdAt"), limitToLast(1));
+    state.msgWatchers.set(id, onSnapshot(q, (snap) => {
+      for (const ch of snap.docChanges()) {
+        if (ch.type !== "added") continue;
+        const m = ch.doc.data({ serverTimestamps: "estimate" });
+        const t = m.createdAt?.toMillis?.() ?? 0;
+        // Ni au chargement, ni pour ses propres messages, ni pour un ancien message
+        // qui redevient le dernier après une suppression.
+        if (!first && t > latest && m.authorUid !== state.user.uid) onIncomingMessage(id, m);
+        latest = Math.max(latest, t);
+      }
+      first = false;
+    }, (err) => console.error("Écoute des nouveaux messages impossible", err)));
+  }
+}
+
+function isViewing(convId) {
+  return !document.hidden && convId === state.selectedId
+    && (!isMobile() || $("screen-app").classList.contains("show-chat"));
+}
+
+function onIncomingMessage(convId, m) {
+  playMessageSound();
+  if (isViewing(convId)) return;
+  const c = state.conversations.get(convId);
+  showNotification({
+    title: `${m.authorName || "?"} · ${c?.title || "Canal Dev"}`,
+    body: excerpt(m),
+    tag: convId,
+    onClick: () => selectConversation(convId),
+  });
 }
 
 /* ---------- Barre latérale ---------- */
@@ -394,20 +445,8 @@ function selectConversation(id) {
   renderConversationList();
 
   let first = true;
-  let latest = 0; // date du message le plus récent déjà vu
   const q = query(collection(db, "conversations", id, "messages"), orderBy("createdAt"), limitToLast(300));
   state.unsubMessages = onSnapshot(q, (snap) => {
-    // Son uniquement pour un nouveau message d'un autre membre (pas au chargement,
-    // ni pour un ancien message qui réapparaît après une suppression).
-    let incoming = false;
-    for (const ch of snap.docChanges()) {
-      if (ch.type !== "added") continue;
-      const m = ch.doc.data({ serverTimestamps: "estimate" });
-      const t = m.createdAt?.toMillis?.() ?? 0;
-      if (!first && t > latest && m.authorUid !== state.user.uid) incoming = true;
-      latest = Math.max(latest, t);
-    }
-    if (incoming) playMessageSound();
     renderMessages(snap.docs, first);
     first = false;
   }, (err) => {
@@ -444,7 +483,7 @@ $("btn-back").addEventListener("click", () => $("screen-app").classList.remove("
 function renderSoundButton() {
   const on = isSoundEnabled();
   const b = $("btn-sound");
-  b.textContent = on ? "🔔" : "🔕";
+  b.textContent = on ? "🔊" : "🔇";
   b.setAttribute("aria-pressed", String(on));
   b.title = on ? "Son des nouveaux messages activé (cliquer pour couper)" : "Son des nouveaux messages coupé (cliquer pour activer)";
   b.setAttribute("aria-label", b.title);
@@ -454,6 +493,26 @@ $("btn-sound").addEventListener("click", () => {
   renderSoundButton();
 });
 renderSoundButton();
+
+const NOTIF_TITLES = {
+  on: "Notifications activées (cliquer pour les couper)",
+  off: "Notifications coupées (cliquer pour les activer)",
+  denied: "Notifications bloquées : autorise-les dans les réglages du site de ton navigateur",
+};
+function renderNotifButton() {
+  const st = notificationState();
+  const b = $("btn-notif");
+  b.hidden = st === "unsupported";
+  b.textContent = st === "on" ? "🔔" : "🔕";
+  b.setAttribute("aria-pressed", String(st === "on"));
+  b.title = NOTIF_TITLES[st] || "";
+  b.setAttribute("aria-label", b.title);
+}
+$("btn-notif").addEventListener("click", async () => {
+  await toggleNotifications();
+  renderNotifButton();
+});
+renderNotifButton();
 
 function isMobile() {
   return window.matchMedia("(max-width: 720px)").matches;
