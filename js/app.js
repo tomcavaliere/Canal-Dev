@@ -33,6 +33,7 @@ const state = {
   unread: new Map(), // id de conversation -> nombre de messages non lus
   msgById: new Map(), // messages chargés de la conversation ouverte : id -> data
   msgDocs: null, // derniers documents affichés (pour réafficher quand l'annuaire des noms change)
+  pending: new Set(), // identifiants des messages de la conversation ouverte pas encore confirmés par le serveur
   replyTo: null, // identifiant du message auquel on répond
   admin: null, // API renvoyée par admin.js
 };
@@ -160,7 +161,7 @@ function teardown() {
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
     unsubReads: null, reads: null, readWrite: 0,
     recent: new Map(), unread: new Map(),
-    msgById: new Map(), msgDocs: null,
+    msgById: new Map(), msgDocs: null, pending: new Set(),
   });
   $("conv-list").replaceChildren();
   $("messages").replaceChildren();
@@ -609,6 +610,7 @@ function selectConversation(id) {
   clearReply();
   state.msgById = new Map();
   state.msgDocs = null;
+  state.pending = new Set();
   state.reads = null;
   state.readWrite = 0;
   state.selectedId = id;
@@ -622,7 +624,8 @@ function selectConversation(id) {
 
   let first = true;
   const q = query(collection(db, "conversations", id, "messages"), orderBy("createdAt"), limitToLast(300));
-  state.unsubMessages = onSnapshot(q, (snap) => {
+  // includeMetadataChanges : on est prévenu quand un message envoyé est confirmé par le serveur.
+  state.unsubMessages = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
     state.msgDocs = snap.docs;
     renderMessages(snap.docs, first);
     first = false;
@@ -650,6 +653,7 @@ function closeConversation() {
   clearReply();
   state.msgById = new Map();
   state.msgDocs = null;
+  state.pending = new Set();
   state.selectedId = null;
   $("chat-view").hidden = true;
   $("chat-empty").hidden = false;
@@ -716,6 +720,8 @@ function renderMessages(docs, forceScroll) {
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
 
   state.msgById = new Map(docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+  // Messages écrits localement mais pas encore confirmés par le serveur (hors ligne, réseau lent).
+  state.pending = new Set(docs.filter((d) => d.metadata.hasPendingWrites).map((d) => d.id));
   syncNames();
   // Le message auquel on répondait a été supprimé : on abandonne la réponse.
   if (state.replyTo && !state.msgById.has(state.replyTo)) clearReply();
@@ -765,8 +771,13 @@ function renderReceipt() {
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
   const p = document.createElement("p");
   p.className = "receipt";
-  p.textContent = names.length ? "Vu par " + listNames(names) : "Envoyé";
-  if (names.length > 3) p.title = names.join(", ");
+  if (state.pending.has(last[0])) {
+    p.textContent = "Envoi…";
+    p.title = "Pas encore reçu par le serveur : il partira dès le retour du réseau. Ne ferme pas la page d'ici là.";
+  } else {
+    p.textContent = names.length ? "Vu par " + listNames(names) : "Envoyé";
+    if (names.length > 3) p.title = names.join(", ");
+  }
   li.append(p);
   if (nearBottom) list.scrollTop = list.scrollHeight;
 }
@@ -800,7 +811,7 @@ function tag(className, text, title) {
 function renderMessage(id, m) {
   const mine = m.authorUid === state.user.uid;
   const li = document.createElement("li");
-  li.className = "msg" + (mine ? " mine" : "");
+  li.className = "msg" + (mine ? " mine" : "") + (state.pending.has(id) ? " pending" : "");
   li.id = "msg-" + id;
 
   // Nom tiré de l'annuaire (authorName n'est pas fiable : saisi par l'auteur).
@@ -1014,14 +1025,18 @@ function clearAttachment() {
   $("attach-error").hidden = true;
 }
 
+function setAttachment(image) {
+  attachment = image;
+  $("attach-img").src = image.data;
+  $("attach-preview").hidden = false;
+}
+
 async function attachFile(file) {
   if (!file || !state.selectedId) return;
   $("attach-error").hidden = true;
   $("btn-attach").disabled = true;
   try {
-    attachment = await prepareImage(file);
-    $("attach-img").src = attachment.data;
-    $("attach-preview").hidden = false;
+    setAttachment(await prepareImage(file));
     $("msg-input").focus();
   } catch (err) {
     clearAttachment();
@@ -1045,7 +1060,10 @@ $("msg-input").addEventListener("paste", (e) => {
 
 /* ---------- Envoi ---------- */
 
-$("composer").addEventListener("submit", async (e) => {
+// Le message s'affiche aussitôt (« Envoi… ») et la saisie est libérée sans attendre le serveur :
+// hors ligne, Firestore le garde et l'envoie au retour du réseau. En cas de refus, le texte,
+// la photo et la réponse sont rendus pour pouvoir réessayer.
+$("composer").addEventListener("submit", (e) => {
   e.preventDefault();
   const input = $("msg-input");
   const text = input.value.trim();
@@ -1054,40 +1072,48 @@ $("composer").addEventListener("submit", async (e) => {
   if ((!text && !image) || !state.selectedId) return;
 
   const convId = state.selectedId;
-  const submit = $("composer").querySelector("[type=submit]");
-  submit.disabled = true;
-  input.value = "";
-  try {
-    const msgRef = doc(collection(db, "conversations", convId, "messages"));
-    const batch = writeBatch(db);
-    batch.set(msgRef, {
-      text,
+  const msgRef = doc(collection(db, "conversations", convId, "messages"));
+  const batch = writeBatch(db);
+  batch.set(msgRef, {
+    text,
+    authorUid: state.user.uid,
+    authorName: state.user.displayName || state.user.email,
+    createdAt: serverTimestamp(),
+    ...(image ? { image: { w: image.w, h: image.h } } : {}),
+    ...(replyTo ? { replyTo } : {}),
+  });
+  if (image) {
+    // La photo est rangée à part (même identifiant) pour ne pas alourdir la liste des messages.
+    batch.set(doc(db, "conversations", convId, "images", msgRef.id), {
+      data: image.data,
       authorUid: state.user.uid,
-      authorName: state.user.displayName || state.user.email,
       createdAt: serverTimestamp(),
-      ...(image ? { image: { w: image.w, h: image.h } } : {}),
-      ...(replyTo ? { replyTo } : {}),
     });
-    if (image) {
-      // La photo est rangée à part (même identifiant) pour ne pas alourdir la liste des messages.
-      batch.set(doc(db, "conversations", convId, "images", msgRef.id), {
-        data: image.data,
-        authorUid: state.user.uid,
-        createdAt: serverTimestamp(),
-      });
-      images.cache.set(msgRef.id, Promise.resolve(image.data));
-    }
-    await batch.commit();
-    if (image && attachment === image) clearAttachment();
-    if (replyTo && state.replyTo === replyTo) clearReply();
-  } catch (err) {
-    console.error(err);
-    input.value = text;
-    alert("Envoi impossible : " + err.message);
-  } finally {
-    submit.disabled = false;
+    images.cache.set(msgRef.id, Promise.resolve(image.data));
   }
+  input.value = "";
+  if (image) clearAttachment();
+  if (replyTo) clearReply();
+
+  batch.commit().catch((err) => {
+    console.error(err);
+    images.cache.delete(msgRef.id);
+    if (state.selectedId === convId) {
+      if (!input.value.trim()) input.value = text;
+      if (image && !attachment) setAttachment(image);
+      if (replyTo && !state.replyTo) startReply(replyTo);
+    }
+    alert("Envoi impossible : " + err.message);
+  });
 });
+
+// Bandeau « hors ligne » : les messages restent en attente jusqu'au retour du réseau.
+function renderOnline() {
+  $("offline-banner").hidden = navigator.onLine;
+}
+window.addEventListener("online", renderOnline);
+window.addEventListener("offline", renderOnline);
+renderOnline();
 
 $("msg-input").addEventListener("keydown", (e) => {
   if (e.key === "Escape" && state.replyTo) {

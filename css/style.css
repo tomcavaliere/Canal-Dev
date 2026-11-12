@@ -256,6 +256,8 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
   min-width: 0;
 }
 .msg.mine .bubble { background: var(--mine); border-radius: var(--radius); border-top-right-radius: 3px; }
+.msg.pending .bubble { opacity: .65; }
+.offline-banner { margin: 0; padding: .4rem 1rem; border-top: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
 .msg.flash .bubble { animation: flash 1.4s ease-out; }
 @keyframes flash { from { box-shadow: 0 0 0 3px var(--accent); } to { box-shadow: 0 0 0 3px transparent; } }
 .msg-head { display: flex; flex-wrap: wrap; gap: .1rem .5rem; align-items: baseline; font-size: .8rem; color: var(--muted); }
@@ -346,7 +348,7 @@ dialog::backdrop { background: rgb(0 0 0 / .4); }
   .app.show-chat .only-mobile { display: inline-block; }
   .user-name, #user-avatar { display: none; }
   .topbar { padding: .5rem 16px; }
-  .messages, .composer, .chat-head, .attach-preview, .attach-error, .reply-preview { padding-left: 16px; padding-right: 16px; }
+  .messages, .composer, .chat-head, .attach-preview, .attach-error, .offline-banner, .reply-preview { padding-left: 16px; padding-right: 16px; }
   .chat-head { flex-direction: column; gap: .5rem; }
   .msg { max-width: 92%; }
 }
