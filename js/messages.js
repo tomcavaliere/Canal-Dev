@@ -73,7 +73,7 @@ function loadMoreItem() {
 }
 
 function renderLoadMore() {
-  $("messages").querySelector(".load-more")?.replaceWith(loadMoreItem());
+  if (state.msgDocs) renderMessages(state.msgDocs, false);
 }
 
 // Montre un message cité (défilement + surbrillance), en agrandissant la fenêtre s'il est trop ancien.
@@ -162,28 +162,67 @@ function daySeparator(date) {
 }
 
 // Messages précédés d'un séparateur à chaque changement de jour.
+/* ---------- Rendu incrémental ---------- */
+
+// Éléments affichés, par clé, avec l'empreinte du contenu qui a servi à les construire.
+// Un élément dont l'empreinte n'a pas changé est réutilisé tel quel : un nouveau message ne
+// recrée pas les autres (focus clavier, photo chargée, modification en cours conservés).
+let rendered = new Map(); // clé -> { el, sig }
+let next = new Map();
+
+function keyed(key, sig, build) {
+  const prev = rendered.get(key);
+  const entry = prev && prev.sig === sig ? prev : { el: build(), sig };
+  entry.el.dataset.key = key;
+  next.set(key, entry);
+  return entry.el;
+}
+
+const millis = (t) => t?.toMillis?.() ?? null;
+
+// Tout ce dont dépend l'affichage d'un message.
+function messageSig(id, m) {
+  const target = m.replyTo ? state.msgById.get(m.replyTo) : null;
+  return JSON.stringify([
+    m.text, m.image?.w, m.image?.h, m.replyTo, millis(m.createdAt), millis(m.editedAt),
+    displayText(m.authorUid, m.authorName),
+    target ? [displayText(target.authorUid, target.authorName), excerpt(target)] : state.hasMore,
+    state.pending.has(id), state.editing?.id === id,
+  ]);
+}
+
 function messageItems(docs) {
-  const items = [];
+  const items = [keyed("load-more", JSON.stringify([state.loadingMore, state.hasMore]), loadMoreItem)];
   let day = null;
   for (const d of docs) {
     const m = state.msgById.get(d.id);
     const date = m.createdAt?.toDate?.();
     if (date && dayKey(date) !== day) {
       day = dayKey(date);
-      items.push(daySeparator(date));
+      items.push(keyed("day-" + day, dayLabel(date), () => daySeparator(date)));
     }
-    items.push(renderMessage(d.id, m));
+    items.push(keyed("msg-" + d.id, messageSig(d.id, m), () => renderMessage(d.id, m)));
   }
   return items;
+}
+
+// Met la liste dans l'ordre voulu en ne déplaçant que les éléments nouveaux ou remplacés
+// (déplacer un élément lui ferait perdre le focus).
+function patchList(list, nodes) {
+  const keep = new Set(nodes);
+  for (const el of [...list.children]) if (!keep.has(el)) el.remove();
+  nodes.forEach((node, i) => {
+    const cur = list.children[i];
+    if (cur !== node) list.insertBefore(node, cur ?? null);
+  });
 }
 
 export function renderMessages(docs, forceScroll) {
   const list = $("messages");
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
   const anchor = forceScroll || nearBottom ? null : scrollAnchor(list);
-  // Modification en cours : le curseur est remis en place après le nouveau rendu.
-  const editor = list.querySelector(".msg-edit textarea");
-  const caret = editor && document.activeElement === editor ? [editor.selectionStart, editor.selectionEnd] : null;
+  // Liste vidée (autre conversation) : plus rien à réutiliser.
+  if (!list.firstElementChild) rendered = new Map();
 
   state.msgById = new Map(docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
   // Messages écrits localement mais pas encore confirmés par le serveur (hors ligne, réseau lent).
@@ -198,19 +237,17 @@ export function renderMessages(docs, forceScroll) {
     li.className = "empty";
     li.textContent = "Aucun message pour l'instant.";
     list.replaceChildren(li);
+    rendered = new Map();
     return;
   }
 
-  list.replaceChildren(loadMoreItem(), ...messageItems(docs));
+  next = new Map();
+  patchList(list, messageItems(docs));
+  rendered = next;
   renderReceipt();
   if (forceScroll || nearBottom) list.scrollTop = list.scrollHeight;
   else restoreAnchor(list, anchor);
   applySearch();
-  if (caret) {
-    const ta = list.querySelector(".msg-edit textarea");
-    ta?.focus({ preventScroll: true });
-    ta?.setSelectionRange(...caret);
-  }
   syncMyRead();
 }
 

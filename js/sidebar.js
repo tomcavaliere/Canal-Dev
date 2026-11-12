@@ -39,6 +39,7 @@ function conversationItem(id, c) {
   const unread = state.unread.get(id) || 0;
   btn.className = "item" + (id === state.selectedId ? " active" : "") + (unread ? " has-unread" : "");
   btn.addEventListener("click", () => selectConversation(id));
+  btn.dataset.focus = "conv:" + id;
 
   const row = document.createElement("span");
   row.className = "item-row";
@@ -96,7 +97,7 @@ function emptyItem(text) {
   return li;
 }
 
-function smallButton(text, label, onClick) {
+function smallButton(text, label, onClick, focusKey) {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "group-btn";
@@ -104,6 +105,7 @@ function smallButton(text, label, onClick) {
   b.title = label;
   b.setAttribute("aria-label", label);
   b.addEventListener("click", onClick);
+  b.dataset.focus = focusKey;
   return b;
 }
 
@@ -134,12 +136,13 @@ function projectGroup(projectId, title, convs) {
   const groupUnread = isOpen ? 0 : convs.reduce((sum, [id]) => sum + (state.unread.get(id) || 0), 0);
   if (groupUnread) toggle.append(unreadBadge(groupUnread, unreadLabel(groupUnread)));
   toggle.addEventListener("click", () => toggleCollapsed(projectId));
+  toggle.dataset.focus = "group:" + projectId;
   head.append(toggle);
 
   if (state.isAdmin && projectId) {
     head.append(
-      smallButton("+", `Nouvelle conversation dans « ${title} »`, () => state.admin?.newConversation(projectId)),
-      smallButton("✎", `Renommer ou supprimer le projet « ${title} »`, () => state.admin?.editProject(projectId)),
+      smallButton("+", `Nouvelle conversation dans « ${title} »`, () => state.admin?.newConversation(projectId), "add:" + projectId),
+      smallButton("✎", `Renommer ou supprimer le projet « ${title} »`, () => state.admin?.editProject(projectId), "edit:" + projectId),
     );
   }
   li.append(head);
@@ -181,5 +184,17 @@ export function renderConversationList() {
   } else if (loose.length > 0 || state.isAdmin) {
     items.push(projectGroup("", "Sans projet", loose));
   }
-  $("conv-list").replaceChildren(...items);
+  updateList($("conv-list"), items);
+}
+
+// La liste est reconstruite à chaque changement (conversations, non-lus, projets), mais le DOM
+// n'est touché que si le résultat diffère ; dans ce cas, le focus clavier est rendu à l'élément
+// équivalent (même conversation, même projet).
+function updateList(list, items) {
+  const html = items.map((el) => el.outerHTML).join("");
+  if (html === list.innerHTML) return;
+  const active = /** @type {HTMLElement | null} */ (document.activeElement);
+  const focusKey = active && list.contains(active) ? active.dataset.focus : null;
+  list.replaceChildren(...items);
+  if (focusKey) list.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
 }
