@@ -24,7 +24,7 @@ import { $ } from "./ui.js";
 export async function purgeUserData(uid, email) {
   // Photos, messages puis accusés de lecture. Les photos sont lues par petits lots (jusqu'à ~900 Ko chacune).
   /** @type {[string, string, number][]} */
-  const groups = [["images", "authorUid", 10], ["messages", "authorUid", 400], ["reads", "uid", 400]];
+  const groups = [["images", "authorUid", 10], ["thumbs", "authorUid", 100], ["messages", "authorUid", 400], ["reads", "uid", 400]];
   for (const [group, field, size] of groups) {
     const q = query(collectionGroup(db, group), where(field, "==", uid), limit(size));
     for (;;) {
@@ -58,13 +58,14 @@ function plain(value) {
 }
 
 async function collectMyData(user) {
-  const [profile, name, invite, convs, msgs, imgs, reads] = await Promise.all([
+  const [profile, name, invite, convs, msgs, imgs, thumbs, reads] = await Promise.all([
     getDoc(doc(db, "users", user.uid)),
     getDoc(doc(db, "names", user.uid)),
     getDoc(doc(db, "invites", user.email.toLowerCase())),
     getDocs(query(collection(db, "conversations"), where("members", "array-contains", user.uid))),
     getDocs(query(collectionGroup(db, "messages"), where("authorUid", "==", user.uid))),
     getDocs(query(collectionGroup(db, "images"), where("authorUid", "==", user.uid))),
+    getDocs(query(collectionGroup(db, "thumbs"), where("authorUid", "==", user.uid))),
     getDocs(query(collectionGroup(db, "reads"), where("uid", "==", user.uid))),
   ]);
   return {
@@ -107,6 +108,8 @@ async function collectMyData(user) {
       messageId: d.id,
       createdAt: plain(d.data().createdAt),
       data: d.data().data,
+      // Miniature affichée dans le fil (même photo, réduite), si elle existe.
+      thumbnail: thumbs.docs.find((t) => t.ref.parent.parent.id === d.ref.parent.parent.id && t.id === d.id)?.data().data ?? null,
     })),
     // Date de dernière lecture de chaque conversation, visible par ses autres membres.
     readReceipts: reads.docs.map((d) => ({

@@ -167,12 +167,14 @@ service cloud.firestore {
       // ---------- Messages ----------
       match /messages/{msgId} {
         // `image` (facultatif) ne contient que les dimensions ; la photo elle-même est
-        // dans images/{msgId}, écrite dans le même batch.
+        // dans images/{msgId}, écrite dans le même batch, et sa miniature (si `thumb`) dans thumbs/{msgId}.
         function validImageMeta(img) {
-          return img is map && img.keys().hasOnly(['w', 'h'])
+          return img is map && img.keys().hasOnly(['w', 'h', 'thumb'])
             && img.w is int && img.w > 0 && img.w <= 1600
             && img.h is int && img.h > 0 && img.h <= 1600
-            && existsAfter(/databases/$(database)/documents/conversations/$(convId)/images/$(msgId));
+            && existsAfter(/databases/$(database)/documents/conversations/$(convId)/images/$(msgId))
+            && (!('thumb' in img) || (img.thumb == true
+              && existsAfter(/databases/$(database)/documents/conversations/$(convId)/thumbs/$(msgId))));
         }
         // `replyTo` (facultatif) : identifiant d'un message existant de la même conversation.
         function validReplyTo(id) {
@@ -232,6 +234,29 @@ service cloud.firestore {
           || (canAccess(convId) && resource.data.authorUid == request.auth.uid);
       }
 
+      // ---------- Miniatures des photos (même identifiant que le message) ----------
+      // Affichées dans le fil ; l'original (images/) n'est chargé qu'à l'agrandissement.
+      match /thumbs/{thumbId} {
+        function validThumb() {
+          let d = request.resource.data;
+          let parts = d.data.split(',');
+          return d.keys().hasOnly(['data', 'authorUid', 'createdAt'])
+            && d.authorUid == request.auth.uid
+            && d.createdAt == request.time
+            && d.data is string
+            && d.data.size() <= 60000
+            && parts.size() == 2
+            && parts[0] == 'data:image/jpeg;base64'
+            && getAfter(/databases/$(database)/documents/conversations/$(convId)/messages/$(thumbId)).data.authorUid == request.auth.uid;
+        }
+
+        allow read: if canAccess(convId);
+        allow create: if canAccess(convId) && validThumb();
+        allow update: if false;
+        allow delete: if isAdmin()
+          || (canAccess(convId) && resource.data.authorUid == request.auth.uid);
+      }
+
       // ---------- Accusés de lecture (un par membre, identifiant = UID) ----------
       // Date à laquelle le membre a vu pour la dernière fois la conversation, visible
       // par les autres membres (« Vu par … » sous le dernier message envoyé).
@@ -259,6 +284,10 @@ service cloud.firestore {
         || (signedIn() && resource.data.authorUid == request.auth.uid);
     }
     match /{path=**}/images/{imgId} {
+      allow read, delete: if isAdmin()
+        || (signedIn() && resource.data.authorUid == request.auth.uid);
+    }
+    match /{path=**}/thumbs/{thumbId} {
       allow read, delete: if isAdmin()
         || (signedIn() && resource.data.authorUid == request.auth.uid);
     }

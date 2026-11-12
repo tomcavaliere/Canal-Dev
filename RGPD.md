@@ -46,8 +46,8 @@ Conclusion : l'intérêt légitime n'est pas supplanté par les droits des perso
 
 | Droit | Moyen | Implémentation |
 |---|---|---|
-| Accès, portabilité | *Mon compte → Télécharger mes données* (JSON : compte de connexion dont l'URL de la photo Google, profil, nom affiché, invitation en attente, messages, photos en data URL, accusés) | [js/account.js](js/account.js) `collectMyData` |
-| Effacement | *Mon compte → Supprimer mon compte* | `purgeUserData` (messages, photos, accusés, accès, invitation, nom affiché, profil) + `deleteUser` (après réauthentification) |
+| Accès, portabilité | *Mon compte → Télécharger mes données* (JSON : compte de connexion dont l'URL de la photo Google, profil, nom affiché, invitation en attente, messages, photos et miniatures en data URL, accusés) | [js/account.js](js/account.js) `collectMyData` |
+| Effacement | *Mon compte → Supprimer mon compte* | `purgeUserData` (messages, photos et miniatures, accusés, accès, invitation, nom affiché, profil) + `deleteUser` (après réauthentification) |
 | Effacement (sur demande email) | Admin : bouton ✕ dans « Utilisateurs », puis Firebase Console → Authentication → supprimer l'utilisateur | [js/admin.js](js/admin.js) |
 | Rectification | Nom affiché : l'admin le corrige (✎ dans « Utilisateurs ») ; la personne le voit dans *Mon compte*. Messages : *Modifier* (texte seul, mention « modifié », sans historique) ou supprimer et republier | [js/admin.js](js/admin.js) |
 | Opposition, limitation | Email au responsable | Retirer les accès / supprimer le compte selon la demande |
@@ -98,9 +98,9 @@ Les profils et messages créés avant la mise en conformité contenaient une URL
 
 ## 10. Photos partagées
 
-- **Stockage** : dans Firestore (UE), collection `conversations/{id}/images/{messageId}`, séparée des messages ; lecture réservée aux membres de la conversation et à l'admin (mêmes règles que les messages).
+- **Stockage** : dans Firestore (UE), collection `conversations/{id}/images/{messageId}`, séparée des messages, et une miniature (480 px, ~45 Ko) dans `conversations/{id}/thumbs/{messageId}`, affichée dans le fil ; lecture réservée aux membres de la conversation et à l'admin (mêmes règles que les messages).
 - **Minimisation** : redimensionnement à 1600 px max et ré-encodage JPEG dans le navigateur ([js/images.js](js/images.js)) ; les métadonnées EXIF (GPS, date, appareil) ne sont jamais envoyées. Les règles n'acceptent qu'un JPEG en data URL de 900 000 caractères max.
 - **Pas de traitement biométrique** : aucune analyse ni reconnaissance automatique ; les photos ne relèvent donc pas de l'art. 9.
 - **Tiers photographiés** : avertissement affiché avant chaque envoi (accord de la personne, pas de documents personnels). Toute demande d'un tiers (membre ou non) est traitée par suppression immédiate du message par l'admin (bouton *Supprimer* sur le message), puis réponse à la personne.
-- **Effacement** : suppression du message → suppression de la photo (même batch) ; suppression du compte ou de la conversation → toutes les photos concernées.
-- **Volume** : environ 300 à 700 Ko par photo ; le quota gratuit Firestore (1 Gio) permet de l'ordre de 1 500 à 3 000 photos.
+- **Effacement** : suppression du message → suppression de la photo et de sa miniature (même batch) ; suppression du compte ou de la conversation → toutes les photos et miniatures concernées.
+- **Volume** : environ 300 à 700 Ko par photo, plus 45 Ko de miniature ; le quota gratuit Firestore (1 Gio) permet de l'ordre de 1 500 à 3 000 photos.

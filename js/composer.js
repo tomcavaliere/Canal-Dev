@@ -103,7 +103,7 @@ $("composer").addEventListener("submit", (e) => {
     authorUid: state.user.uid,
     authorName: state.user.displayName || state.user.email,
     createdAt: serverTimestamp(),
-    ...(image ? { image: { w: image.w, h: image.h } } : {}),
+    ...(image ? { image: { w: image.w, h: image.h, thumb: true } } : {}),
     ...(replyTo ? { replyTo } : {}),
   });
   if (image) {
@@ -113,7 +113,14 @@ $("composer").addEventListener("submit", (e) => {
       authorUid: state.user.uid,
       createdAt: serverTimestamp(),
     });
+    // Miniature affichée dans le fil (l'original n'est chargé qu'à l'agrandissement).
+    batch.set(doc(db, "conversations", convId, "thumbs", msgRef.id), {
+      data: image.thumb,
+      authorUid: state.user.uid,
+      createdAt: serverTimestamp(),
+    });
     images.cache.set(msgRef.id, Promise.resolve(image.data));
+    images.cache.set("t:" + msgRef.id, Promise.resolve(image.thumb));
   }
   // Date de la dernière activité, pour classer la conversation en tête de liste chez tous ses membres.
   batch.update(doc(db, "conversations", convId), { lastMessageAt: serverTimestamp() });
@@ -124,6 +131,7 @@ $("composer").addEventListener("submit", (e) => {
   batch.commit().catch((err) => {
     console.error(err);
     images.cache.delete(msgRef.id);
+    images.cache.delete("t:" + msgRef.id);
     if (state.selectedId === convId) {
       if (!input.value.trim()) input.value = text;
       if (image && !attachment) setAttachment(image);

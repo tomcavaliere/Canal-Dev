@@ -247,6 +247,30 @@ describe("Photos", () => {
     })));
   it("un non-membre ne lit pas les photos", () =>
     assertFails(getDoc(doc(bob(), "conversations/c1/images/m3"))));
+
+  function sendWithThumb(db, uid, { thumb = JPEG, declare = true, write = true } = {}) {
+    const ref = newMessageRef(db);
+    const batch = writeBatch(db);
+    batch.set(ref, message(uid, { image: { w: 800, h: 600, ...(declare ? { thumb: true } : {}) } }));
+    batch.set(doc(db, `conversations/c1/images/${ref.id}`), { data: JPEG, authorUid: uid, createdAt: serverTimestamp() });
+    if (write) batch.set(doc(db, `conversations/c1/thumbs/${ref.id}`), { data: thumb, authorUid: uid, createdAt: serverTimestamp() });
+    return batch.commit();
+  }
+  it("une photo avec sa miniature dans le même batch est acceptée", () => assertSucceeds(sendWithThumb(alice(), "alice")));
+  it("une miniature de plus de 60 000 caractères est refusée", () =>
+    assertFails(sendWithThumb(alice(), "alice", { thumb: JPEG + "A".repeat(60_000) })));
+  it("un message qui annonce une miniature absente est refusé", () =>
+    assertFails(sendWithThumb(alice(), "alice", { write: false })));
+  it("une miniature rattachée au message d'un autre est refusée", () =>
+    assertFails(setDoc(doc(alice(), "conversations/c1/thumbs/m2"), {
+      data: JPEG, authorUid: "alice", createdAt: serverTimestamp(),
+    })));
+  it("un non-membre ne lit pas les miniatures", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), "conversations/c1/thumbs/m3"), { data: JPEG, authorUid: "dave", createdAt: T0 }));
+    await assertFails(getDoc(doc(bob(), "conversations/c1/thumbs/m3")));
+    await assertSucceeds(getDoc(doc(alice(), "conversations/c1/thumbs/m3")));
+  });
 });
 
 describe("Accusés de lecture", () => {
@@ -388,6 +412,7 @@ describe("Droits RGPD (requêtes sur toutes les conversations)", () => {
     const db = dave();
     await assertSucceeds(mine(db, "messages", "authorUid", "dave"));
     await assertSucceeds(mine(db, "images", "authorUid", "dave"));
+    await assertSucceeds(mine(db, "thumbs", "authorUid", "dave"));
     await assertSucceeds(mine(db, "reads", "uid", "dave"));
   });
   it("et peut les supprimer", async () => {
@@ -400,6 +425,7 @@ describe("Droits RGPD (requêtes sur toutes les conversations)", () => {
     const db = alice();
     await assertFails(mine(db, "messages", "authorUid", "carol"));
     await assertFails(mine(db, "images", "authorUid", "dave"));
+    await assertFails(mine(db, "thumbs", "authorUid", "dave"));
     await assertFails(mine(db, "reads", "uid", "carol"));
   });
   it("l'admin peut tout interroger (suppression d'un compte)", () =>

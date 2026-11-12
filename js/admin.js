@@ -596,7 +596,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       // Photos d'abord, lues par petits lots (jusqu'à ~900 Ko chacune), puis les messages
       // et les accusés de lecture.
       /** @type {[string, number][]} */
-      const subs = [["images", 10], ["messages", 400], ["reads", 400]];
+      const subs = [["images", 10], ["thumbs", 100], ["messages", 400], ["reads", 400]];
       for (const [sub, size] of subs) {
         const ref = collection(db, "conversations", conv.id, sub);
         for (;;) {

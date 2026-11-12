@@ -47,7 +47,7 @@ js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase H
 confidentialite.html    politique de confidentialité
 RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
-firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid et reads.uid, requis pour l'export/la suppression)
+firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid, thumbs.authorUid et reads.uid, requis pour l'export/la suppression)
 firebase.json           hébergement (en-têtes HTTP, fichiers exclus), règles, index, émulateur des tests
 .firebaserc             projet Firebase par défaut
 package.json            outils de test, de qualité et de déploiement (le site ne charge aucune de ces dépendances)
@@ -73,7 +73,7 @@ Déploie [firestore.rules](firestore.rules) :
 - soit avec la CLI : `npm i -g firebase-tools && firebase login && firebase use --add && firebase deploy --only firestore`.
 
 La CLI déploie aussi [firestore.indexes.json](firestore.indexes.json). Si tu passes par la console, crée l'exemption d'index à la main :
-**Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour la collection `images`, et pour la collection `reads` avec le champ `uid`.
+**Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour les collections `images` et `thumbs`, et pour la collection `reads` avec le champ `uid`.
 Sans cet index, « Télécharger mes données » et la suppression de compte échouent.
 
 ### 3. Devenir administrateur

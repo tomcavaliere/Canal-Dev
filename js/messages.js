@@ -184,7 +184,7 @@ const millis = (t) => t?.toMillis?.() ?? null;
 function messageSig(id, m) {
   const target = m.replyTo ? state.msgById.get(m.replyTo) : null;
   return JSON.stringify([
-    m.text, m.image?.w, m.image?.h, m.replyTo, millis(m.createdAt), millis(m.editedAt),
+    m.text, m.image?.w, m.image?.h, m.image?.thumb, m.replyTo, millis(m.createdAt), millis(m.editedAt),
     displayText(m.authorUid, m.authorName),
     target ? [displayText(target.authorUid, target.authorName), excerpt(target)] : state.hasMore,
     state.pending.has(id), state.editing?.id === id,
@@ -322,6 +322,7 @@ function renderMessage(id, m) {
         const batch = writeBatch(db);
         batch.delete(doc(db, "conversations", state.selectedId, "messages", id));
         if (m.image) batch.delete(doc(db, "conversations", state.selectedId, "images", id));
+        if (m.image?.thumb) batch.delete(doc(db, "conversations", state.selectedId, "thumbs", id));
         await batch.commit();
       } catch (err) {
         console.error(err);
@@ -499,14 +500,16 @@ export function resetImages() {
   images.cache = new Map();
 }
 
-function loadImage(id) {
-  if (!images.cache.has(id)) {
+// Photo d'origine (`images`) ou miniature (`thumbs`, clé « t:<id> » dans le cache).
+function loadImage(id, thumb = false) {
+  const key = thumb ? "t:" + id : id;
+  if (!images.cache.has(key)) {
     const convId = state.selectedId;
-    images.cache.set(id, getDoc(doc(db, "conversations", convId, "images", id))
+    images.cache.set(key, getDoc(doc(db, "conversations", convId, thumb ? "thumbs" : "images", id))
       .then((snap) => (snap.exists() ? snap.data().data : null))
-      .catch((err) => { console.error(err); images.cache.delete(id); return null; }));
+      .catch((err) => { console.error(err); images.cache.delete(key); return null; }));
   }
-  return images.cache.get(id);
+  return images.cache.get(key);
 }
 
 function observeImage(img) {
@@ -523,7 +526,7 @@ function observeImage(img) {
 }
 
 async function showImage(img) {
-  const data = await loadImage(img.dataset.id);
+  const data = await loadImage(img.dataset.id, img.dataset.thumb === "1");
   if (data) img.src = data;
   else img.closest(".msg-img-btn").classList.add("missing");
 }
@@ -540,15 +543,24 @@ function renderImage(id, m) {
   img.width = m.image.w;
   img.height = m.image.h;
   img.dataset.id = id;
+  // Fil : la miniature (anciens messages sans miniature : l'original).
+  const thumb = !!m.image.thumb;
+  img.dataset.thumb = thumb ? "1" : "";
   btn.append(img);
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", async () => {
     if (!img.src) return;
-    $("viewer-img").src = img.src;
-    $("viewer-img").alt = img.alt;
+    const viewer = $("viewer-img");
+    viewer.src = img.src; // la miniature tout de suite, l'original dès qu'il est chargé
+    viewer.alt = img.alt;
     $("dlg-image").showModal();
+    if (!thumb) return;
+    $("dlg-image").classList.add("loading");
+    const data = await loadImage(id);
+    $("dlg-image").classList.remove("loading");
+    if (data && $("dlg-image").open && viewer.src === img.src) viewer.src = data;
   });
   // Déjà chargée : affichage immédiat (évite un clignotement à chaque mise à jour).
-  const cached = images.cache.get(id);
+  const cached = images.cache.get(thumb ? "t:" + id : id);
   if (cached) cached.then((data) => { if (data) img.src = data; });
   else queueMicrotask(() => observeImage(img));
   return btn;
