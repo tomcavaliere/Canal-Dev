@@ -34,6 +34,7 @@ firestore.indexes.json  index (collection groups messages.authorUid, images.auth
 firebase.json           hébergement (en-têtes HTTP, fichiers exclus), règles, index, émulateur des tests
 .firebaserc             projet Firebase par défaut
 package.json            outils de test et de déploiement (le site ne charge aucune de ces dépendances)
+.github/workflows/      tests à chaque push, déploiement automatique depuis main
 scripts/test-rules.sh   lance l'émulateur Firestore et les tests
 tests/rules.test.mjs    tests des règles de sécurité
 ```
@@ -71,6 +72,25 @@ Firebase Hosting envoie `Cache-Control: no-cache` : le navigateur revérifie cha
 (réponse 304 s'il n'a pas changé). Il n'y a donc plus de numéro de version `?v=` à incrémenter.
 Les en-têtes de sécurité (interdiction d'afficher le site dans un cadre, `nosniff`, etc.) sont dans
 [firebase.json](firebase.json) ; la politique de contenu (CSP) reste dans chaque page HTML.
+
+### 5. Déploiement automatique (GitHub Actions)
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) lance la vérification de syntaxe et les tests
+des règles à chaque push et pull request, puis, sur `main` uniquement et si tout passe, déploie site, règles
+et index. Le code et les règles partent donc toujours ensemble. Mise en place, une fois :
+1. Google Cloud Console → projet `canal-dev-c18d7` → **IAM → Comptes de service → Créer** (par ex. `github-deploy`),
+   avec les rôles : *Administrateur Firebase Hosting*, *Administrateur des règles Firebase*,
+   *Administrateur des index Cloud Datastore*, *Consommateur Service Usage*.
+2. Sur ce compte : **Clés → Ajouter une clé → JSON**. Le fichier téléchargé est un secret : ne le commite jamais.
+3. GitHub → **Settings → Secrets and variables → Actions → New repository secret** :
+   nom `FIREBASE_SERVICE_ACCOUNT`, valeur = contenu du fichier JSON. Supprime ensuite le fichier.
+
+Si un déploiement échoue pour une permission manquante, le journal de l'action nomme la permission :
+ajoute le rôle correspondant au compte de service.
+
+### 6. Quitter GitHub Pages
+Une fois le site en ligne sur web.app, laisse GitHub Pages actif quelque temps : [js/redirect.js](js/redirect.js)
+renvoie les anciens liens vers la nouvelle adresse. Désactive-le ensuite (GitHub → **Settings → Pages**),
+puis retire `tomcavaliere.github.io` des domaines autorisés d'Authentication.
 
 ## Utilisation (admin)
 1. **+ Projet** (facultatif) : crée un projet. Le ✎ à côté d'un projet permet de le renommer ou de le supprimer (ses conversations sont conservées et passent « Sans projet »).
