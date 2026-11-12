@@ -1,0 +1,62 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude-in-chrome__tabs_context_mcp"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(rtk git push:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-push.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Bash(git commit:*)",
+            "model": "claude-sonnet-5-5",
+            "timeout": 300,
+            "statusMessage": "Revue de code indépendante avant commit…",
+            "prompt": "Tu es un relecteur de code indépendant. Tu n'as AUCUN contexte sur le travail effectué : juge uniquement le code. Un commit va être créé avec la commande suivante (JSON de l'appel d'outil) : $ARGUMENTS\n\nProjet : application web statique (HTML/CSS/JS vanilla) hébergée sur GitHub Pages, avec Firebase (Auth, Firestore, règles dans firestore.rules) et des contraintes RGPD (voir RGPD.md).\n\n1. Lance `git diff --cached` pour voir ce qui va être commité. Si c'est vide (la commande fait elle-même le `git add`, ex. `-a` ou `git add ... &&`), examine `git diff HEAD` et `git status --porcelain` pour les fichiers concernés.\n2. Lis le contexte autour des changements si nécessaire (fichiers complets, firestore.rules, etc.).\n3. Cherche UNIQUEMENT des problèmes CRITIQUES :\n   - secrets/identifiants commités (clés privées, tokens, mots de passe, comptes de service ; la config web Firebase publique n'est PAS un secret) ;\n   - failles de sécurité : XSS (innerHTML avec données utilisateur non échappées), règles Firestore trop permissives (lecture/écriture ouvertes, contournement d'auth, élévation de privilèges admin), injection ;\n   - fuite de données personnelles / non-conformité RGPD manifeste ;\n   - bug qui casse clairement l'application (erreur de syntaxe, référence inexistante, perte de données, boucle infinie) ;\n   - fichiers qui ne doivent pas être commités (node_modules, .env, fichiers de debug volumineux).\n4. Les remarques de style, nommage, améliorations possibles ou doutes non avérés NE bloquent PAS.\n\nRéponds ok=true si aucun problème critique n'est trouvé. Si tu trouves un problème critique avéré, réponds ok=false avec une raison en français listant chaque problème : fichier:ligne, description, correction attendue."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Bash(rtk git commit:*)",
+            "model": "claude-sonnet-5-5",
+            "timeout": 300,
+            "statusMessage": "Revue de code indépendante avant commit…",
+            "prompt": "Tu es un relecteur de code indépendant. Tu n'as AUCUN contexte sur le travail effectué : juge uniquement le code. Un commit va être créé avec la commande suivante (JSON de l'appel d'outil) : $ARGUMENTS\n\nProjet : application web statique (HTML/CSS/JS vanilla) hébergée sur GitHub Pages, avec Firebase (Auth, Firestore, règles dans firestore.rules) et des contraintes RGPD (voir RGPD.md).\n\n1. Lance `git diff --cached` pour voir ce qui va être commité. Si c'est vide (la commande fait elle-même le `git add`, ex. `-a` ou `git add ... &&`), examine `git diff HEAD` et `git status --porcelain` pour les fichiers concernés.\n2. Lis le contexte autour des changements si nécessaire (fichiers complets, firestore.rules, etc.).\n3. Cherche UNIQUEMENT des problèmes CRITIQUES :\n   - secrets/identifiants commités (clés privées, tokens, mots de passe, comptes de service ; la config web Firebase publique n'est PAS un secret) ;\n   - failles de sécurité : XSS (innerHTML avec données utilisateur non échappées), règles Firestore trop permissives (lecture/écriture ouvertes, contournement d'auth, élévation de privilèges admin), injection ;\n   - fuite de données personnelles / non-conformité RGPD manifeste ;\n   - bug qui casse clairement l'application (erreur de syntaxe, référence inexistante, perte de données, boucle infinie) ;\n   - fichiers qui ne doivent pas être commités (node_modules, .env, fichiers de debug volumineux).\n4. Les remarques de style, nommage, améliorations possibles ou doutes non avérés NE bloquent PAS.\n\nRéponds ok=true si aucun problème critique n'est trouvé. Si tu trouves un problème critique avéré, réponds ok=false avec une raison en français listant chaque problème : fichier:ligne, description, correction attendue."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/commit-reminder.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
