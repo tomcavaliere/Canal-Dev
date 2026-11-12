@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canal Dev</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <!-- Chargement -->
+  <div id="screen-loading" class="screen center">
+    <p class="muted">Chargement…</p>
+  </div>
+
+  <!-- Connexion -->
+  <section id="screen-login" class="screen center" hidden>
+    <div class="card">
+      <h1>Canal Dev</h1>
+      <p>Canal de suivi du développement. Connecte-toi avec ton compte Gmail pour continuer.</p>
+      <button id="btn-login" class="btn primary">Se connecter avec Google</button>
+      <p id="login-error" class="error" hidden></p>
+    </div>
+  </section>
+
+  <!-- Accès en attente -->
+  <section id="screen-pending" class="screen center" hidden>
+    <div class="card">
+      <h1>Accès en attente</h1>
+      <p>Ton compte <strong id="pending-email"></strong> est enregistré.
+        L'administrateur doit te donner accès à une conversation.
+        Cette page se mettra à jour automatiquement dès que ce sera fait.</p>
+      <p class="muted small">Identifiant : <code id="pending-uid"></code></p>
+      <p id="pending-error" class="error" hidden></p>
+      <button class="btn btn-logout">Se déconnecter</button>
+    </div>
+  </section>
+
+  <!-- Application -->
+  <div id="screen-app" class="screen app" hidden>
+    <header class="topbar">
+      <button id="btn-back" class="btn icon only-mobile" aria-label="Retour aux conversations">←</button>
+      <span class="brand">Canal Dev</span>
+      <span class="spacer"></span>
+      <span id="admin-badge" class="badge" hidden>Admin</span>
+      <img id="user-photo" class="avatar" alt="" referrerpolicy="no-referrer">
+      <span id="user-name" class="user-name"></span>
+      <button class="btn small btn-logout">Déconnexion</button>
+    </header>
+
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <h2>Conversations</h2>
+        <button id="btn-new-conv" class="btn small" hidden>+ Nouvelle</button>
+      </div>
+      <ul id="conv-list" class="list"></ul>
+
+      <div id="admin-users" hidden>
+        <div class="sidebar-head">
+          <h2>Utilisateurs</h2>
+        </div>
+        <ul id="user-list" class="list"></ul>
+      </div>
+    </aside>
+
+    <main class="chat">
+      <div id="chat-empty" class="center muted">Sélectionne une conversation.</div>
+      <div id="chat-view" class="chat-view" hidden>
+        <div class="chat-head">
+          <div class="chat-head-text">
+            <h2 id="chat-title"></h2>
+            <p id="chat-desc" class="muted small"></p>
+          </div>
+          <div id="chat-admin-actions" class="row" hidden>
+            <button id="btn-members" class="btn small">Membres</button>
+            <button id="btn-delete-conv" class="btn small danger">Supprimer</button>
+          </div>
+        </div>
+        <ol id="messages" class="messages"></ol>
+        <form id="composer" class="composer">
+          <textarea id="msg-input" rows="2" maxlength="4000"
+            placeholder="Écrire un message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
+          <button class="btn primary" type="submit">Envoyer</button>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <!-- Dialogue : nouvelle conversation (admin) -->
+  <dialog id="dlg-new-conv">
+    <form id="form-new-conv" method="dialog" class="stack">
+      <h2>Nouvelle conversation</h2>
+      <label>Titre
+        <input id="new-conv-title" maxlength="120" required>
+      </label>
+      <label>Description
+        <textarea id="new-conv-desc" maxlength="500" rows="3"></textarea>
+      </label>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button type="submit" class="btn primary">Créer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialogue : membres (admin) -->
+  <dialog id="dlg-members">
+    <div class="stack">
+      <h2>Membres de « <span id="members-conv-title"></span> »</h2>
+      <p class="muted small">Coche un utilisateur pour lui donner accès (lecture et écriture).</p>
+      <ul id="members-list" class="list members"></ul>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>
