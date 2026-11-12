@@ -19,8 +19,14 @@ js/firebase-config.js   config Firebase + ADMIN_UID  ← à remplir
 js/firebase.js          initialisation Firebase
 js/app.js               connexion, conversations, messages
 js/admin.js             création de conversations, gestion des membres (admin)
+js/account.js           « Mon compte » : export et suppression des données (RGPD)
+js/ui.js                helpers d'affichage (avatar à initiales)
+js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
+confidentialite.html    politique de confidentialité
+RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
-firebase.json           pour déployer les règles avec la CLI Firebase
+firestore.indexes.json  index (collection groups messages.authorUid et images.authorUid, requis pour l'export/la suppression)
+firebase.json           pour déployer les règles et index avec la CLI Firebase
 ```
 
 ## Mise en place
@@ -36,6 +42,10 @@ firebase.json           pour déployer les règles avec la CLI Firebase
 Déploie [firestore.rules](firestore.rules) :
 - soit en copiant son contenu dans **Firestore → Règles → Publier** ;
 - soit avec la CLI : `npm i -g firebase-tools && firebase login && firebase use --add && firebase deploy --only firestore`.
+
+La CLI déploie aussi [firestore.indexes.json](firestore.indexes.json). Si tu passes par la console, crée l'exemption d'index à la main :
+**Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour la collection `images`.
+Sans cet index, « Télécharger mes données » et la suppression de compte échouent.
 
 ### 3. Devenir administrateur
 1. Lance le site en local (voir plus bas) et connecte-toi avec ton compte Gmail.
@@ -62,6 +72,20 @@ python3 -m http.server 8000
 # puis http://localhost:8000
 ```
 Les modules ES ne fonctionnent pas en ouvrant `index.html` directement (`file://`) : il faut un serveur.
+
+## RGPD
+Le détail est dans [RGPD.md](RGPD.md) (registre, base légale, procédures) et l'information des utilisateurs dans [confidentialite.html](confidentialite.html).
+
+À faire une fois dans la console Firebase :
+- [ ] **Paramètres du projet → Confidentialité** (ou *Data privacy*) : accepter les *Data Processing Terms*.
+- [ ] Vérifier que Firestore est bien en région UE (`eur3` ou `europe-*`).
+- [ ] **Paramètres du projet → Intégrations → Google Analytics** : désactivé (le site n'en utilise pas).
+- [ ] Déployer règles **et** index (`firebase deploy --only firestore`).
+
+Au quotidien :
+- Un utilisateur exporte ou supprime ses données depuis **Mon compte**.
+- Tous les trimestres, supprimer les comptes marqués **« inactif > 12 mois »** (✕ dans « Utilisateurs »), puis le compte correspondant dans **Authentication → Users**.
+- Une demande par email (opposition, effacement…) : répondre sous 1 mois, voir [RGPD.md](RGPD.md#4-exercice-des-droits-art-12-à-22).
 
 ## Sécurité
 - La clé `apiKey` Firebase est publique par conception ; elle n'ouvre aucun droit à elle seule.

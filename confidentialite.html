@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Politique de confidentialité — Canal Dev</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="doc">
+    <p class="small"><a href="./">← Retour à Canal Dev</a></p>
+    <h1>Politique de confidentialité</h1>
+    <p class="muted small">Dernière mise à jour : 12 novembre 2026</p>
+
+    <p>Canal Dev est un canal de communication privé servant à suivre le développement d'un outil.
+      Cette page explique quelles données personnelles sont traitées, pourquoi, combien de temps,
+      et comment exercer tes droits, conformément au Règlement général sur la protection des données
+      (RGPD, règlement UE 2016/679) et à la loi Informatique et Libertés.</p>
+
+    <h2>1. Responsable du traitement</h2>
+    <p>Tom Cavaliere, personne physique, administrateur de Canal Dev.<br>
+      Contact pour toute question ou demande relative à tes données :
+      <a href="mailto:tomcavaliere66@gmail.com">tomcavaliere66@gmail.com</a>.</p>
+
+    <h2>2. Données traitées</h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Donnée</th><th>Origine</th><th>Utilisation</th></tr></thead>
+        <tbody>
+          <tr><td>Adresse email Gmail</td><td>Ton compte Google, à la connexion</td><td>Identification, gestion des accès par l'administrateur</td></tr>
+          <tr><td>Nom affiché</td><td>Ton compte Google, à chaque connexion</td><td>Affiché à côté de tes messages</td></tr>
+          <tr><td>Identifiant technique (UID)</td><td>Généré par Firebase</td><td>Lier ton compte à tes accès et messages</td></tr>
+          <tr><td>Date de création du compte et de dernière connexion</td><td>Générées automatiquement</td><td>Appliquer la durée de conservation (§ 6)</td></tr>
+          <tr><td>Contenu et date de tes messages</td><td>Saisis par toi</td><td>Fonctionnement du canal</td></tr>
+          <tr><td>Photos que tu joins à tes messages</td><td>Choisies par toi</td><td>Partage avec les membres de la conversation</td></tr>
+          <tr><td>Données techniques de connexion (adresse IP, navigateur)</td><td>Ton navigateur</td><td>Traitées par les hébergeurs (§ 5) pour délivrer le service et le sécuriser</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>La photo de ton compte Google n'est <strong>pas</strong> collectée. Aucune donnée sensible
+      n'est demandée : merci de ne pas en publier dans les messages.</p>
+    <p><strong>Photos partagées.</strong> Avant l'envoi, chaque photo est redimensionnée dans ton
+      navigateur (1600 pixels maximum) et ré-encodée : ses <strong>métadonnées sont supprimées</strong>
+      (position GPS, date de prise de vue, modèle d'appareil…). Seule l'image elle-même est envoyée.
+      Si une photo montre une autre personne, tu dois avoir son accord avant de la publier
+      (droit à l'image) ; évite aussi les photos de documents contenant des données personnelles.
+      Les photos ne font l'objet d'aucune analyse automatique (pas de reconnaissance faciale).</p>
+    <p>Aucune décision automatisée ni profilage. Aucune publicité, aucun outil de mesure d'audience,
+      aucune revente ou cession de données.</p>
+
+    <h2>3. Finalité et base légale</h2>
+    <p>Les données servent uniquement à faire fonctionner le canal : authentifier les participants,
+      leur donner accès aux conversations auxquelles l'administrateur les a invités, afficher et
+      conserver les échanges.</p>
+    <p>Base légale : l'<strong>intérêt légitime</strong> du responsable (article 6.1.f du RGPD)
+      à disposer d'un outil d'échange sécurisé avec les personnes qui participent au suivi du projet.
+      Ce traitement est limité au strict nécessaire, réservé aux personnes qui choisissent de se
+      connecter, et tu peux t'y opposer ou supprimer ton compte à tout moment.</p>
+
+    <h2>4. Qui voit tes données</h2>
+    <ul>
+      <li><strong>L'administrateur</strong> : ton email, ton nom, tes dates de connexion, les conversations
+        auxquelles tu as accès et tous les messages.</li>
+      <li><strong>Les autres membres d'une conversation</strong> : ton nom, tes messages et tes photos
+        dans cette conversation uniquement (pas ton email).</li>
+      <li><strong>Les sous-traitants techniques</strong> listés ci-dessous, uniquement pour héberger le service.</li>
+    </ul>
+    <p>Ces règles d'accès sont appliquées côté serveur : un utilisateur ne peut techniquement pas lire
+      une conversation dont il n'est pas membre.</p>
+
+    <h2>5. Sous-traitants et transferts hors de l'Union européenne</h2>
+    <ul>
+      <li><strong>Google Firebase</strong> (Google Ireland Ltd / Google LLC) — authentification et base de données.
+        <ul>
+          <li>Les messages, photos, profils et conversations (Cloud Firestore) sont hébergés <strong>dans l'Union européenne</strong>.</li>
+          <li>Le compte de connexion (Firebase Authentication : email, nom, UID, dates) peut être traité
+            aux <strong>États-Unis</strong>. Ce transfert est encadré par la décision d'adéquation
+            <em>EU-US Data Privacy Framework</em> (Google LLC y est certifiée) et par les clauses
+            contractuelles types de la Commission européenne intégrées aux conditions de traitement des données de Google.</li>
+          <li>Le code de Firebase est chargé depuis les serveurs de Google (gstatic.com), qui reçoivent ton adresse IP.</li>
+        </ul>
+      </li>
+      <li><strong>GitHub Pages</strong> (GitHub Inc., États-Unis) — hébergement des pages du site.
+        GitHub reçoit ton adresse IP et des informations techniques de navigation pour délivrer les pages
+        et en assurer la sécurité. Transfert encadré par le <em>EU-US Data Privacy Framework</em>
+        (GitHub Inc. y est certifiée) et les clauses contractuelles types.</li>
+    </ul>
+
+    <h2>6. Durées de conservation</h2>
+    <ul>
+      <li><strong>Compte et profil</strong> : jusqu'à ce que tu supprimes ton compte, ou au plus tard
+        <strong>12 mois après ta dernière connexion</strong> ; l'administrateur supprime alors le compte et les données associées.</li>
+      <li><strong>Messages et photos</strong> : tant que la conversation existe. Ils sont supprimés si tu
+        supprimes le message (la photo part avec), si tu supprimes ton compte, ou si l'administrateur
+        supprime la conversation.</li>
+      <li><strong>Retrait d'accès</strong> : si l'administrateur te retire d'une conversation, tes messages
+        y restent visibles des autres membres ; tu peux toujours les supprimer en supprimant ton compte.</li>
+      <li><strong>Journaux techniques</strong> des hébergeurs : selon leurs politiques respectives.</li>
+    </ul>
+
+    <h2>7. Stockage sur ton appareil (cookies et traceurs)</h2>
+    <p>Le site enregistre uniquement ta session de connexion Firebase dans le stockage local du navigateur
+      (IndexedDB), pour que tu restes connecté. Ce stockage est strictement nécessaire au service demandé :
+      il est exempté de consentement (article 82 de la loi Informatique et Libertés). Il disparaît à la déconnexion.
+      Aucun cookie publicitaire ou de mesure d'audience n'est utilisé.</p>
+
+    <h2>8. Sécurité</h2>
+    <ul>
+      <li>Connexion uniquement via un compte Google à l'adresse vérifiée ; communications chiffrées (HTTPS).</li>
+      <li>Contrôle d'accès appliqué côté serveur par les règles de sécurité Firestore ; données chiffrées au repos par Google.</li>
+      <li>Politique de sécurité du contenu (CSP) limitant les ressources externes chargées par la page.</li>
+      <li>En cas de violation de données présentant un risque, la CNIL est notifiée sous 72 heures et,
+        si le risque est élevé, les personnes concernées sont informées.</li>
+    </ul>
+
+    <h2>9. Tes droits</h2>
+    <p>Tu disposes des droits d'accès, de rectification, d'effacement, de limitation du traitement,
+      d'opposition et de portabilité de tes données (articles 15 à 21 du RGPD).</p>
+    <ul>
+      <li><strong>Accès et portabilité</strong> : bouton <em>Mon compte → Télécharger mes données</em>
+        (fichier JSON contenant toutes les données te concernant, photos comprises).</li>
+      <li><strong>Effacement</strong> : bouton <em>Mon compte → Supprimer mon compte</em>
+        (supprime ton profil, tous tes messages et photos, tes accès et ton compte de connexion). Tu peux aussi supprimer un message ou une photo à tout moment.</li>
+      <li><strong>Rectification</strong> : ton nom est repris de ton compte Google à chaque connexion ;
+        modifie-le dans ton compte Google puis reconnecte-toi. Pour un message ou une photo, supprime-le et republie-le.</li>
+      <li><strong>Une photo te représente sans ton accord</strong> : écris à l'adresse ci-dessous en
+        indiquant la conversation et la date ; elle est supprimée sans délai, que tu sois membre du canal ou non.</li>
+      <li><strong>Opposition, limitation, ou toute autre demande</strong> : écris à
+        <a href="mailto:tomcavaliere66@gmail.com">tomcavaliere66@gmail.com</a>.
+        Une réponse est apportée dans un délai d'un mois.</li>
+    </ul>
+    <p>Tu peux également définir des directives sur le sort de tes données après ton décès
+      (article 85 de la loi Informatique et Libertés).</p>
+    <p>Si tu estimes que tes droits ne sont pas respectés, tu peux introduire une réclamation auprès de la
+      <strong>CNIL</strong> (3 place de Fontenoy, TSA 80715, 75334 Paris Cedex 07 —
+      <a href="https://www.cnil.fr/fr/plaintes" rel="noopener">www.cnil.fr/fr/plaintes</a>).</p>
+
+    <h2>10. Modifications</h2>
+    <p>Cette politique peut évoluer, notamment si le fonctionnement du service change.
+      La date de dernière mise à jour figure en haut de la page.</p>
+  </main>
+</body>
+</html>
