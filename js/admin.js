@@ -9,6 +9,8 @@ import { purgeUserData } from "./account.js";
 import { avatarEl } from "./ui.js";
 import { nameOf, namesLoaded, isNameTaken } from "./names.js";
 import { confirmDialog, toast } from "./dialogs.js";
+import { playMessageSound } from "./sound.js";
+import { showNotification } from "./notify.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -32,6 +34,19 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   let usersLoaded = false;
   const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
     users = new Map(snap.docs.map((d) => [d.id, d.data()]));
+    // Alerte quand quelqu'un se connecte pour la première fois (pas au chargement).
+    if (usersLoaded) {
+      for (const ch of snap.docChanges()) {
+        if (ch.type !== "added" || ch.doc.id === ADMIN_UID) continue;
+        const u = ch.doc.data();
+        playMessageSound();
+        showNotification({
+          title: "Nouvel utilisateur",
+          body: `${u.displayName || u.email} s'est connecté pour la première fois.`,
+          tag: "new-user",
+        });
+      }
+    }
     usersLoaded = true;
     renderUsers();
     if ($("dlg-members").open) renderMembers();
@@ -291,6 +306,11 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       items.push(li);
     }
     $("user-list").replaceChildren(...items);
+    // Personnes connectées qui attendent un accès.
+    const waiting = list.filter(([uid]) => accessCount(uid) === 0).length;
+    $("users-pending").textContent = `${waiting} en attente`;
+    $("users-pending").title = "Utilisateurs connectés sans accès à une conversation";
+    $("users-pending").hidden = !waiting;
   }
 
   function cancelInviteButton(i) {
