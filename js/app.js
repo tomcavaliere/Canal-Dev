@@ -5,10 +5,10 @@ import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
   orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=2";
-import { initAccount } from "./account.js?v=2";
-import { avatarEl, initials } from "./ui.js?v=2";
-import { prepareImage } from "./images.js?v=2";
+import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=3";
+import { initAccount } from "./account.js?v=3";
+import { avatarEl, initials } from "./ui.js?v=3";
+import { prepareImage } from "./images.js?v=3";
 
 const $ = (id) => document.getElementById(id);
 
@@ -16,8 +16,11 @@ const state = {
   user: null,
   isAdmin: false,
   conversations: new Map(), // id -> data
+  projects: new Map(), // id -> data (null si le projet n'existe plus)
   selectedId: null,
   unsubConvs: null,
+  unsubProjects: null, // admin : écoute de toute la collection
+  projectSubs: new Map(), // non-admin : id -> unsubscribe (un écouteur par projet visible)
   unsubMessages: null,
   admin: null, // API renvoyée par admin.js
 };
@@ -98,25 +101,29 @@ async function startSession(user) {
   fillUserHeader(user);
 
   if (state.isAdmin) {
-    const { setupAdmin } = await import("./admin.js?v=2");
+    const { setupAdmin } = await import("./admin.js?v=3");
     state.admin = setupAdmin({
       getConversations: () => state.conversations,
+      getProjects: () => state.projects,
       getSelected: () => (state.selectedId ? { id: state.selectedId, ...state.conversations.get(state.selectedId) } : null),
       selectConversation,
     });
   }
+  if (state.isAdmin) listenAllProjects();
   listenConversations();
 }
 
 function teardown() {
   state.unsubConvs?.();
+  state.unsubProjects?.();
+  state.projectSubs.forEach((unsub) => unsub());
   state.unsubMessages?.();
   state.admin?.teardown();
   resetImages();
   clearAttachment();
   Object.assign(state, {
-    user: null, isAdmin: false, conversations: new Map(), selectedId: null,
-    unsubConvs: null, unsubMessages: null, admin: null,
+    user: null, isAdmin: false, conversations: new Map(), projects: new Map(), selectedId: null,
+    unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, admin: null,
   });
   $("conv-list").replaceChildren();
   $("messages").replaceChildren();
@@ -146,7 +153,7 @@ function fillUserHeader(user) {
   $("user-avatar").textContent = initials(user.displayName || user.email);
   $("user-name").textContent = user.displayName || user.email;
   $("admin-badge").hidden = !state.isAdmin;
-  $("btn-new-conv").hidden = !state.isAdmin;
+  $("sidebar-admin-actions").hidden = !state.isAdmin;
   $("admin-users").hidden = !state.isAdmin;
   $("pending-email").textContent = user.email;
   $("pending-uid").textContent = user.uid;
@@ -173,6 +180,7 @@ function listenConversations() {
     if (!state.selectedId && state.conversations.size > 0 && !isMobile()) {
       selectConversation(sortedConversations()[0][0]);
     }
+    if (!state.isAdmin) syncProjectListeners();
     renderConversationList();
     if (state.selectedId) renderChatHeader();
     state.admin?.onConversationsChanged();
@@ -184,44 +192,180 @@ function listenConversations() {
   });
 }
 
+function byCreatedDesc(a, b) {
+  return (b[1].createdAt?.toMillis?.() ?? 0) - (a[1].createdAt?.toMillis?.() ?? 0);
+}
+
 function sortedConversations() {
-  return [...state.conversations.entries()].sort((a, b) =>
-    (b[1].createdAt?.toMillis?.() ?? 0) - (a[1].createdAt?.toMillis?.() ?? 0));
+  return [...state.conversations.entries()].sort(byCreatedDesc);
+}
+
+/* ---------- Projets ---------- */
+
+// Admin : tous les projets (même vides).
+function listenAllProjects() {
+  state.unsubProjects = onSnapshot(collection(db, "projects"), (snap) => {
+    state.projects = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+    renderConversationList();
+    if (state.selectedId) renderChatHeader();
+    state.admin?.onProjectsChanged();
+  }, (err) => console.error("Lecture des projets impossible", err));
+}
+
+// Non-admin : uniquement les projets de ses conversations, lus un par un.
+function syncProjectListeners() {
+  const needed = new Set();
+  for (const c of state.conversations.values()) if (c.projectId) needed.add(c.projectId);
+
+  for (const [id, unsub] of state.projectSubs) {
+    if (needed.has(id)) continue;
+    unsub();
+    state.projectSubs.delete(id);
+    state.projects.delete(id);
+  }
+  for (const id of needed) {
+    if (state.projectSubs.has(id)) continue;
+    state.projectSubs.set(id, onSnapshot(doc(db, "projects", id), (snap) => {
+      state.projects.set(id, snap.exists() ? snap.data({ serverTimestamps: "estimate" }) : null);
+      renderConversationList();
+      if (state.selectedId) renderChatHeader();
+    }, (err) => console.error("Lecture du projet impossible", err)));
+  }
+}
+
+// Projet réel d'une conversation, ou null si elle n'en a pas (ou s'il a disparu).
+function projectOf(c) {
+  return c.projectId && state.projects.get(c.projectId) ? c.projectId : null;
+}
+
+// Projets repliés dans la barre latérale (préférence locale, sans importance si perdue).
+const COLLAPSED_KEY = "canal-dev.collapsedProjects";
+const collapsed = new Set((() => {
+  try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY)) || []; } catch { return []; }
+})());
+function toggleCollapsed(id) {
+  if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
+  try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch { /* ignoré */ }
+  renderConversationList();
+}
+
+/* ---------- Barre latérale ---------- */
+
+function conversationItem(id, c) {
+  const li = document.createElement("li");
+  const btn = document.createElement("button");
+  btn.className = "item" + (id === state.selectedId ? " active" : "");
+  btn.addEventListener("click", () => selectConversation(id));
+
+  const title = document.createElement("span");
+  title.className = "item-title";
+  title.textContent = c.title || "(sans titre)";
+  btn.append(title);
+
+  if (state.isAdmin) {
+    const sub = document.createElement("span");
+    sub.className = "item-sub";
+    const n = c.members?.length ?? 0;
+    sub.textContent = n === 0 ? "Aucun membre" : `${n} membre${n > 1 ? "s" : ""}`;
+    btn.append(sub);
+  } else if (c.description) {
+    const sub = document.createElement("span");
+    sub.className = "item-sub";
+    sub.textContent = c.description;
+    btn.append(sub);
+  }
+  li.append(btn);
+  return li;
+}
+
+function emptyItem(text) {
+  const li = document.createElement("li");
+  li.className = "muted small list-empty";
+  li.textContent = text;
+  return li;
+}
+
+function smallButton(text, label, onClick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "group-btn";
+  b.textContent = text;
+  b.title = label;
+  b.setAttribute("aria-label", label);
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+// Un groupe repliable : en-tête (titre du projet) + liste de ses conversations.
+function projectGroup(projectId, title, convs) {
+  const li = document.createElement("li");
+  li.className = "group";
+  const isOpen = !collapsed.has(projectId);
+
+  const head = document.createElement("div");
+  head.className = "group-head";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "group-toggle";
+  toggle.setAttribute("aria-expanded", String(isOpen));
+  const caret = document.createElement("span");
+  caret.className = "caret";
+  caret.setAttribute("aria-hidden", "true");
+  caret.textContent = isOpen ? "▾" : "▸";
+  const name = document.createElement("span");
+  name.className = "group-title";
+  name.textContent = title;
+  const count = document.createElement("span");
+  count.className = "group-count";
+  count.textContent = String(convs.length);
+  toggle.append(caret, name, count);
+  toggle.addEventListener("click", () => toggleCollapsed(projectId));
+  head.append(toggle);
+
+  if (state.isAdmin && projectId) {
+    head.append(
+      smallButton("+", `Nouvelle conversation dans « ${title} »`, () => state.admin?.newConversation(projectId)),
+      smallButton("✎", `Modifier le projet « ${title} »`, () => state.admin?.editProject(projectId)),
+    );
+  }
+  li.append(head);
+
+  if (isOpen) {
+    const ul = document.createElement("ul");
+    ul.className = "list group-items";
+    const items = convs.map(([id, c]) => conversationItem(id, c));
+    if (items.length === 0) items.push(emptyItem("Aucune conversation."));
+    ul.replaceChildren(...items);
+    li.append(ul);
+  }
+  return li;
 }
 
 function renderConversationList() {
-  const items = sortedConversations().map(([id, c]) => {
-    const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.className = "item" + (id === state.selectedId ? " active" : "");
-    btn.addEventListener("click", () => selectConversation(id));
+  const convs = sortedConversations();
+  const byProject = new Map(); // projectId -> [[id, c], ...]
+  const loose = [];
+  for (const entry of convs) {
+    const pid = projectOf(entry[1]);
+    if (!pid) { loose.push(entry); continue; }
+    if (!byProject.has(pid)) byProject.set(pid, []);
+    byProject.get(pid).push(entry);
+  }
+  // L'admin voit aussi les projets vides.
+  if (state.isAdmin) for (const pid of state.projects.keys()) if (!byProject.has(pid)) byProject.set(pid, []);
 
-    const title = document.createElement("span");
-    title.className = "item-title";
-    title.textContent = c.title || "(sans titre)";
-    btn.append(title);
+  const projects = [...byProject.keys()]
+    .map((pid) => [pid, state.projects.get(pid)])
+    .sort((a, b) => (a[1].title || "").localeCompare(b[1].title || "", "fr"));
 
-    if (state.isAdmin) {
-      const sub = document.createElement("span");
-      sub.className = "item-sub";
-      const n = c.members?.length ?? 0;
-      sub.textContent = n === 0 ? "Aucun membre" : `${n} membre${n > 1 ? "s" : ""}`;
-      btn.append(sub);
-    } else if (c.description) {
-      const sub = document.createElement("span");
-      sub.className = "item-sub";
-      sub.textContent = c.description;
-      btn.append(sub);
-    }
-    li.append(btn);
-    return li;
-  });
-  if (items.length === 0) {
-    const li = document.createElement("li");
-    li.className = "muted small";
-    li.style.padding = "0 1rem";
-    li.textContent = state.isAdmin ? "Aucune conversation. Crée-en une." : "";
-    items.push(li);
+  const items = projects.map(([pid, p]) => projectGroup(pid, p.title || "(sans titre)", byProject.get(pid)));
+
+  if (projects.length === 0) {
+    // Pas de projet : liste simple, comme avant.
+    items.push(...loose.map(([id, c]) => conversationItem(id, c)));
+    if (loose.length === 0 && state.isAdmin) items.push(emptyItem("Aucune conversation. Crée-en une."));
+  } else if (loose.length > 0 || state.isAdmin) {
+    items.push(projectGroup("", "Sans projet", loose));
   }
   $("conv-list").replaceChildren(...items);
 }
@@ -266,6 +410,9 @@ function closeConversation() {
 function renderChatHeader() {
   const c = state.conversations.get(state.selectedId);
   if (!c) return;
+  const pid = projectOf(c);
+  $("chat-project").textContent = pid ? state.projects.get(pid).title || "" : "";
+  $("chat-project").hidden = !pid;
   $("chat-title").textContent = c.title || "(sans titre)";
   $("chat-desc").textContent = c.description || "";
   $("chat-desc").hidden = !c.description;

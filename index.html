@@ -6,8 +6,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://www.gstatic.com; frame-src https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="no-referrer">
   <title>Canal Dev</title>
-  <link rel="stylesheet" href="css/style.css?v=2">
-  <script type="module" src="js/app.js?v=2"></script>
+  <link rel="stylesheet" href="css/style.css?v=3">
+  <script type="module" src="js/app.js?v=3"></script>
 </head>
 <body>
   <!-- Chargement -->
@@ -61,7 +61,10 @@
     <aside class="sidebar">
       <div class="sidebar-head">
         <h2>Conversations</h2>
-        <button id="btn-new-conv" class="btn small" hidden>+ Nouvelle</button>
+        <div id="sidebar-admin-actions" class="row" hidden>
+          <button id="btn-new-project" class="btn small">+ Projet</button>
+          <button id="btn-new-conv" class="btn small">+ Conversation</button>
+        </div>
       </div>
       <ul id="conv-list" class="list"></ul>
 
@@ -80,11 +83,13 @@
       <div id="chat-view" class="chat-view" hidden>
         <div class="chat-head">
           <div class="chat-head-text">
+            <p id="chat-project" class="chat-project muted small" hidden></p>
             <h2 id="chat-title"></h2>
             <p id="chat-desc" class="muted small"></p>
           </div>
           <div id="chat-admin-actions" class="row" hidden>
             <button id="btn-members" class="btn small">Membres</button>
+            <button id="btn-move-conv" class="btn small">Déplacer</button>
             <button id="btn-delete-conv" class="btn small danger">Supprimer</button>
           </div>
         </div>
@@ -122,9 +127,46 @@
       <label>Description
         <textarea id="new-conv-desc" maxlength="500" rows="3"></textarea>
       </label>
+      <label>Projet
+        <select id="new-conv-project"></select>
+      </label>
       <div class="row end">
         <button type="button" class="btn" data-close>Annuler</button>
         <button type="submit" class="btn primary">Créer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialogue : nouveau projet / modifier un projet (admin) -->
+  <dialog id="dlg-project">
+    <form id="form-project" method="dialog" class="stack">
+      <h2 id="project-dlg-title">Nouveau projet</h2>
+      <label>Nom
+        <input id="project-title" maxlength="120" required>
+      </label>
+      <label>Description
+        <textarea id="project-desc" maxlength="500" rows="3"></textarea>
+      </label>
+      <p class="muted small">Les membres d'une conversation voient le nom du projet qui la contient.</p>
+      <div class="row end">
+        <button id="btn-delete-project" type="button" class="btn danger" hidden>Supprimer le projet</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button type="submit" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialogue : déplacer une conversation (admin) -->
+  <dialog id="dlg-move">
+    <form id="form-move" method="dialog" class="stack">
+      <h2>Déplacer « <span id="move-conv-title"></span> »</h2>
+      <label>Projet
+        <select id="move-project"></select>
+      </label>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button type="submit" class="btn primary">Déplacer</button>
       </div>
     </form>
   </dialog>

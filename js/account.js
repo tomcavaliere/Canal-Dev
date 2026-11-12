@@ -7,7 +7,7 @@ import {
   collection, collectionGroup, doc, getDoc, getDocs, deleteDoc, updateDoc, writeBatch,
   query, where, limit, arrayRemove, Timestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db, ADMIN_UID } from "./firebase.js?v=2";
+import { auth, db, ADMIN_UID } from "./firebase.js?v=3";
 
 const $ = (id) => document.getElementById(id);
 
@@ -71,6 +71,7 @@ async function collectMyData(user) {
     profile: profile.exists() ? plain(profile.data()) : null,
     conversations: convs.docs.map((d) => ({
       id: d.id, title: d.data().title, description: d.data().description,
+      projectId: d.data().projectId ?? null,
     })),
     messages: msgs.docs
       .map((d) => ({ conversationId: d.ref.parent.parent.id, id: d.id, ...plain(d.data()) }))

@@ -1,19 +1,19 @@
 // Fonctions réservées à l'administrateur. Chargé uniquement si l'UID connecté
 // correspond à ADMIN_UID — mais la vraie protection est dans firestore.rules.
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, limit,
-  onSnapshot, arrayUnion, arrayRemove, serverTimestamp,
+  collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, limit,
+  onSnapshot, arrayUnion, arrayRemove, serverTimestamp, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db, ADMIN_UID } from "./firebase.js?v=2";
-import { purgeUserData } from "./account.js?v=2";
-import { avatarEl } from "./ui.js?v=2";
+import { db, ADMIN_UID } from "./firebase.js?v=3";
+import { purgeUserData } from "./account.js?v=3";
+import { avatarEl } from "./ui.js?v=3";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
 
 const $ = (id) => document.getElementById(id);
 
-export function setupAdmin({ getConversations, getSelected, selectConversation }) {
+export function setupAdmin({ getConversations, getProjects, getSelected, selectConversation }) {
   let users = new Map(); // uid -> data
   const cleanups = [];
 
@@ -121,22 +121,36 @@ export function setupAdmin({ getConversations, getSelected, selectConversation }
     return btn;
   }
 
+  /* --- Choix du projet (listes déroulantes) --- */
+  function fillProjectSelect(select, selectedId) {
+    const none = new Option("Aucun projet", "");
+    const opts = [...getProjects().entries()]
+      .sort((a, b) => (a[1].title || "").localeCompare(b[1].title || "", "fr"))
+      .map(([id, p]) => new Option(p.title || "(sans titre)", id));
+    select.replaceChildren(none, ...opts);
+    select.value = selectedId && getProjects().has(selectedId) ? selectedId : "";
+  }
+
   /* --- Nouvelle conversation --- */
   const dlgNew = $("dlg-new-conv");
-  on($("btn-new-conv"), "click", () => {
+  function newConversation(projectId = "") {
     $("form-new-conv").reset();
+    fillProjectSelect($("new-conv-project"), projectId);
     dlgNew.showModal();
-  });
+  }
+  on($("btn-new-conv"), "click", () => newConversation());
   on($("form-new-conv"), "submit", async (e) => {
     e.preventDefault();
     const title = $("new-conv-title").value.trim();
     const description = $("new-conv-desc").value.trim();
+    const projectId = $("new-conv-project").value;
     if (!title) return;
     try {
       const ref = await addDoc(collection(db, "conversations"), {
         title,
         description,
         members: [],
+        ...(projectId ? { projectId } : {}),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -146,6 +160,93 @@ export function setupAdmin({ getConversations, getSelected, selectConversation }
     } catch (err) {
       console.error(err);
       alert("Création impossible : " + err.message);
+    }
+  });
+
+  /* --- Projets : création, modification, suppression --- */
+  const dlgProject = $("dlg-project");
+  let editingProjectId = null;
+
+  function openProjectDialog(projectId = null) {
+    const p = projectId ? getProjects().get(projectId) : null;
+    if (projectId && !p) return;
+    editingProjectId = projectId;
+    $("form-project").reset();
+    $("project-dlg-title").textContent = p ? "Modifier le projet" : "Nouveau projet";
+    $("project-title").value = p?.title || "";
+    $("project-desc").value = p?.description || "";
+    $("btn-delete-project").hidden = !p;
+    dlgProject.showModal();
+  }
+  on($("btn-new-project"), "click", () => openProjectDialog());
+
+  on($("form-project"), "submit", async (e) => {
+    e.preventDefault();
+    const title = $("project-title").value.trim();
+    const description = $("project-desc").value.trim();
+    if (!title) return;
+    try {
+      if (editingProjectId) {
+        await updateDoc(doc(db, "projects", editingProjectId), { title, description, updatedAt: serverTimestamp() });
+      } else {
+        await addDoc(collection(db, "projects"), {
+          title, description, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        });
+      }
+      dlgProject.close();
+    } catch (err) {
+      console.error(err);
+      alert("Enregistrement impossible : " + err.message);
+    }
+  });
+
+  // Supprimer un projet ne supprime pas ses conversations : elles passent « Sans projet ».
+  on($("btn-delete-project"), "click", async () => {
+    const id = editingProjectId;
+    const p = id && getProjects().get(id);
+    if (!p) return;
+    if (!confirm(`Supprimer le projet « ${p.title} » ? Ses conversations sont conservées et passent dans « Sans projet ».`)) return;
+    try {
+      const convs = await getDocs(query(collection(db, "conversations"), where("projectId", "==", id)));
+      for (let i = 0; i < convs.docs.length; i += 400) {
+        const batch = writeBatch(db);
+        convs.docs.slice(i, i + 400).forEach((d) =>
+          batch.update(d.ref, { projectId: deleteField(), updatedAt: serverTimestamp() }));
+        await batch.commit();
+      }
+      await deleteDoc(doc(db, "projects", id));
+      dlgProject.close();
+    } catch (err) {
+      console.error(err);
+      alert("Suppression impossible : " + err.message);
+    }
+  });
+
+  /* --- Déplacer une conversation --- */
+  const dlgMove = $("dlg-move");
+  on($("btn-move-conv"), "click", () => {
+    const conv = getSelected();
+    if (!conv) return;
+    $("move-conv-title").textContent = conv.title || "";
+    fillProjectSelect($("move-project"), conv.projectId);
+    dlgMove.showModal();
+  });
+  on($("form-move"), "submit", async (e) => {
+    e.preventDefault();
+    const conv = getSelected();
+    if (!conv) { dlgMove.close(); return; }
+    const projectId = $("move-project").value;
+    try {
+      if (projectId !== (conv.projectId || "")) {
+        await updateDoc(doc(db, "conversations", conv.id), {
+          projectId: projectId || deleteField(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      dlgMove.close();
+    } catch (err) {
+      console.error(err);
+      alert("Déplacement impossible : " + err.message);
     }
   });
 
@@ -225,6 +326,12 @@ export function setupAdmin({ getConversations, getSelected, selectConversation }
   });
 
   return {
+    newConversation,
+    editProject: openProjectDialog,
+    onProjectsChanged() {
+      // Un projet supprimé pendant qu'on l'édite : on ferme le dialogue.
+      if (dlgProject.open && editingProjectId && !getProjects().has(editingProjectId)) dlgProject.close();
+    },
     onConversationsChanged() {
       renderUsers();
       if (dlgMembers.open) renderMembers();
@@ -233,6 +340,8 @@ export function setupAdmin({ getConversations, getSelected, selectConversation }
       cleanups.forEach((fn) => fn());
       if (dlgNew.open) dlgNew.close();
       if (dlgMembers.open) dlgMembers.close();
+      if (dlgProject.open) dlgProject.close();
+      if (dlgMove.open) dlgMove.close();
       $("user-list").replaceChildren();
     },
   };
