@@ -5,6 +5,11 @@ import {
   onSnapshot, arrayUnion, arrayRemove, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db, ADMIN_UID } from "./firebase.js";
+import { purgeUserData } from "./account.js";
+import { avatarEl } from "./ui.js";
+
+// Durée de conservation d'un compte sans connexion (voir confidentialite.html).
+const INACTIVE_MS = 365 * 24 * 3600 * 1000;
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,11 +45,7 @@ export function setupAdmin({ getConversations, getSelected, selectConversation }
   function userRow([uid, u], extra) {
     const wrap = document.createElement("div");
     wrap.className = "user-row";
-    const img = document.createElement("img");
-    img.className = "avatar";
-    img.alt = "";
-    img.referrerPolicy = "no-referrer";
-    if (u.photoURL) img.src = u.photoURL;
+    const avatar = avatarEl(u.displayName || u.email);
     const info = document.createElement("div");
     info.className = "info";
     const name = document.createElement("span");
@@ -53,8 +54,8 @@ export function setupAdmin({ getConversations, getSelected, selectConversation }
     email.className = "muted small";
     email.textContent = u.email;
     info.append(name, email);
-    wrap.append(img, info);
-    if (extra) wrap.append(extra);
+    wrap.append(avatar, info);
+    if (extra) wrap.append(...[].concat(extra));
     return wrap;
   }
 
@@ -74,7 +75,17 @@ export function setupAdmin({ getConversations, getSelected, selectConversation }
         tag.textContent = String(n);
         tag.title = `${n} conversation(s)`;
       }
-      li.append(userRow(entry, tag));
+      const extras = [tag];
+      const last = entry[1].lastLogin?.toMillis?.();
+      if (last && Date.now() - last > INACTIVE_MS) {
+        const old = document.createElement("span");
+        old.className = "tag-pending";
+        old.textContent = "inactif > 12 mois";
+        old.title = "Durée de conservation dépassée : supprimer ce compte.";
+        extras.unshift(old);
+      }
+      extras.push(deleteUserButton(entry));
+      li.append(userRow(entry, extras));
       return li;
     });
     if (items.length === 0) {
@@ -85,6 +96,29 @@ export function setupAdmin({ getConversations, getSelected, selectConversation }
       items.push(li);
     }
     $("user-list").replaceChildren(...items);
+  }
+
+  /* --- Suppression d'un utilisateur (conservation / droit à l'effacement) --- */
+  function deleteUserButton([uid, u]) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "del-user";
+    btn.textContent = "✕";
+    btn.title = "Supprimer l'utilisateur et toutes ses données";
+    btn.setAttribute("aria-label", `Supprimer ${u.email} et toutes ses données`);
+    btn.addEventListener("click", async () => {
+      if (!confirm(`Supprimer ${u.email} : profil, tous ses messages et ses accès ? Action irréversible.`)) return;
+      btn.disabled = true;
+      try {
+        await purgeUserData(uid);
+        alert(`Données de ${u.email} supprimées.\n\nÀ faire aussi : Firebase Console → Authentication → Users → supprimer le compte ${uid}.`);
+      } catch (err) {
+        console.error(err);
+        btn.disabled = false;
+        alert("Suppression impossible : " + err.message);
+      }
+    });
+    return btn;
   }
 
   /* --- Nouvelle conversation --- */
@@ -170,26 +204,24 @@ export function setupAdmin({ getConversations, getSelected, selectConversation }
   on($("btn-delete-conv"), "click", async () => {
     const conv = getSelected();
     if (!conv) return;
-    if (!confirm(`Supprimer définitivement « ${conv.title} » et tous ses messages ?`)) return;
+    if (!confirm(`Supprimer définitivement « ${conv.title} », tous ses messages et toutes ses photos ?`)) return;
     try {
-      const msgs = collection(db, "conversations", conv.id, "messages");
-      for (;;) {
-        const snap = await getDocs(query(msgs, limit(400)));
-        if (snap.empty) break;
-        const batch = writeBatch(db);
-        snap.docs.forEach((d) => batch.delete(d.ref));
-        await batch.commit();
+      // Photos d'abord, lues par petits lots (jusqu'à ~900 Ko chacune), puis les messages.
+      for (const [sub, size] of [["images", 10], ["messages", 400]]) {
+        const ref = collection(db, "conversations", conv.id, sub);
+        for (;;) {
+          const snap = await getDocs(query(ref, limit(size)));
+          if (snap.empty) break;
+          const batch = writeBatch(db);
+          snap.docs.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+        }
       }
       await deleteDoc(doc(db, "conversations", conv.id));
     } catch (err) {
       console.error(err);
       alert("Suppression impossible : " + err.message);
     }
-  });
-
-  /* --- Fermeture des dialogues --- */
-  document.querySelectorAll("dialog [data-close]").forEach((b) => {
-    on(b, "click", () => b.closest("dialog").close());
   });
 
   return {

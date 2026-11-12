@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com; frame-src https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
   <title>Canal Dev</title>
   <link rel="stylesheet" href="css/style.css">
   <script type="module" src="js/app.js"></script>
@@ -20,6 +22,9 @@
       <p>Canal de suivi du développement. Connecte-toi avec ton compte Gmail pour continuer.</p>
       <button id="btn-login" class="btn primary">Se connecter avec Google</button>
       <p id="login-error" class="error" hidden></p>
+      <p class="muted small legal">En te connectant, ton adresse email, ton nom et tes messages sont traités
+        pour faire fonctionner ce canal, comme décrit dans la
+        <a href="confidentialite.html">politique de confidentialité</a>.</p>
     </div>
   </section>
 
@@ -32,7 +37,11 @@
         Cette page se mettra à jour automatiquement dès que ce sera fait.</p>
       <p class="muted small">Identifiant : <code id="pending-uid"></code></p>
       <p id="pending-error" class="error" hidden></p>
-      <button class="btn btn-logout">Se déconnecter</button>
+      <div class="row wrap">
+        <button class="btn btn-account">Mon compte et mes données</button>
+        <button class="btn btn-logout">Se déconnecter</button>
+      </div>
+      <p class="muted small legal"><a href="confidentialite.html">Politique de confidentialité</a></p>
     </div>
   </section>
 
@@ -43,8 +52,9 @@
       <span class="brand">Canal Dev</span>
       <span class="spacer"></span>
       <span id="admin-badge" class="badge" hidden>Admin</span>
-      <img id="user-photo" class="avatar" alt="" referrerpolicy="no-referrer">
+      <span id="user-avatar" class="avatar" aria-hidden="true"></span>
       <span id="user-name" class="user-name"></span>
+      <button class="btn small btn-account">Mon compte</button>
       <button class="btn small btn-logout">Déconnexion</button>
     </header>
 
@@ -61,6 +71,8 @@
         </div>
         <ul id="user-list" class="list"></ul>
       </div>
+
+      <p class="sidebar-foot muted small"><a href="confidentialite.html">Politique de confidentialité</a></p>
     </aside>
 
     <main class="chat">
@@ -77,7 +89,21 @@
           </div>
         </div>
         <ol id="messages" class="messages"></ol>
+        <div id="attach-preview" class="attach-preview" hidden>
+          <img id="attach-img" alt="Photo à envoyer">
+          <div class="attach-info small">
+            <p><strong>Photo prête à l'envoi.</strong> Elle est redimensionnée et ses métadonnées
+              (position GPS, date, appareil) sont retirées.</p>
+            <p class="muted">Visible par tous les membres de la conversation. Ne publie pas la photo
+              d'une personne sans son accord, ni de document contenant des données personnelles.</p>
+          </div>
+          <button id="btn-attach-remove" type="button" class="btn small">Retirer</button>
+        </div>
+        <p id="attach-error" class="error small attach-error" role="alert" hidden></p>
         <form id="composer" class="composer">
+          <button id="btn-attach" type="button" class="btn icon" title="Joindre une photo"
+            aria-label="Joindre une photo">📷</button>
+          <input id="file-input" type="file" accept="image/*" hidden>
           <textarea id="msg-input" rows="2" maxlength="4000"
             placeholder="Écrire un message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
           <button class="btn primary" type="submit">Envoyer</button>
@@ -109,6 +135,51 @@
       <h2>Membres de « <span id="members-conv-title"></span> »</h2>
       <p class="muted small">Coche un utilisateur pour lui donner accès (lecture et écriture).</p>
       <ul id="members-list" class="list members"></ul>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialogue : photo en grand -->
+  <dialog id="dlg-image" class="img-viewer">
+    <div class="stack">
+      <img id="viewer-img" alt="">
+      <div class="row end">
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialogue : mon compte (droits RGPD) -->
+  <dialog id="dlg-account">
+    <div class="stack">
+      <h2>Mon compte</h2>
+      <p class="small">Connecté avec <strong id="account-email"></strong></p>
+
+      <section class="stack tight">
+        <h3>Mes données</h3>
+        <p class="muted small">Télécharge une copie de toutes les données te concernant
+          (compte, profil, conversations accessibles, messages et photos) au format JSON.</p>
+        <div><button id="btn-export" class="btn">Télécharger mes données</button></div>
+      </section>
+
+      <section id="account-delete" class="stack tight">
+        <h3>Supprimer mon compte</h3>
+        <p class="muted small">Supprime définitivement ton profil, tous tes messages et photos, tes accès
+          aux conversations et ton compte de connexion. Cette action est irréversible.
+          Une confirmation avec ton compte Google sera demandée.</p>
+        <label>Tape <strong>SUPPRIMER</strong> pour confirmer
+          <input id="delete-confirm" autocomplete="off" spellcheck="false">
+        </label>
+        <div><button id="btn-delete-account" class="btn danger">Supprimer mon compte</button></div>
+      </section>
+      <p id="account-admin-note" class="muted small" hidden>Le compte administrateur ne peut pas être
+        supprimé depuis l'application (voir RGPD.md).</p>
+
+      <p id="account-status" class="small" role="status"></p>
+      <p class="muted small">Pour toute autre demande (rectification, limitation, opposition) :
+        voir la <a href="confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>.</p>
       <div class="row end">
         <button type="button" class="btn" data-close>Fermer</button>
       </div>
