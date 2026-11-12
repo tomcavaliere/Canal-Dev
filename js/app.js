@@ -2,7 +2,7 @@ import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, deleteUser,
 } from "./sdk/firebase-auth.js";
 import {
-  doc, getDoc, setDoc, updateDoc, collection, query, where, writeBatch,
+  doc, getDoc, setDoc, updateDoc, collection, collectionGroup, query, where, writeBatch,
   orderBy, limitToLast, onSnapshot, serverTimestamp, deleteField, Timestamp, getCountFromServer,
 } from "./sdk/firebase-firestore.js";
 import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js";
@@ -21,6 +21,7 @@ const state = {
   user: null,
   isAdmin: false,
   conversations: new Map(), // id -> data
+  convsLoaded: false,
   projects: new Map(), // id -> data (null si le projet n'existe plus)
   selectedId: null,
   unsubConvs: null,
@@ -29,6 +30,8 @@ const state = {
   unsubMessages: null,
   unsubReads: null,
   reads: null, // conversation ouverte : uid -> { name, t } (null tant que non chargé)
+  myReads: null, // ses propres accusés, toutes conversations : id -> date de lecture (null tant que non chargé)
+  unsubMyReads: null,
   readWrite: 0, // date du dernier message dont on a déjà envoyé l'accusé de lecture
   msgWatchers: new Map(), // id de conversation -> unsubscribe (écoute des messages non lus)
   recent: new Map(), // id de conversation -> [{ t, authorUid }] messages reçus depuis la dernière lecture
@@ -141,6 +144,7 @@ async function startSession(user, id) {
     });
   }
   if (state.isAdmin) listenAllProjects();
+  listenMyReads();
   listenConversations();
 }
 
@@ -166,6 +170,7 @@ function teardown() {
   state.projectSubs.forEach((unsub) => unsub());
   state.unsubMessages?.();
   state.unsubReads?.();
+  state.unsubMyReads?.();
   state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
   stopNames();
@@ -173,9 +178,9 @@ function teardown() {
   clearAttachment();
   clearReply();
   Object.assign(state, {
-    user: null, isAdmin: false, conversations: new Map(), projects: new Map(), selectedId: null,
+    user: null, isAdmin: false, conversations: new Map(), convsLoaded: false, projects: new Map(), selectedId: null,
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
-    unsubReads: null, reads: null, readWrite: 0,
+    unsubReads: null, reads: null, readWrite: 0, myReads: null, unsubMyReads: null,
     recent: new Map(), unread: new Map(),
     msgById: new Map(), msgDocs: null, pending: new Set(),
     msgLimit: 0, hasMore: false, loadingMore: false, revealId: null,
@@ -223,6 +228,7 @@ function listenConversations() {
 
   state.unsubConvs = onSnapshot(q, (snap) => {
     state.conversations = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+    state.convsLoaded = true;
 
     if (!state.isAdmin && state.conversations.size === 0) {
       show("screen-pending");
@@ -238,8 +244,10 @@ function listenConversations() {
     }
     if (!state.isAdmin) syncProjectListeners();
     syncNames();
-    syncMessageWatchers();
-    pruneLastRead();
+    if (state.myReads) {
+      syncMessageWatchers();
+      pruneLastRead();
+    }
     renderConversationList();
     if (state.selectedId) renderChatHeader();
     state.admin?.onConversationsChanged();
@@ -398,11 +406,38 @@ function onIncomingMessage(convId, m) {
 
 /* ---------- Messages non lus ---------- */
 
-// Date du dernier message lu, par conversation, gardée dans ce navigateur (une clé par compte).
-// Une conversation inconnue est considérée comme lue jusqu'à maintenant la toute première fois
-// (pas de rafale de non-lus à la mise en service), puis entièrement non lue ensuite
-// (nouvelle conversation à laquelle on vient d'être ajouté).
+// Date de dernière lecture, par conversation. Deux sources :
+//  - ses accusés de lecture (conversations/{id}/reads/{uid}), écrits dès qu'on voit un nouveau
+//    message : ils synchronisent les non-lus entre ses appareils ;
+//  - ce navigateur (une clé par compte), à jour immédiatement, y compris hors ligne.
+// La plus récente des deux l'emporte. Une conversation inconnue des deux est considérée comme lue
+// jusqu'à maintenant la toute première fois (pas de rafale de non-lus à la mise en service),
+// puis entièrement non lue ensuite (nouvelle conversation à laquelle on vient d'être ajouté).
 const read = { key: null, map: {} };
+
+// Les écoutes des nouveaux messages attendent ces dates pour savoir à partir d'où compter.
+function listenMyReads() {
+  const q = query(collectionGroup(db, "reads"), where("uid", "==", state.user.uid));
+  const apply = (map) => {
+    const first = !state.myReads;
+    state.myReads = map;
+    if (first && state.convsLoaded) {
+      syncMessageWatchers();
+      pruneLastRead();
+    }
+    for (const id of state.recent.keys()) updateUnread(id);
+  };
+  state.unsubMyReads = onSnapshot(q, (snap) => {
+    apply(new Map(snap.docs.map((d) => [
+      d.ref.parent.parent.id,
+      d.data({ serverTimestamps: "estimate" }).lastRead?.toMillis?.() ?? 0,
+    ])));
+  }, (err) => {
+    // Sans cette écoute, les non-lus restent propres à ce navigateur.
+    console.error("Lecture de ses accusés de lecture impossible", err);
+    if (!state.myReads) apply(new Map());
+  });
+}
 
 function loadLastRead(uid) {
   read.key = "canal-dev.lastRead." + uid;
@@ -416,11 +451,13 @@ function saveLastRead() {
 }
 
 function lastReadOf(id) {
+  const synced = state.myReads?.get(id);
   if (!(id in read.map)) {
+    if (synced != null) return synced; // déjà lue sur un autre appareil
     read.map[id] = read.map["*"] ?? 0;
     saveLastRead();
   }
-  return read.map[id];
+  return Math.max(read.map[id], synced ?? 0);
 }
 
 // Oublie les conversations auxquelles on n'a plus accès.
@@ -451,7 +488,7 @@ function updateUnread(id) {
 
 function markRead(id) {
   const latest = Math.max(lastReadOf(id), ...(state.recent.get(id) || []).map((m) => m.t));
-  if (latest > read.map[id]) {
+  if (latest > (read.map[id] ?? 0)) {
     read.map[id] = latest;
     saveLastRead();
   }
