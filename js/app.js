@@ -9,6 +9,7 @@ import { auth, db, isConfigured, ADMIN_UID, GMAIL_RE } from "./firebase.js?v=5";
 import { initAccount } from "./account.js?v=5";
 import { avatarEl, initials } from "./ui.js?v=5";
 import { prepareImage } from "./images.js?v=5";
+import { isSoundEnabled, setSoundEnabled, playMessageSound } from "./sound.js?v=6";
 
 const $ = (id) => document.getElementById(id);
 
@@ -393,8 +394,20 @@ function selectConversation(id) {
   renderConversationList();
 
   let first = true;
+  let latest = 0; // date du message le plus récent déjà vu
   const q = query(collection(db, "conversations", id, "messages"), orderBy("createdAt"), limitToLast(300));
   state.unsubMessages = onSnapshot(q, (snap) => {
+    // Son uniquement pour un nouveau message d'un autre membre (pas au chargement,
+    // ni pour un ancien message qui réapparaît après une suppression).
+    let incoming = false;
+    for (const ch of snap.docChanges()) {
+      if (ch.type !== "added") continue;
+      const m = ch.doc.data({ serverTimestamps: "estimate" });
+      const t = m.createdAt?.toMillis?.() ?? 0;
+      if (!first && t > latest && m.authorUid !== state.user.uid) incoming = true;
+      latest = Math.max(latest, t);
+    }
+    if (incoming) playMessageSound();
     renderMessages(snap.docs, first);
     first = false;
   }, (err) => {
@@ -427,6 +440,20 @@ function renderChatHeader() {
 }
 
 $("btn-back").addEventListener("click", () => $("screen-app").classList.remove("show-chat"));
+
+function renderSoundButton() {
+  const on = isSoundEnabled();
+  const b = $("btn-sound");
+  b.textContent = on ? "🔔" : "🔕";
+  b.setAttribute("aria-pressed", String(on));
+  b.title = on ? "Son des nouveaux messages activé (cliquer pour couper)" : "Son des nouveaux messages coupé (cliquer pour activer)";
+  b.setAttribute("aria-label", b.title);
+}
+$("btn-sound").addEventListener("click", () => {
+  setSoundEnabled(!isSoundEnabled());
+  renderSoundButton();
+});
+renderSoundButton();
 
 function isMobile() {
   return window.matchMedia("(max-width: 720px)").matches;
