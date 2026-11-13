@@ -137,7 +137,7 @@ export function projectRoles(p) {
     }));
 }
 
-// Organigramme d'un projet, du niveau le plus haut au plus bas : [{ id, name, roles: [{ id, name, uids }] }].
+// Organigramme d'un projet, du niveau le plus haut au plus bas : [{ id, roles: [{ id, name, uids }] }].
 // Les rôles disparus sont ignorés ; un rôle n'apparaît qu'au premier niveau qui le cite.
 export function projectOrgLevels(p) {
   if (!p || !Array.isArray(p.orgLevels)) return [];
@@ -147,7 +147,6 @@ export function projectOrgLevels(p) {
     .filter((l) => l && typeof l.id === "string")
     .map((l) => ({
       id: l.id,
-      name: typeof l.name === "string" ? l.name : "",
       roles: (Array.isArray(l.roles) ? l.roles : [])
         .filter((id) => roles.has(id) && !placed.has(id) && placed.add(id))
         .map((id) => roles.get(id)),

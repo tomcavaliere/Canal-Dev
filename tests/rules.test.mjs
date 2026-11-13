@@ -678,7 +678,7 @@ describe("Rôles des projets", () => {
 });
 
 describe("Organigramme des projets", () => {
-  const levels = [{ id: "n1", name: "Direction", roles: ["r1"] }, { id: "n2", name: "", roles: ["r2"] }];
+  const levels = [{ id: "n1", roles: ["r1"] }, { id: "n2", roles: ["r2"] }];
 
   it("l'admin définit l'organigramme d'un projet", () =>
     assertSucceeds(updateDoc(doc(admin(), "projects/p1"), { orgLevels: levels })));
@@ -686,7 +686,7 @@ describe("Organigramme des projets", () => {
     assertFails(updateDoc(doc(alice(), "projects/p1"), { orgLevels: levels })));
   it("plus de 10 niveaux sont refusés, même pour l'admin", () =>
     assertFails(updateDoc(doc(admin(), "projects/p1"), {
-      orgLevels: Array.from({ length: 11 }, (_, i) => ({ id: "n" + i, name: "", roles: [] })),
+      orgLevels: Array.from({ length: 11 }, (_, i) => ({ id: "n" + i, roles: [] })),
     })));
   it("l'organigramme doit être une liste", () =>
     assertFails(updateDoc(doc(admin(), "projects/p1"), { orgLevels: { n1: ["r1"] } })));

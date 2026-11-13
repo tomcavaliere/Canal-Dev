@@ -30,12 +30,11 @@ function draw(dlg) {
   }
   dlg.style.setProperty("--proj", projectColor(openProjectId));
   $("org-title").textContent = `Organigramme de « ${p.title || "(sans titre)"} »`;
+  // Le niveau n'est pas écrit : il se lit à la position de la ligne.
   const items = levels.map((level, i) => {
     const li = document.createElement("li");
     li.className = "org-level";
-    const label = document.createElement("h3");
-    label.className = "org-level-name";
-    label.textContent = level.name || `Niveau ${i + 1}`;
+    li.setAttribute("aria-label", `Niveau ${i + 1}`);
     const cards = document.createElement("ul");
     cards.className = "org-cards";
     for (const role of level.roles) {
@@ -54,7 +53,7 @@ function draw(dlg) {
     if (!level.roles.length) {
       cards.append(Object.assign(document.createElement("li"), { className: "muted small", textContent: "Aucun rôle." }));
     }
-    li.append(label, cards);
+    li.append(cards);
     return li;
   });
   $("org-levels").replaceChildren(...items);

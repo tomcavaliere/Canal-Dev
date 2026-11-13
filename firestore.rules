@@ -176,7 +176,7 @@ service cloud.firestore {
       //   `roles`       : liste [{ id, name }] (20 au plus), dans l'ordre d'affichage ;
       //   `roleMembers` : map uid -> [id de rôle] (qui tient quel rôle) ;
       //   `roleUids`    : les mêmes UID à plat, pour retrouver ses rôles (export, effacement RGPD).
-      // Organigramme (facultatif, écrit par l'admin seul) : `orgLevels`, liste [{ id, name, roles: [id de rôle] }]
+      // Organigramme (facultatif, écrit par l'admin seul) : `orgLevels`, liste [{ id, roles: [id de rôle] }]
       // (10 niveaux au plus), du plus haut au plus bas. Il ne contient aucun UID : les personnes viennent des rôles.
       // Logo (facultatif) : petite image PNG/WebP/JPEG en data URL (environ 45 Ko au plus).
       function validProject() {

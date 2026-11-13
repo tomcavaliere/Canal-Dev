@@ -283,6 +283,7 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .role-editor { padding: .5rem; border: 1px solid var(--border); border-radius: 8px; }
 .role-editor .row input { flex: 1; min-width: 0; }
 .role-people-picker { max-height: 9rem; }
+.level-label { flex: 1; min-width: 0; font-size: .9rem; }
 .level-num {
   flex-shrink: 0; width: 1.6rem; height: 1.6rem; display: inline-grid; place-items: center;
   border-radius: 50%; background: var(--surface-2); font-size: .8rem; font-weight: 600;
@@ -294,9 +295,6 @@ dialog.org-dialog { width: min(720px, calc(100vw - 32px)); }
 .org-level { display: flex; flex-direction: column; align-items: center; gap: .4rem; }
 .org-level + .org-level::before {
   content: ""; width: 2px; height: 1.1rem; background: color-mix(in srgb, var(--proj) 45%, transparent);
-}
-.org-level-name {
-  margin: 0; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
 }
 .org-cards {
   list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem;

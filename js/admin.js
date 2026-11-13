@@ -672,7 +672,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     $("project-dlg-title").textContent = p ? "Modifier le projet" : "Nouveau projet";
     $("project-error").hidden = true;
     draftRoles = projectRoles(p).map((r) => ({ id: r.id, name: r.name, uids: new Set(r.uids) }));
-    draftLevels = projectOrgLevels(p).map((l) => ({ id: l.id, name: l.name, roles: l.roles.map((r) => r.id) }));
+    draftLevels = projectOrgLevels(p).map((l) => ({ id: l.id, roles: l.roles.map((r) => r.id) }));
     renderRoleEditors();
     dlgProject.showModal();
   }
@@ -807,16 +807,10 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
 
   /* --- Organigramme d'un projet : les rôles rangés par niveau (même dialogue) --- */
   const MAX_LEVELS = 10;
-  /** @type {{ id: string, name: string, roles: string[] }[]} */
+  /** @type {{ id: string, roles: string[] }[]} */
   let draftLevels = [];
 
-  function focusLevel(id) {
-    /** @type {HTMLInputElement | null} */ ($("project-levels").querySelector(`input[data-level="${CSS.escape(id)}"]`))?.focus();
-  }
-
   function renderLevelEditors() {
-    const active = /** @type {HTMLElement | null} */ (document.activeElement);
-    const focusedLevel = active && $("project-levels").contains(active) ? active.dataset.level : null;
     const named = draftRoles.filter((r) => r.name.trim());
     const items = draftLevels.map((level, i) => {
       const li = document.createElement("li");
@@ -826,26 +820,15 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       const num = document.createElement("span");
       num.className = "level-num";
       num.textContent = String(i + 1);
-      num.title = `Niveau ${i + 1}`;
-      const input = document.createElement("input");
-      input.maxLength = 60;
-      input.value = level.name;
-      input.placeholder = `Niveau ${i + 1} (ex. Direction)`;
-      input.setAttribute("aria-label", `Nom du niveau ${i + 1}`);
-      input.dataset.level = level.id;
-      input.addEventListener("input", () => { level.name = input.value; });
-      input.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter" || e.isComposing) return;
-        e.preventDefault();
-        if (i < draftLevels.length - 1) focusLevel(draftLevels[i + 1].id);
-        else addLevel();
-      });
+      const label = document.createElement("span");
+      label.className = "level-label";
+      label.textContent = i === 0 ? "Niveau 1 (le plus haut)" : `Niveau ${i + 1}`;
       const up = document.createElement("button");
       up.type = "button";
       up.className = "btn small";
       up.textContent = "↑";
       up.title = "Monter ce niveau";
-      up.setAttribute("aria-label", `Monter le niveau ${level.name || i + 1}`);
+      up.setAttribute("aria-label", `Monter le niveau ${i + 1}`);
       up.disabled = i === 0;
       up.addEventListener("click", () => {
         [draftLevels[i - 1], draftLevels[i]] = [draftLevels[i], draftLevels[i - 1]];
@@ -855,12 +838,12 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       del.type = "button";
       del.className = "btn small danger";
       del.textContent = "Retirer";
-      del.setAttribute("aria-label", `Retirer le niveau ${level.name || i + 1}`);
+      del.setAttribute("aria-label", `Retirer le niveau ${i + 1}`);
       del.addEventListener("click", () => {
         draftLevels.splice(i, 1);
         renderLevelEditors();
       });
-      head.append(num, input, up, del);
+      head.append(num, label, up, del);
 
       // Un rôle n'est qu'à un seul niveau : le cocher ici le retire de l'autre.
       const ul = document.createElement("ul");
@@ -898,15 +881,12 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       : [];
     $("project-levels-unplaced").textContent = `Hors organigramme : ${unplaced.join(", ")}.`;
     $("project-levels-unplaced").hidden = !unplaced.length;
-    if (focusedLevel) focusLevel(focusedLevel);
   }
 
   function addLevel() {
     if (draftLevels.length >= MAX_LEVELS) return;
-    const level = { id: newRoleId(), name: "", roles: [] };
-    draftLevels.push(level);
+    draftLevels.push({ id: newRoleId(), roles: [] });
     renderLevelEditors();
-    focusLevel(level.id);
   }
   on($("btn-add-level"), "click", addLevel);
 
@@ -915,7 +895,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     const kept = new Set(draftRoles.filter((r) => r.name.trim()).map((r) => r.id));
     return {
       orgLevels: draftLevels.map((l) => ({
-        id: l.id, name: l.name.trim().slice(0, 60), roles: l.roles.filter((id) => kept.has(id)),
+        id: l.id, roles: l.roles.filter((id) => kept.has(id)),
       })),
     };
   }
