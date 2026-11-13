@@ -692,6 +692,21 @@ describe("Organigramme des projets", () => {
     assertFails(updateDoc(doc(admin(), "projects/p1"), { orgLevels: { n1: ["r1"] } })));
 });
 
+describe("Liens des projets", () => {
+  const links = [{ label: "Maquettes", url: "https://www.figma.com/" }, { label: "Dépôt", url: "https://github.com/" }];
+
+  it("l'admin définit les liens d'un projet", () =>
+    assertSucceeds(updateDoc(doc(admin(), "projects/p1"), { links })));
+  it("un membre ne modifie pas les liens", () =>
+    assertFails(updateDoc(doc(alice(), "projects/p1"), { links })));
+  it("plus de 20 liens sont refusés, même pour l'admin", () =>
+    assertFails(updateDoc(doc(admin(), "projects/p1"), {
+      links: Array.from({ length: 21 }, (_, i) => ({ label: "L" + i, url: `https://exemple.fr/${i}` })),
+    })));
+  it("les liens doivent former une liste", () =>
+    assertFails(updateDoc(doc(admin(), "projects/p1"), { links: { a: "https://exemple.fr/" } })));
+});
+
 describe("Calendrier : membres du projet", () => {
   const ticket = (uid, via) => ({ uid, via, at: serverTimestamp() });
   const carol = () => as("carol");
