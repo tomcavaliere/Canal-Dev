@@ -45,6 +45,12 @@ export async function purgeUserData(uid, email) {
     }
   }
 
+  // Rôles tenus dans des projets (voir firestore.rules : la personne peut s'en retirer elle-même).
+  const projects = await getDocs(query(collection(db, "projects"), where("roleUids", "array-contains", uid)));
+  for (const p of projects.docs) {
+    await updateDoc(p.ref, { [`roleMembers.${uid}`]: deleteField(), roleUids: arrayRemove(uid) });
+  }
+
   const convs = await getDocs(query(collection(db, "conversations"), where("members", "array-contains", uid)));
   // Réactions laissées sur les messages des autres (tant qu'on est encore membre pour les retirer).
   for (const c of convs.docs) {
@@ -81,7 +87,7 @@ function plain(value) {
 }
 
 async function collectMyData(user) {
-  const [profile, name, invite, convs, msgs, imgs, thumbs, reads] = await Promise.all([
+  const [profile, name, invite, convs, msgs, imgs, thumbs, reads, projects] = await Promise.all([
     getDoc(doc(db, "users", user.uid)),
     getDoc(doc(db, "names", user.uid)),
     getDoc(doc(db, "invites", user.email.toLowerCase())),
@@ -90,6 +96,7 @@ async function collectMyData(user) {
     getDocs(query(collectionGroup(db, "images"), where("authorUid", "==", user.uid))),
     getDocs(query(collectionGroup(db, "thumbs"), where("authorUid", "==", user.uid))),
     getDocs(query(collectionGroup(db, "reads"), where("uid", "==", user.uid))),
+    getDocs(query(collection(db, "projects"), where("roleUids", "array-contains", user.uid))),
   ]);
   const reacted = await Promise.all(convs.docs.map((c) => getDocs(reactedQuery(c.id, user.uid))));
   return {
@@ -146,6 +153,16 @@ async function collectMyData(user) {
       conversationId: d.ref.parent.parent.id,
       lastRead: plain(d.data().lastRead),
     })),
+    // Rôles tenus dans des projets, visibles par les membres de leurs conversations.
+    projectRoles: projects.docs.map((d) => {
+      const p = d.data();
+      const ids = p.roleMembers?.[user.uid] ?? [];
+      return {
+        projectId: d.id,
+        projectTitle: p.title,
+        roles: (p.roles ?? []).filter((r) => ids.includes(r.id)).map((r) => r.name),
+      };
+    }),
   };
 }
 
