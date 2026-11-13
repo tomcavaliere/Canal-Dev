@@ -12,7 +12,7 @@ import { confirmDialog, toast } from "./dialogs.js";
 import { playMessageSound } from "./sound.js";
 import { showNotification } from "./notify.js";
 import { isOnline } from "./presence.js";
-import { addJoinEvent } from "./messages.js";
+import { addMemberEvent } from "./messages.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -772,7 +772,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
             members: cb.checked ? arrayUnion(uid) : arrayRemove(uid),
             updatedAt: serverTimestamp(),
           });
-          if (cb.checked) addJoinEvent(batch, conv.id, uid);
+          addMemberEvent(batch, conv.id, uid, cb.checked ? "join" : "leave");
           if (addName) {
             batch.set(doc(db, "names", uid), nameEntry(uniqueName(googleName(u) || "Membre sans nom", uid)));
           }

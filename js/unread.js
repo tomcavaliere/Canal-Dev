@@ -42,7 +42,7 @@ export function syncMessageWatchers() {
       for (const ch of snap.docChanges()) {
         if (ch.type !== "added") continue;
         const m = ch.doc.data({ serverTimestamps: "estimate" });
-        if (m.event) continue; // « X a rejoint la conversation » : ni son, ni notification, ni non-lu
+        if (m.event) continue; // annonce (« X a rejoint / a quitté ») : ni son, ni notification, ni non-lu
         const t = m.createdAt?.toMillis?.() ?? 0;
         // Ni au chargement, ni pour ses propres messages, ni pour un ancien message
         // qui redevient visible après une suppression.

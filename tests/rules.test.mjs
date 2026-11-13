@@ -571,6 +571,31 @@ describe("Annonce « a rejoint la conversation »", () => {
     batch.delete(doc(db, "invites/erin@gmail.com"));
     await assertSucceeds(batch.commit());
   });
+  const leave = (db, uid, { event = { ...joinEvent(uid), event: "leave" }, members = true } = {}) => {
+    const batch = writeBatch(db);
+    if (members) batch.update(doc(db, "conversations/c1"), { members: arrayRemove(uid), updatedAt: serverTimestamp() });
+    batch.set(newMessageRef(db), event);
+    return batch.commit();
+  };
+  it("l'admin annonce le départ d'un membre qu'il retire", () => assertSucceeds(leave(admin(), "alice")));
+  it("un départ sans retrait des membres dans le même batch est refusé", () =>
+    assertFails(leave(admin(), "alice", { members: false })));
+  it("le départ de quelqu'un qui n'était pas membre est refusé", () => assertFails(leave(admin(), "bob")));
+  it("une annonce d'arrivée pour un membre qu'on retire est refusée", () =>
+    assertFails(leave(admin(), "alice", { event: joinEvent("alice") })));
+  it("un membre qui se retire annonce son propre départ, pas celui d'un autre", async () => {
+    const db = alice();
+    const other = writeBatch(db);
+    other.update(doc(db, "conversations/c1"), { members: arrayRemove("alice") });
+    other.set(newMessageRef(db), { ...joinEvent("carol"), event: "leave" });
+    await assertFails(other.commit());
+    const self = writeBatch(db);
+    self.update(doc(db, "conversations/c1"), { members: arrayRemove("alice") });
+    self.set(newMessageRef(db), { ...joinEvent("alice"), event: "leave" });
+    await assertSucceeds(self.commit());
+  });
+  it("un type d'annonce inconnu est refusé", () =>
+    assertFails(leave(admin(), "alice", { event: { ...joinEvent("alice"), event: "kick" } })));
   it("on ne transforme pas une annonce en message", async () => {
     await env.withSecurityRulesDisabled((ctx) =>
       setDoc(doc(ctx.firestore(), "conversations/c1/messages/j1"), { event: "join", authorUid: "alice", createdAt: T0 }));

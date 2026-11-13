@@ -16,13 +16,14 @@ import { bumpRate, rateWait } from "./rate.js";
 import { isPinned, renderPinned, togglePin } from "./pinned.js";
 import { REACTIONS, isJumbo, toggleEmojiMenu } from "./emoji.js";
 
-/* ---------- Annonce « X a rejoint la conversation » ---------- */
+/* ---------- Annonces « X a rejoint / a quitté la conversation » ---------- */
 
-// Ajoutée au batch qui ajoute `uid` aux membres (les règles l'exigent). `authorUid` est la
-// personne qui rejoint : l'export et la suppression de ses données la couvrent ainsi.
-export function addJoinEvent(batch, convId, uid) {
+// Ajoutée au batch qui ajoute `uid` aux membres (« join ») ou l'en retire (« leave ») : les
+// règles l'exigent. `authorUid` est la personne concernée : l'export et la suppression de ses
+// données la couvrent ainsi.
+export function addMemberEvent(batch, convId, uid, event) {
   batch.set(doc(collection(db, "conversations", convId, "messages")), {
-    event: "join", authorUid: uid, createdAt: serverTimestamp(),
+    event, authorUid: uid, createdAt: serverTimestamp(),
   });
 }
 
@@ -281,11 +282,13 @@ function tag(className, text, title) {
   return s;
 }
 
-// Annonce (« X a rejoint la conversation ») : une ligne centrée, sans réponse ni modification.
+// Annonce (« X a rejoint / a quitté la conversation ») : une ligne centrée, sans réponse ni modification.
+const EVENT_TEXT = { join: "a rejoint la conversation", leave: "a quitté la conversation" };
 export function eventText(m) {
   // Personne absente de l'annuaire (compte supprimé, nom pas encore chargé) : pas de nom inventé.
   const n = nameOf(m.authorUid);
-  return m.event === "join" ? `${typeof n === "string" ? n : "Un membre"} a rejoint la conversation` : "";
+  const what = EVENT_TEXT[m.event];
+  return what ? `${typeof n === "string" ? n : "Un membre"} ${what}` : "";
 }
 
 function renderEvent(id, m) {

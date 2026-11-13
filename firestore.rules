@@ -253,19 +253,19 @@ service cloud.firestore {
             && (d.text.size() > 0 || 'image' in d);
         }
 
-        // Annonce « X a rejoint la conversation » : `authorUid` est la personne qui rejoint
-        // (export et suppression de ses données la couvrent ainsi). Écrite par l'admin qui l'ajoute
-        // ou par elle-même (invitation), uniquement dans le batch qui l'ajoute aux membres.
-        function validJoin() {
+        // Annonces « X a rejoint / a quitté la conversation » : `authorUid` est la personne
+        // concernée (export et suppression de ses données la couvrent ainsi). Écrites par l'admin
+        // ou par elle-même, uniquement dans le batch qui l'ajoute aux membres ou l'en retire.
+        function validMemberEvent() {
           let d = request.resource.data;
           let conv = /databases/$(database)/documents/conversations/$(convId);
+          let before = d.authorUid in get(conv).data.members;
+          let after = d.authorUid in getAfter(conv).data.members;
           return d.keys().hasOnly(['event', 'authorUid', 'createdAt'])
-            && d.event == 'join'
             && d.createdAt == request.time
             && d.authorUid is string
             && (isAdmin() || d.authorUid == request.auth.uid)
-            && !(d.authorUid in get(conv).data.members)
-            && d.authorUid in getAfter(conv).data.members;
+            && ((d.event == 'join' && !before && after) || (d.event == 'leave' && before && !after));
         }
 
         // Réactions : `reactions` = { uid: emoji }, une par membre, parmi une liste fixe
@@ -300,7 +300,7 @@ service cloud.firestore {
 
         allow read: if canAccess(convId);
         allow create: if canAccess(convId) && validMessage() && rateBumped();
-        allow create: if signedIn() && validJoin();
+        allow create: if signedIn() && validMemberEvent();
         allow update: if canAccess(convId) && resource.data.authorUid == request.auth.uid
           && !('event' in resource.data) && validEdit() && rateBumped();
         allow update: if canAccess(convId) && validReaction() && rateBumped();
