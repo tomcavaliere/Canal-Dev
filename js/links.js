@@ -8,7 +8,8 @@ import { state } from "./state.js";
 import { $ } from "./ui.js";
 
 export const MAX_LINKS = 30; // même limite que firestore.rules
-const MAX_LABEL = 60;
+export const MAX_LABEL = 60;
+export const MAX_PROJECT_LINKS = 20; // même limite que firestore.rules
 const MAX_URL = 2000;
 
 /**
@@ -29,17 +30,17 @@ export function normalizeUrl(raw) {
 }
 
 /**
- * Liens valables d'une conversation (un lien mal formé est ignoré, jamais affiché).
+ * Liens valables d'une conversation ou d'un projet (un lien mal formé est ignoré, jamais affiché).
  * @param {any} conv
  * @returns {{ label: string, url: string }[]}
  */
-function linksOf(conv) {
+export function linksOf(conv) {
   if (!Array.isArray(conv?.links)) return [];
   return conv.links.filter((l) => l && typeof l.label === "string" && typeof l.url === "string"
     && normalizeUrl(l.url) === l.url);
 }
 
-function linkHost(url) {
+export function linkHost(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
 }
 

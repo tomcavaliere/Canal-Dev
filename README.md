@@ -14,6 +14,8 @@ Canal de communication pour suivre le développement d'un outil.
 - Chaque projet peut avoir un **organigramme** : l'administrateur y range les rôles par **niveau** (niveau 1 en haut).
   Les membres l'ouvrent avec le 🏢 à côté du nom du projet : un niveau par ligne, du plus haut au plus bas (le niveau
   n'est pas écrit, il se lit à la position), chaque rôle avec les personnes qui le tiennent.
+- Chaque projet peut avoir des **liens** (texte + adresse, 20 au plus), ajoutés par l'administrateur dans le ✎ du projet. Ils s'affichent
+  dans la barre latérale, sous les rôles, et s'ouvrent dans un nouvel onglet.
 - Chaque projet a un **calendrier** (📅 à côté de son nom), ouvert à tous ses membres (les membres de ses conversations) :
   chacun y crée des **réunions** et y invite d'autres membres du projet, qui répondent « présent » ou « absent »
   (une pastille sur le 📅 compte les invitations sans réponse), et y ajoute des **objectifs**, avec ou sans échéance,
@@ -54,7 +56,7 @@ js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'a
 js/ui.js                helpers d'affichage (avatar à initiales)
 js/dialogs.js           dialogue de confirmation et messages brefs (remplacent alert/confirm)
 js/richtext.js          liens cliquables et code dans les messages
-js/links.js             liens attachés à une conversation (barre au-dessus de la saisie)
+js/links.js             liens attachés à une conversation (barre au-dessus de la saisie) ; validation des liens de projet
 js/pinned.js            messages épinglés par l'admin (barre sous l'en-tête de la conversation)
 js/notify.js            notifications et enregistrement du service worker
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)

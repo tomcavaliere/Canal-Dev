@@ -2,6 +2,7 @@
 
 import { displayText, nameOf } from "./names.js";
 import { isLogo } from "./images.js";
+import { linkHost, linksOf } from "./links.js";
 import { $ } from "./ui.js";
 import { openProjectCalendar, selectConversation } from "./app.js";
 import { pendingInvitations } from "./calendar.js";
@@ -193,7 +194,37 @@ function rolesBlock(projectId) {
   return ul;
 }
 
-// Un groupe repliable : en-tête (titre du projet), ses rôles, puis la liste de ses conversations.
+// Liens d'un projet (ajoutés par l'admin), sous ses rôles : chacun s'ouvre dans un nouvel onglet.
+function linksBlock(projectId) {
+  const links = linksOf(state.projects.get(projectId));
+  if (!links.length) return null;
+  const ul = document.createElement("ul");
+  ul.className = "list group-links";
+  ul.setAttribute("aria-label", "Liens du projet");
+  for (const l of links) {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = l.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.title = l.url;
+    const icon = document.createElement("span");
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "🔗";
+    const text = document.createElement("span");
+    text.className = "group-link-text";
+    text.textContent = l.label;
+    const host = document.createElement("span");
+    host.className = "visually-hidden";
+    host.textContent = ` (${linkHost(l.url)}, nouvel onglet)`;
+    a.append(icon, text, host);
+    li.append(a);
+    ul.append(li);
+  }
+  return ul;
+}
+
+// Un groupe repliable : en-tête (titre du projet), ses rôles et ses liens, puis la liste de ses conversations.
 function projectGroup(projectId, title, convs) {
   const li = document.createElement("li");
   li.className = "group" + (projectId ? "" : " group-loose");
@@ -273,6 +304,8 @@ function projectGroup(projectId, title, convs) {
   if (isOpen) {
     const roles = projectId ? rolesBlock(projectId) : null;
     if (roles) li.append(roles);
+    const links = projectId ? linksBlock(projectId) : null;
+    if (links) li.append(links);
     const ul = document.createElement("ul");
     ul.className = "list group-items";
     const items = convs.map(([id, c]) => conversationItem(id, c));

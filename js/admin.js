@@ -16,6 +16,7 @@ import { addMemberEvent } from "./messages.js";
 import { projectOrgLevels, projectRoles, roleUids } from "./sidebar.js";
 import { isLogo, prepareLogo } from "./images.js";
 import { deleteProjectCalendar } from "./tickets.js";
+import { linksOf, MAX_LABEL, MAX_PROJECT_LINKS, normalizeUrl } from "./links.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -674,6 +675,8 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     draftRoles = projectRoles(p).map((r) => ({ id: r.id, name: r.name, uids: new Set(r.uids) }));
     draftLevels = projectOrgLevels(p).map((l) => ({ id: l.id, roles: l.roles.map((r) => r.id) }));
     renderRoleEditors();
+    draftLinks = linksOf(p).map((l) => ({ id: newRoleId(), label: l.label, url: l.url }));
+    renderLinkEditors();
     dlgProject.showModal();
   }
   on($("btn-new-project"), "click", () => openProjectDialog());
@@ -890,6 +893,88 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   }
   on($("btn-add-level"), "click", addLevel);
 
+  /* --- Liens d'un projet : texte + adresse, dans l'ordre d'affichage (même dialogue) --- */
+  /** @type {{ id: string, label: string, url: string }[]} */
+  let draftLinks = [];
+
+  function renderLinkEditors() {
+    // Reconstruite à chaque ajout, retrait ou changement d'ordre : on garde le champ en cours de saisie.
+    const active = /** @type {HTMLElement | null} */ (document.activeElement);
+    const focused = active && $("project-links").contains(active) ? active.dataset.link : null;
+    const items = draftLinks.map((link, i) => {
+      const li = document.createElement("li");
+      li.className = "role-editor link-editor";
+      const row = document.createElement("div");
+      row.className = "row";
+      const label = document.createElement("input");
+      label.maxLength = MAX_LABEL;
+      label.value = link.label;
+      label.placeholder = "Texte (ex. Maquettes)";
+      label.setAttribute("aria-label", `Texte du lien ${i + 1}`);
+      label.dataset.link = link.id + "-label";
+      label.addEventListener("input", () => { link.label = label.value; });
+      const url = document.createElement("input");
+      url.type = "text";
+      url.inputMode = "url";
+      url.maxLength = 2000;
+      url.value = link.url;
+      url.placeholder = "Adresse (https://…)";
+      url.setAttribute("aria-label", `Adresse du lien ${i + 1}`);
+      url.dataset.link = link.id + "-url";
+      url.addEventListener("input", () => { link.url = url.value; });
+      const up = document.createElement("button");
+      up.type = "button";
+      up.className = "btn small";
+      up.textContent = "↑";
+      up.title = "Monter ce lien";
+      up.setAttribute("aria-label", `Monter le lien ${link.label || i + 1}`);
+      up.disabled = i === 0;
+      up.addEventListener("click", () => {
+        [draftLinks[i - 1], draftLinks[i]] = [draftLinks[i], draftLinks[i - 1]];
+        renderLinkEditors();
+      });
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "btn small danger";
+      del.textContent = "Retirer";
+      del.setAttribute("aria-label", `Retirer le lien ${link.label || i + 1}`);
+      del.addEventListener("click", () => {
+        draftLinks.splice(i, 1);
+        renderLinkEditors();
+      });
+      row.append(label, url, up, del);
+      li.append(row);
+      return li;
+    });
+    $("project-links").replaceChildren(...items);
+    $("btn-add-project-link").disabled = draftLinks.length >= MAX_PROJECT_LINKS;
+    if (focused) /** @type {HTMLInputElement | null} */ ($("project-links").querySelector(`[data-link="${CSS.escape(focused)}"]`))?.focus();
+  }
+
+  on($("btn-add-project-link"), "click", () => {
+    if (draftLinks.length >= MAX_PROJECT_LINKS) return;
+    const link = { id: newRoleId(), label: "", url: "" };
+    draftLinks.push(link);
+    renderLinkEditors();
+    /** @type {HTMLInputElement | null} */ ($("project-links").querySelector(`[data-link="${link.id}-label"]`))?.focus();
+  });
+
+  // Liens à enregistrer : les lignes vides sont ignorées ; une ligne à moitié remplie ou une adresse
+  // invalide est une erreur (message), pour ne rien perdre en silence.
+  /** @returns {{ links: { label: string, url: string }[] } | { error: string }} */
+  function linksFields() {
+    const links = [];
+    for (const [i, l] of draftLinks.entries()) {
+      const label = l.label.trim().slice(0, MAX_LABEL);
+      if (!label && !l.url.trim()) continue;
+      if (!label) return { error: `Lien ${i + 1} : écris le texte du lien.` };
+      const url = normalizeUrl(l.url);
+      if (!url) return { error: `Lien ${i + 1} : adresse invalide (elle doit commencer par https:// ou http://).` };
+      links.push({ label, url });
+    }
+    return { links };
+  }
+
   // Champ Firestore de l'organigramme : seuls les rôles enregistrés (nommés) y restent.
   function levelsFields() {
     const kept = new Set(draftRoles.filter((r) => r.name.trim()).map((r) => r.id));
@@ -925,14 +1010,20 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       $("project-error").hidden = false;
       return;
     }
+    const linked = linksFields();
+    if ("error" in linked) {
+      $("project-error").textContent = linked.error;
+      $("project-error").hidden = false;
+      return;
+    }
     try {
       if (editingProjectId) {
         await updateDoc(doc(db, "projects", editingProjectId), {
-          title, description, ...rolesFields(), ...levelsFields(), logo: draftLogo ?? deleteField(), updatedAt: serverTimestamp(),
+          title, description, ...rolesFields(), ...levelsFields(), links: linked.links, logo: draftLogo ?? deleteField(), updatedAt: serverTimestamp(),
         });
       } else {
         await addDoc(collection(db, "projects"), {
-          title, description, ...rolesFields(), ...levelsFields(), ...(draftLogo ? { logo: draftLogo } : {}),
+          title, description, ...rolesFields(), ...levelsFields(), links: linked.links, ...(draftLogo ? { logo: draftLogo } : {}),
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
       }
