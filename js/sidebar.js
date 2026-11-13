@@ -1,6 +1,7 @@
 // Barre latérale : liste des conversations, groupées par projet et triées par activité.
 
 import { displayText, nameOf } from "./names.js";
+import { isLogo } from "./images.js";
 import { $ } from "./ui.js";
 import { selectConversation } from "./app.js";
 import { state } from "./state.js";
@@ -188,8 +189,18 @@ function projectGroup(projectId, title, convs) {
   caret.className = "caret";
   caret.setAttribute("aria-hidden", "true");
   caret.textContent = isOpen ? "▾" : "▸";
-  const dot = document.createElement("span");
-  dot.className = "group-dot";
+  // Logo du projet s'il en a un, sinon une pastille de sa couleur.
+  const logo = projectId ? state.projects.get(projectId)?.logo : null;
+  let dot;
+  if (isLogo(logo)) {
+    dot = document.createElement("img");
+    dot.className = "group-logo";
+    dot.src = logo;
+    dot.alt = "";
+  } else {
+    dot = document.createElement("span");
+    dot.className = "group-dot";
+  }
   dot.setAttribute("aria-hidden", "true");
   const name = document.createElement("span");
   name.className = "group-title";

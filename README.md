@@ -9,6 +9,7 @@ Canal de communication pour suivre le développement d'un outil.
   recherche dans les messages chargés, modification de ses messages, liens et `code` mis en forme.
 - Installable comme application (PWA) ; notifications tant que l'application est ouverte (pas de push : plan Spark).
 - L'administrateur peut ranger les conversations dans des **projets** (ou les laisser « Sans projet ») et les déplacer de l'un à l'autre. Les membres voient le nom du projet de leurs conversations, jamais la liste des autres projets.
+- Chaque projet peut avoir un **logo** (choisi par l'administrateur, réduit à 256 px et enregistré dans le document du projet), affiché dans la barre latérale et au-dessus du titre de ses conversations.
 - Chaque projet peut avoir des **rôles** (Développeur, Design…) modifiables par l'administrateur. Les rôles et les personnes qui les tiennent s'affichent dans la barre latérale, juste sous le nom du projet.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.

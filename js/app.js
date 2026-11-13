@@ -20,6 +20,7 @@ import { addMemberEvent, clearReply, listenMessages, PAGE, renderMessages, reset
 import { renderReceipt, syncMyRead } from "./receipts.js";
 import { closeSearch } from "./search.js";
 import { projectColor, projectOf, renderConversationList, roleUids, sortedConversations } from "./sidebar.js";
+import { isLogo } from "./images.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
@@ -490,7 +491,17 @@ function renderChatHeader() {
   const c = state.conversations.get(state.selectedId);
   if (!c) return;
   const pid = projectOf(c);
-  $("chat-project").textContent = pid ? state.projects.get(pid).title || "" : "";
+  const project = pid ? state.projects.get(pid) : null;
+  const logo = project?.logo;
+  $("chat-project").textContent = project?.title || "";
+  if (isLogo(logo)) {
+    const img = document.createElement("img");
+    img.className = "chat-project-logo";
+    img.src = logo;
+    img.alt = "";
+    $("chat-project").prepend(img);
+  }
+  $("chat-project").classList.toggle("has-logo", isLogo(logo));
   $("chat-project").hidden = !pid;
   $("chat-project").style.setProperty("--proj", projectColor(pid ?? ""));
   $("chat-title").textContent = c.title || "(sans titre)";

@@ -215,6 +215,17 @@
       <label>Description
         <textarea id="project-desc" maxlength="500" rows="3"></textarea>
       </label>
+      <div class="stack tight">
+        <span class="field-label">Logo</span>
+        <div class="row logo-editor">
+          <img id="project-logo-preview" class="logo-preview" alt="Logo du projet" hidden>
+          <span id="project-logo-none" class="muted small">Aucun logo</span>
+          <label class="btn small">Choisir une image…
+            <input id="project-logo-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+          </label>
+          <button id="btn-remove-logo" type="button" class="btn small" hidden>Retirer</button>
+        </div>
+      </div>
       <p class="muted small">Les membres d'une conversation voient le nom du projet qui la contient.</p>
       <fieldset class="stack tight project-roles">
         <legend>Rôles</legend>

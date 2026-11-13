@@ -14,6 +14,7 @@ import { showNotification } from "./notify.js";
 import { isOnline } from "./presence.js";
 import { addMemberEvent } from "./messages.js";
 import { projectRoles, roleUids } from "./sidebar.js";
+import { isLogo, prepareLogo } from "./images.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -664,6 +665,8 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     $("form-project").reset();
     $("project-title").value = p?.title || "";
     $("project-desc").value = p?.description || "";
+    draftLogo = isLogo(p?.logo) ? p.logo : null;
+    renderLogo();
     $("btn-delete-project").hidden = !p;
     $("project-dlg-title").textContent = p ? "Modifier le projet" : "Nouveau projet";
     $("project-error").hidden = true;
@@ -672,6 +675,35 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     dlgProject.showModal();
   }
   on($("btn-new-project"), "click", () => openProjectDialog());
+
+  /* --- Logo d'un projet (petite image enregistrée dans le document du projet) --- */
+  /** @type {string | null} */
+  let draftLogo = null;
+
+  function renderLogo() {
+    const img = /** @type {HTMLImageElement} */ ($("project-logo-preview"));
+    if (draftLogo) img.src = draftLogo; else img.removeAttribute("src");
+    img.hidden = !draftLogo;
+    $("project-logo-none").hidden = !!draftLogo;
+    $("btn-remove-logo").hidden = !draftLogo;
+  }
+
+  on($("project-logo-file"), "change", async (e) => {
+    const input = /** @type {HTMLInputElement} */ (e.target);
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    try {
+      draftLogo = await prepareLogo(file);
+      renderLogo();
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  });
+  on($("btn-remove-logo"), "click", () => {
+    draftLogo = null;
+    renderLogo();
+  });
 
   /* --- Rôles d'un projet (édités dans le dialogue du projet) --- */
   const MAX_ROLES = 20;
@@ -781,11 +813,12 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     try {
       if (editingProjectId) {
         await updateDoc(doc(db, "projects", editingProjectId), {
-          title, description, ...rolesFields(), updatedAt: serverTimestamp(),
+          title, description, ...rolesFields(), logo: draftLogo ?? deleteField(), updatedAt: serverTimestamp(),
         });
       } else {
         await addDoc(collection(db, "projects"), {
-          title, description, ...rolesFields(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+          title, description, ...rolesFields(), ...(draftLogo ? { logo: draftLogo } : {}),
+          createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
       }
       dlgProject.close();
