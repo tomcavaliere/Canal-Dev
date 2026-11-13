@@ -5,6 +5,7 @@ import { isLogo } from "./images.js";
 import { $ } from "./ui.js";
 import { openProjectCalendar, selectConversation } from "./app.js";
 import { pendingInvitations } from "./calendar.js";
+import { openOrgChart } from "./org.js";
 import { state } from "./state.js";
 import { unreadBadge, unreadLabel, unreadMessages } from "./unread.js";
 
@@ -136,6 +137,32 @@ export function projectRoles(p) {
     }));
 }
 
+// Organigramme d'un projet, du niveau le plus haut au plus bas : [{ id, name, roles: [{ id, name, uids }] }].
+// Les rôles disparus sont ignorés ; un rôle n'apparaît qu'au premier niveau qui le cite.
+export function projectOrgLevels(p) {
+  if (!p || !Array.isArray(p.orgLevels)) return [];
+  const roles = new Map(projectRoles(p).map((r) => [r.id, r]));
+  const placed = new Set();
+  return p.orgLevels
+    .filter((l) => l && typeof l.id === "string")
+    .map((l) => ({
+      id: l.id,
+      name: typeof l.name === "string" ? l.name : "",
+      roles: (Array.isArray(l.roles) ? l.roles : [])
+        .filter((id) => roles.has(id) && !placed.has(id) && placed.add(id))
+        .map((id) => roles.get(id)),
+    }));
+}
+
+// Noms des personnes qui tiennent un rôle (« toi » pour soi-même), triés ; les personnes
+// absentes de l'annuaire (compte supprimé) sont omises.
+export function holderNames(uids) {
+  return uids
+    .filter((uid) => uid === state.user?.uid || typeof nameOf(uid) === "string")
+    .map((uid) => (uid === state.user?.uid ? "toi" : displayText(uid)))
+    .sort((a, b) => a.localeCompare(b, "fr"));
+}
+
 // Toutes les personnes qui tiennent un rôle dans les projets connus (pour suivre leurs noms).
 export function roleUids() {
   const uids = new Set();
@@ -147,13 +174,7 @@ export function roleUids() {
 // monde, y compris ceux que personne ne tient encore (« à pourvoir »).
 function rolesBlock(projectId) {
   const roles = projectRoles(state.projects.get(projectId))
-    .map((r) => ({
-      ...r,
-      names: r.uids
-        .filter((uid) => uid === state.user?.uid || typeof nameOf(uid) === "string")
-        .map((uid) => (uid === state.user?.uid ? "toi" : displayText(uid)))
-        .sort((a, b) => a.localeCompare(b, "fr")),
-    }));
+    .map((r) => ({ ...r, names: holderNames(r.uids) }));
   if (!roles.length) return null;
   const ul = document.createElement("ul");
   ul.className = "list group-roles";
@@ -234,6 +255,12 @@ function projectGroup(projectId, title, convs) {
       cal.append(badge);
     }
     head.append(cal);
+    // Organigramme, s'il a au moins un niveau.
+    if (projectOrgLevels(state.projects.get(projectId)).length) {
+      const org = smallButton("🏢", `Organigramme de « ${title} »`, () => openOrgChart(projectId), "org:" + projectId);
+      org.classList.add("group-org");
+      head.append(org);
+    }
   }
 
   if (state.isAdmin && projectId) {

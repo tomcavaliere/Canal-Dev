@@ -11,6 +11,9 @@ Canal de communication pour suivre le développement d'un outil.
 - L'administrateur peut ranger les conversations dans des **projets** (ou les laisser « Sans projet ») et les déplacer de l'un à l'autre. Les membres voient le nom du projet de leurs conversations, jamais la liste des autres projets.
 - Chaque projet peut avoir un **logo** (choisi par l'administrateur, réduit à 256 px et enregistré dans le document du projet), affiché dans la barre latérale et au-dessus du titre de ses conversations.
 - Chaque projet peut avoir des **rôles** (Développeur, Design…) modifiables par l'administrateur. Les rôles et les personnes qui les tiennent s'affichent dans la barre latérale, juste sous le nom du projet.
+- Chaque projet peut avoir un **organigramme** : l'administrateur y range les rôles par **niveau** (niveau 1 en haut,
+  chaque niveau peut être nommé, par exemple « Direction »). Les membres l'ouvrent avec le 🏢 à côté du nom du projet :
+  un niveau par ligne, chaque rôle avec les personnes qui le tiennent.
 - Chaque projet a un **calendrier** (📅 à côté de son nom), ouvert à tous ses membres (les membres de ses conversations) :
   chacun y crée des **réunions** et y invite d'autres membres du projet, qui répondent « présent » ou « absent »
   (une pastille sur le 📅 compte les invitations sans réponse), et y ajoute des **objectifs**, avec ou sans échéance,
@@ -44,6 +47,7 @@ js/composer.js          saisie, photo jointe, emojis, pouce, envoi
 js/emoji.js             réactions (liste fixe), sélecteur d'emojis, emojis affichés en grand
 js/admin.js             création de conversations, gestion des membres (admin)
 js/calendar.js          calendrier d'un projet : réunions, invitations et réponses, objectifs
+js/org.js              organigramme d'un projet : rôles rangés par niveau (lecture)
 js/tickets.js           fiches de membre des projets (accès au calendrier), tenues à jour par l'admin
 js/account.js           « Mon compte » : export et suppression des données (RGPD)
 js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'admin seul)
@@ -134,7 +138,7 @@ renvoie les anciens liens vers la nouvelle adresse. Désactive-le ensuite (GitHu
 puis retire `tomcavaliere.github.io` des domaines autorisés d'Authentication.
 
 ## Utilisation (admin)
-1. **+ Projet** (facultatif) : crée un projet. Le ✎ à côté d'un projet permet de le renommer, de gérer ses **rôles** (ajouter, renommer, réordonner avec ↑, retirer, cocher les personnes) ou de le supprimer (ses conversations sont conservées et passent « Sans projet »).
+1. **+ Projet** (facultatif) : crée un projet. Le ✎ à côté d'un projet permet de le renommer, de gérer ses **rôles** (ajouter, renommer, réordonner avec ↑, retirer, cocher les personnes) et son **organigramme** (+ Niveau, nommer, monter avec ↑, cocher les rôles de chaque niveau ; un rôle n'est qu'à un niveau) ou de le supprimer (ses conversations sont conservées et passent « Sans projet »).
 1. **+ Conversation** (ou **+** à côté d'un projet) : crée une conversation, dans un projet ou non. En haut d'une conversation : **Renommer** (titre et description) et **Déplacer** (changer de projet).
 1. **+ Lien** (en bas d'une conversation, au-dessus de la saisie) : attache une adresse à un texte (par exemple « sport » → `https://www.basketusa.com/`). Les membres voient la barre des liens et les ouvrent dans un nouvel onglet ; le ✕ retire un lien (30 au plus par conversation).
 1. **Épingler** (à côté de « Répondre » sur chaque message) : met un message important en avant. Il apparaît dans la barre 📌 en haut de la conversation (un clic y mène, même s'il est ancien) et porte la mention « Épinglé » dans le fil. **Désépingler** ou le ✕ de la barre le retire (10 au plus par conversation ; supprimer le message retire aussi l'épingle).

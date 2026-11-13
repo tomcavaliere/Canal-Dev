@@ -21,6 +21,7 @@ import { renderReceipt, syncMyRead } from "./receipts.js";
 import { closeSearch } from "./search.js";
 import { projectColor, projectOf, renderConversationList, roleUids, sortedConversations } from "./sidebar.js";
 import { isLogo } from "./images.js";
+import { renderOrgChart } from "./org.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
@@ -363,6 +364,7 @@ function listenAllProjects() {
     adminSyncTickets();
     onCalendarContextChanged();
     renderConversationList();
+    renderOrgChart();
     if (state.selectedId) renderChatHeader();
     state.admin?.onProjectsChanged();
   }, (err) => console.error("Lecture des projets impossible", err));
@@ -386,6 +388,7 @@ function syncProjectListeners() {
       syncNames(); // personnes qui tiennent un rôle
       onCalendarContextChanged();
       renderConversationList();
+      renderOrgChart();
       if (state.selectedId) renderChatHeader();
     }, (err) => console.error("Lecture du projet impossible", err)));
   }
@@ -431,6 +434,7 @@ function scheduleNamesRender() {
     if (state.selectedId) renderOnline();
     renderConversationList(); // noms des rôles
     renderCalendarNames();
+    renderOrgChart();
     const replied = state.replyTo && state.msgById.get(state.replyTo);
     if (replied) $("reply-author").textContent = displayText(replied.authorUid, replied.authorName);
     state.admin?.onNamesChanged();

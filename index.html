@@ -291,6 +291,14 @@
         <ol id="project-roles" class="role-editors"></ol>
         <div><button id="btn-add-role" type="button" class="btn small">+ Rôle</button></div>
       </fieldset>
+      <fieldset class="stack tight project-roles">
+        <legend>Organigramme</legend>
+        <p class="muted small">Range les rôles par niveau, du plus haut (niveau 1) au plus bas. Les membres du projet
+          l'ouvrent avec le 🏢 à côté du nom du projet.</p>
+        <ol id="project-levels" class="role-editors"></ol>
+        <p id="project-levels-unplaced" class="muted small" hidden></p>
+        <div><button id="btn-add-level" type="button" class="btn small">+ Niveau</button></div>
+      </fieldset>
       <p id="project-error" class="error small" role="alert" hidden></p>
       <div class="row end">
         <button id="btn-delete-project" type="button" class="btn danger" hidden>Supprimer le projet</button>
@@ -380,6 +388,17 @@
         <p id="invite-error" class="error small" role="alert" hidden></p>
         <ul id="invite-list" class="list invites"></ul>
       </form>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialogue : organigramme d'un projet (lecture) -->
+  <dialog id="dlg-org" class="org-dialog" aria-labelledby="org-title">
+    <div class="stack">
+      <h2 id="org-title">Organigramme</h2>
+      <ol id="org-levels" class="org-levels"></ol>
       <div class="row end">
         <button type="button" class="btn" data-close>Fermer</button>
       </div>

@@ -13,7 +13,7 @@ import { playMessageSound } from "./sound.js";
 import { showNotification } from "./notify.js";
 import { isOnline } from "./presence.js";
 import { addMemberEvent } from "./messages.js";
-import { projectRoles, roleUids } from "./sidebar.js";
+import { projectOrgLevels, projectRoles, roleUids } from "./sidebar.js";
 import { isLogo, prepareLogo } from "./images.js";
 import { deleteProjectCalendar } from "./tickets.js";
 
@@ -672,6 +672,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     $("project-dlg-title").textContent = p ? "Modifier le projet" : "Nouveau projet";
     $("project-error").hidden = true;
     draftRoles = projectRoles(p).map((r) => ({ id: r.id, name: r.name, uids: new Set(r.uids) }));
+    draftLevels = projectOrgLevels(p).map((l) => ({ id: l.id, name: l.name, roles: l.roles.map((r) => r.id) }));
     renderRoleEditors();
     dlgProject.showModal();
   }
@@ -742,7 +743,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       input.placeholder = "Nom du rôle (ex. Développeur)";
       input.setAttribute("aria-label", `Nom du rôle ${i + 1}`);
       input.dataset.role = role.id;
-      input.addEventListener("input", () => { role.name = input.value; });
+      input.addEventListener("input", () => { role.name = input.value; renderLevelEditors(); });
       // Entrée dans un nom de rôle : passe au rôle suivant (ou en crée un), sans enregistrer le projet.
       input.addEventListener("keydown", (e) => {
         if (e.key !== "Enter" || e.isComposing) return;
@@ -792,6 +793,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     $("project-roles").replaceChildren(...items);
     $("btn-add-role").disabled = draftRoles.length >= MAX_ROLES;
     if (focusedRole) focusRole(focusedRole);
+    renderLevelEditors(); // les rôles proposés dans l'organigramme suivent la liste
   }
 
   function addRole() {
@@ -802,6 +804,121 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     focusRole(role.id);
   }
   on($("btn-add-role"), "click", addRole);
+
+  /* --- Organigramme d'un projet : les rôles rangés par niveau (même dialogue) --- */
+  const MAX_LEVELS = 10;
+  /** @type {{ id: string, name: string, roles: string[] }[]} */
+  let draftLevels = [];
+
+  function focusLevel(id) {
+    /** @type {HTMLInputElement | null} */ ($("project-levels").querySelector(`input[data-level="${CSS.escape(id)}"]`))?.focus();
+  }
+
+  function renderLevelEditors() {
+    const active = /** @type {HTMLElement | null} */ (document.activeElement);
+    const focusedLevel = active && $("project-levels").contains(active) ? active.dataset.level : null;
+    const named = draftRoles.filter((r) => r.name.trim());
+    const items = draftLevels.map((level, i) => {
+      const li = document.createElement("li");
+      li.className = "role-editor stack tight";
+      const head = document.createElement("div");
+      head.className = "row";
+      const num = document.createElement("span");
+      num.className = "level-num";
+      num.textContent = String(i + 1);
+      num.title = `Niveau ${i + 1}`;
+      const input = document.createElement("input");
+      input.maxLength = 60;
+      input.value = level.name;
+      input.placeholder = `Niveau ${i + 1} (ex. Direction)`;
+      input.setAttribute("aria-label", `Nom du niveau ${i + 1}`);
+      input.dataset.level = level.id;
+      input.addEventListener("input", () => { level.name = input.value; });
+      input.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" || e.isComposing) return;
+        e.preventDefault();
+        if (i < draftLevels.length - 1) focusLevel(draftLevels[i + 1].id);
+        else addLevel();
+      });
+      const up = document.createElement("button");
+      up.type = "button";
+      up.className = "btn small";
+      up.textContent = "↑";
+      up.title = "Monter ce niveau";
+      up.setAttribute("aria-label", `Monter le niveau ${level.name || i + 1}`);
+      up.disabled = i === 0;
+      up.addEventListener("click", () => {
+        [draftLevels[i - 1], draftLevels[i]] = [draftLevels[i], draftLevels[i - 1]];
+        renderLevelEditors();
+      });
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "btn small danger";
+      del.textContent = "Retirer";
+      del.setAttribute("aria-label", `Retirer le niveau ${level.name || i + 1}`);
+      del.addEventListener("click", () => {
+        draftLevels.splice(i, 1);
+        renderLevelEditors();
+      });
+      head.append(num, input, up, del);
+
+      // Un rôle n'est qu'à un seul niveau : le cocher ici le retire de l'autre.
+      const ul = document.createElement("ul");
+      ul.className = "list members role-people-picker";
+      for (const role of named) {
+        const pli = document.createElement("li");
+        const lab = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = level.roles.includes(role.id);
+        const other = draftLevels.findIndex((l) => l !== level && l.roles.includes(role.id));
+        cb.addEventListener("change", () => {
+          for (const l of draftLevels) l.roles = l.roles.filter((id) => id !== role.id);
+          if (cb.checked) level.roles.push(role.id);
+          renderLevelEditors();
+        });
+        lab.append(cb, document.createTextNode(role.name.trim()));
+        if (other >= 0) {
+          const where = document.createElement("span");
+          where.className = "muted small";
+          where.textContent = ` (niveau ${other + 1})`;
+          lab.append(where);
+        }
+        pli.append(lab);
+        ul.append(pli);
+      }
+      if (!named.length) ul.append(Object.assign(document.createElement("li"), { className: "muted small", textContent: "Aucun rôle : ajoute-en au-dessus." }));
+      li.append(head, ul);
+      return li;
+    });
+    $("project-levels").replaceChildren(...items);
+    $("btn-add-level").disabled = draftLevels.length >= MAX_LEVELS;
+    const unplaced = draftLevels.length
+      ? named.filter((r) => !draftLevels.some((l) => l.roles.includes(r.id))).map((r) => r.name.trim())
+      : [];
+    $("project-levels-unplaced").textContent = `Hors organigramme : ${unplaced.join(", ")}.`;
+    $("project-levels-unplaced").hidden = !unplaced.length;
+    if (focusedLevel) focusLevel(focusedLevel);
+  }
+
+  function addLevel() {
+    if (draftLevels.length >= MAX_LEVELS) return;
+    const level = { id: newRoleId(), name: "", roles: [] };
+    draftLevels.push(level);
+    renderLevelEditors();
+    focusLevel(level.id);
+  }
+  on($("btn-add-level"), "click", addLevel);
+
+  // Champ Firestore de l'organigramme : seuls les rôles enregistrés (nommés) y restent.
+  function levelsFields() {
+    const kept = new Set(draftRoles.filter((r) => r.name.trim()).map((r) => r.id));
+    return {
+      orgLevels: draftLevels.map((l) => ({
+        id: l.id, name: l.name.trim().slice(0, 60), roles: l.roles.filter((id) => kept.has(id)),
+      })),
+    };
+  }
 
   // Champs Firestore des rôles (voir firestore.rules) : seuls les rôles nommés sont gardés,
   // et seules les personnes encore inscrites.
@@ -831,11 +948,11 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     try {
       if (editingProjectId) {
         await updateDoc(doc(db, "projects", editingProjectId), {
-          title, description, ...rolesFields(), logo: draftLogo ?? deleteField(), updatedAt: serverTimestamp(),
+          title, description, ...rolesFields(), ...levelsFields(), logo: draftLogo ?? deleteField(), updatedAt: serverTimestamp(),
         });
       } else {
         await addDoc(collection(db, "projects"), {
-          title, description, ...rolesFields(), ...(draftLogo ? { logo: draftLogo } : {}),
+          title, description, ...rolesFields(), ...levelsFields(), ...(draftLogo ? { logo: draftLogo } : {}),
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
       }

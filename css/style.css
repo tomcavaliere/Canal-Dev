@@ -283,6 +283,31 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .role-editor { padding: .5rem; border: 1px solid var(--border); border-radius: 8px; }
 .role-editor .row input { flex: 1; min-width: 0; }
 .role-people-picker { max-height: 9rem; }
+.level-num {
+  flex-shrink: 0; width: 1.6rem; height: 1.6rem; display: inline-grid; place-items: center;
+  border-radius: 50%; background: var(--surface-2); font-size: .8rem; font-weight: 600;
+}
+
+/* Organigramme d'un projet (lecture) : un niveau par ligne, reliés par un trait vertical */
+dialog.org-dialog { width: min(720px, calc(100vw - 32px)); }
+.org-levels { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.org-level { display: flex; flex-direction: column; align-items: center; gap: .4rem; }
+.org-level + .org-level::before {
+  content: ""; width: 2px; height: 1.1rem; background: color-mix(in srgb, var(--proj) 45%, transparent);
+}
+.org-level-name {
+  margin: 0; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+}
+.org-cards {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem;
+}
+.org-card {
+  display: flex; flex-direction: column; gap: .1rem; min-width: 8rem; max-width: 14rem; padding: .45rem .7rem;
+  text-align: center; border: 1px solid color-mix(in srgb, var(--proj) 45%, var(--border)); border-radius: 8px;
+  background: color-mix(in srgb, var(--proj) 8%, var(--surface));
+}
+.org-role { font-weight: 600; color: var(--proj); overflow-wrap: anywhere; }
+.org-people { overflow-wrap: anywhere; }
 .chat-project { margin: 0 0 .1rem; text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; font-weight: 600; color: var(--proj, var(--muted)); }
 .chat-project::before { content: ""; display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; margin-right: .4rem; vertical-align: .05em; }
 
