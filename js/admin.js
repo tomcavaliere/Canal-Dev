@@ -721,7 +721,14 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       .sort((a, b) => a.label.localeCompare(b.label, "fr"));
   }
 
+  function focusRole(id) {
+    /** @type {HTMLInputElement | null} */ ($("project-roles").querySelector(`input[data-role="${CSS.escape(id)}"]`))?.focus();
+  }
+
   function renderRoleEditors() {
+    // La liste est reconstruite (ajout, retrait, ordre, nouvel inscrit) : on garde le nom en cours de saisie.
+    const active = /** @type {HTMLElement | null} */ (document.activeElement);
+    const focusedRole = active && $("project-roles").contains(active) ? active.dataset.role : null;
     const people = roleCandidates();
     const items = draftRoles.map((role, i) => {
       const li = document.createElement("li");
@@ -735,6 +742,13 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       input.setAttribute("aria-label", `Nom du rôle ${i + 1}`);
       input.dataset.role = role.id;
       input.addEventListener("input", () => { role.name = input.value; });
+      // Entrée dans un nom de rôle : passe au rôle suivant (ou en crée un), sans enregistrer le projet.
+      input.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" || e.isComposing) return;
+        e.preventDefault();
+        if (i < draftRoles.length - 1) focusRole(draftRoles[i + 1].id);
+        else addRole();
+      });
       const up = document.createElement("button");
       up.type = "button";
       up.className = "btn small";
@@ -776,14 +790,17 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     });
     $("project-roles").replaceChildren(...items);
     $("btn-add-role").disabled = draftRoles.length >= MAX_ROLES;
+    if (focusedRole) focusRole(focusedRole);
   }
 
-  on($("btn-add-role"), "click", () => {
+  function addRole() {
     if (draftRoles.length >= MAX_ROLES) return;
-    draftRoles.push({ id: newRoleId(), name: "", uids: new Set() });
+    const role = { id: newRoleId(), name: "", uids: new Set() };
+    draftRoles.push(role);
     renderRoleEditors();
-    /** @type {HTMLInputElement | null} */ ($("project-roles").querySelector("li:last-child input"))?.focus();
-  });
+    focusRole(role.id);
+  }
+  on($("btn-add-role"), "click", addRole);
 
   // Champs Firestore des rôles (voir firestore.rules) : seuls les rôles nommés sont gardés,
   // et seules les personnes encore inscrites.
