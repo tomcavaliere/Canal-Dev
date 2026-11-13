@@ -375,6 +375,19 @@ describe("Limitation anti-abus (rate)", () => {
   });
 });
 
+describe("Réglage des accusés de lecture (noReceipts)", () => {
+  it("le titulaire change le réglage, avec le compteur anti-abus", () =>
+    assertSucceeds(change(alice(), "alice", "users/alice", { noReceipts: true })));
+  it("sans compteur, ou avec un autre champ, c'est refusé", async () => {
+    await assertFails(updateDoc(doc(alice(), "users/alice"), { noReceipts: true }));
+    await assertFails(change(alice(), "alice", "users/alice", { noReceipts: true, displayName: "Autre" }));
+  });
+  it("une valeur non booléenne est refusée, le profil d'un autre aussi", async () => {
+    await assertFails(change(alice(), "alice", "users/alice", { noReceipts: "oui" }));
+    await assertFails(change(bob(), "bob", "users/alice", { noReceipts: true }));
+  });
+});
+
 describe("Invitations", () => {
   // erin n'est encore membre de rien ; l'admin l'a invitée dans c1.
   const erin = () => as("erin");

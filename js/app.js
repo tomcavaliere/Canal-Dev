@@ -258,6 +258,7 @@ async function upsertUser(user) {
   try {
     const snap = await getDoc(ref);
     // Les règles refusent une mise à jour moins d'une minute après la précédente (rechargement de page).
+    state.noReceipts = snap.exists() && snap.data().noReceipts === true;
     const last = snap.exists() ? snap.data().lastLogin?.toMillis?.() ?? 0 : 0;
     if (snap.exists() && Date.now() - last < 65_000) return;
     // deleteField retire la photo des profils créés avant la mise en conformité.

@@ -81,6 +81,7 @@
           <span id="users-pending" class="tag-pending" hidden></span>
         </div>
         <ul id="user-list" class="list"></ul>
+        <p class="purge-row"><button id="btn-purge-inactive" class="btn small danger" type="button" hidden></button></p>
       </div>
 
       <p class="sidebar-foot muted small"><a href="confidentialite.html">Politique de confidentialité</a></p>
@@ -270,6 +271,13 @@
         <p class="muted small">Télécharge une copie de toutes les données te concernant
           (compte, profil, conversations accessibles, messages et photos) au format JSON.</p>
         <div><button id="btn-export" class="btn">Télécharger mes données</button></div>
+      </section>
+
+      <section class="stack tight">
+        <h3>Accusés de lecture</h3>
+        <label class="check"><input id="no-receipts" type="checkbox"> Ne pas envoyer d'accusés de lecture</label>
+        <p class="muted small">Les autres membres ne verront plus « Vu par » pour toi, et tes accusés existants sont
+          supprimés. Tes messages non lus ne seront alors plus synchronisés entre tes appareils.</p>
       </section>
 
       <section id="account-delete" class="stack tight">

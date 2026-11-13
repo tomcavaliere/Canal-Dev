@@ -165,7 +165,7 @@ Le détail est dans [RGPD.md](RGPD.md) (registre, base légale, procédures) et 
 Au quotidien :
 - Un utilisateur exporte ou supprime ses données depuis **Mon compte**.
 - La section « Utilisateurs » signale les personnes **en attente** d'accès (son et notification à leur première connexion).
-- Tous les trimestres, annuler les invitations marquées **« > 3 mois »** et supprimer les comptes marqués **« inactif > 12 mois »** (✕ dans « Utilisateurs »), puis le compte correspondant dans **Authentication → Users**. Y supprimer aussi les comptes absents de « Utilisateurs » (voir [RGPD.md](RGPD.md#6-conservation--procédure)).
+- Tous les trimestres, annuler les invitations marquées **« > 3 mois »** et supprimer les comptes marqués **« inactif > 12 mois »** (bouton **« Supprimer N comptes inactifs »** sous la liste) (✕ dans « Utilisateurs »), puis le compte correspondant dans **Authentication → Users**. Y supprimer aussi les comptes absents de « Utilisateurs » (voir [RGPD.md](RGPD.md#6-conservation--procédure)).
 - Une demande par email (opposition, effacement…) : répondre sous 1 mois, voir [RGPD.md](RGPD.md#4-exercice-des-droits-art-12-à-22).
 
 ## Sécurité

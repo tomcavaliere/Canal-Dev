@@ -44,21 +44,29 @@ service cloud.firestore {
       function validProfile() {
         let d = request.resource.data;
         // Minimisation RGPD : plus de photo de profil (les anciens profils la perdent à la connexion suivante).
-        return d.keys().hasOnly(['email', 'displayName', 'createdAt', 'lastLogin'])
+        // `noReceipts` : réglage « Ne pas envoyer d'accusés de lecture ».
+        return d.keys().hasOnly(['email', 'displayName', 'createdAt', 'lastLogin', 'noReceipts'])
           && d.email == request.auth.token.email
           && d.displayName is string && d.displayName.size() <= 200
-          && d.lastLogin == request.time;
+          && (!('noReceipts' in d) || d.noReceipts is bool);
       }
 
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow create: if signedIn() && request.auth.uid == uid
         && validProfile()
+        && request.resource.data.lastLogin == request.time
         && request.resource.data.createdAt == request.time;
-      // Au plus une mise à jour par minute (elle n'a lieu qu'à la connexion).
+      // Connexion : au plus une mise à jour par minute.
       allow update: if signedIn() && request.auth.uid == uid
         && validProfile()
+        && request.resource.data.lastLogin == request.time
         && request.resource.data.createdAt == resource.data.createdAt
         && request.time > resource.data.lastLogin + duration.value(60, 's');
+      // Réglage des accusés de lecture : ce seul champ, compté par la limitation anti-abus.
+      allow update: if signedIn() && request.auth.uid == uid
+        && validProfile()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['noReceipts'])
+        && rateBumped();
       // Droit à l'effacement : l'utilisateur peut supprimer son propre profil.
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }

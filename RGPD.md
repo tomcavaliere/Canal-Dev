@@ -47,9 +47,10 @@ Conclusion : l'intérêt légitime n'est pas supplanté par les droits des perso
 | Droit | Moyen | Implémentation |
 |---|---|---|
 | Accès, portabilité | *Mon compte → Télécharger mes données* (JSON : compte de connexion dont l'URL de la photo Google, profil, nom affiché, invitation en attente, messages, photos et miniatures en data URL, accusés) | [js/account.js](js/account.js) `collectMyData` |
-| Effacement | *Mon compte → Supprimer mon compte* | `purgeUserData` (messages, photos et miniatures, accusés, accès, invitation, nom affiché, profil) + `deleteUser` (après réauthentification) |
+| Effacement | *Mon compte → Supprimer mon compte* | `purgeUserData` (messages, photos et miniatures, accusés, accès, invitation, nom affiché, profil) + `deleteUser` (après réauthentification) + effacement des clés `canal-dev.*` du navigateur |
 | Effacement (sur demande email) | Admin : bouton ✕ dans « Utilisateurs », puis Firebase Console → Authentication → supprimer l'utilisateur | [js/admin.js](js/admin.js) |
 | Rectification | Nom affiché : l'admin le corrige (✎ dans « Utilisateurs ») ; la personne le voit dans *Mon compte*. Messages : *Modifier* (texte seul, mention « modifié », sans historique) ou supprimer et republier | [js/admin.js](js/admin.js) |
+| Opposition aux accusés de lecture | *Mon compte → Ne pas envoyer d'accusés de lecture* | Réglage `noReceipts` du profil : plus aucun accusé écrit, les existants supprimés ([js/account.js](js/account.js)) |
 | Opposition, limitation | Email au responsable | Retirer les accès / supprimer le compte selon la demande |
 
 Délai de réponse : 1 mois (prolongeable de 2 mois si nécessaire, en informant la personne). Vérifier l'identité du demandeur (la demande doit venir de l'adresse Gmail concernée).
@@ -73,7 +74,7 @@ Le compte administrateur ne peut pas se supprimer depuis l'application (son UID 
 ## 6. Conservation : procédure
 
 Pas de backend (plan gratuit Firebase) : la purge est manuelle.
-Au moins une fois par trimestre, l'admin ouvre l'application : les comptes sans connexion depuis plus de 12 mois sont marqués **« inactif > 12 mois »**. Les supprimer avec ✕, puis supprimer le compte correspondant dans Firebase Console → Authentication.
+Au moins une fois par trimestre, l'admin ouvre l'application : les comptes sans connexion depuis plus de 12 mois sont marqués **« inactif > 12 mois »**. Les supprimer tous avec le bouton **« Supprimer N comptes inactifs »** (ou un par un avec ✕), puis supprimer les comptes listés dans Firebase Console → Authentication.
 Les invitations jamais utilisées depuis plus de 3 mois sont marquées **« > 3 mois »** : les annuler avec ✕.
 Dans Authentication → Users, supprimer aussi les comptes absents de la liste « Utilisateurs » de l'application : connexions refusées antérieures à leur suppression automatique, ou comptes dont les données ont déjà été effacées.
 

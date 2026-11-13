@@ -324,7 +324,44 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     $("users-pending").textContent = `${waiting} en attente`;
     $("users-pending").title = "Utilisateurs connectés sans accès à une conversation";
     $("users-pending").hidden = !waiting;
+    // Comptes sans connexion depuis plus de 12 mois : suppression groupée.
+    const inactive = inactiveUsers();
+    $("btn-purge-inactive").textContent = `Supprimer ${inactive.length} compte${inactive.length > 1 ? "s" : ""} inactif${inactive.length > 1 ? "s" : ""} (> 12 mois)`;
+    $("btn-purge-inactive").hidden = !inactive.length;
   }
+
+  function inactiveUsers() {
+    return sortedUsers().filter(([, u]) => {
+      const last = u.lastLogin?.toMillis?.();
+      return last && Date.now() - last > INACTIVE_MS;
+    });
+  }
+
+  on($("btn-purge-inactive"), "click", async () => {
+    const list = inactiveUsers();
+    if (!list.length) return;
+    const emails = list.map(([, u]) => u.email).join("\n");
+    if (!await confirmDialog(`Supprimer ces ${list.length} compte(s) inactif(s), avec tous leurs messages, photos et accès ? Action irréversible.\n\n${emails}`,
+      { ok: "Supprimer", danger: true })) return;
+    const btn = $("btn-purge-inactive");
+    btn.disabled = true;
+    const done = [];
+    try {
+      for (const [uid, u] of list) {
+        await purgeUserData(uid, u.email);
+        done.push(uid);
+      }
+    } catch (err) {
+      console.error(err);
+      toast("Suppression interrompue : " + err.message, { error: true });
+    } finally {
+      btn.disabled = false;
+    }
+    if (done.length) {
+      await confirmDialog(`${done.length} compte(s) supprimé(s).\n\nÀ faire aussi : Firebase Console → Authentication → Users → supprimer les comptes :\n${done.join("\n")}`,
+        { ok: "Compris", cancel: false });
+    }
+  });
 
   function cancelInviteButton(i) {
     const btn = document.createElement("button");

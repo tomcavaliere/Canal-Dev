@@ -51,7 +51,8 @@ export function renderReceipt() {
 // Enregistre qu'on a vu le dernier message des autres, si ce n'est pas déjà fait.
 export function syncMyRead() {
   const id = state.selectedId;
-  if (!id || !state.reads || !isViewing(id)) return;
+  // Réglage « Ne pas envoyer d'accusés de lecture ».
+  if (!id || !state.reads || !isViewing(id) || state.noReceipts) return;
   let latest = 0;
   for (const m of state.msgById.values()) {
     if (m.authorUid !== state.user.uid) latest = Math.max(latest, m.createdAt?.toMillis?.() ?? 0);

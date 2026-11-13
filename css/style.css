@@ -396,6 +396,9 @@ dialog::backdrop { background: rgb(0 0 0 / .4); }
 .members label { flex-direction: row; align-items: center; gap: .6rem; padding: .5rem .75rem; cursor: pointer; }
 .members label:hover { background: var(--surface-2); }
 .members input[type="checkbox"] { width: auto; }
+label.check { flex-direction: row; align-items: center; gap: .5rem; }
+label.check input { width: auto; }
+.purge-row { padding: .5rem 1rem 0; margin: 0; }
 #form-invite { border-top: 1px solid var(--border); padding-top: .75rem; }
 .invite-fields { display: flex; flex-wrap: wrap; gap: .5rem; }
 .invite-fields input { flex: 1 1 10rem; }

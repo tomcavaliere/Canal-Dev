@@ -33,6 +33,7 @@ export const state = {
   replyTo: null, // identifiant du message auquel on répond
   editing: null, // { id, draft } : son message en cours de modification
   admin: null, // API renvoyée par admin.js
+  noReceipts: false, // réglage du profil : ne pas envoyer d'accusés de lecture
 };
 
 export function isViewing(convId) {

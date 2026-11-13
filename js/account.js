@@ -10,6 +10,8 @@ import {
 import { auth, db, ADMIN_UID } from "./firebase.js";
 import { toast } from "./dialogs.js";
 import { $ } from "./ui.js";
+import { state } from "./state.js";
+import { bumpRate, rateWait } from "./rate.js";
 
 /* ---------- Suppression des données d'un utilisateur ---------- */
 
@@ -151,8 +153,54 @@ function openAccount() {
   $("account-delete").hidden = user.uid === ADMIN_UID;
   $("account-admin-note").hidden = user.uid !== ADMIN_UID;
   $("delete-confirm").value = "";
+  $("no-receipts").checked = state.noReceipts;
   setStatus("");
   $("dlg-account").showModal();
+}
+
+// Réglage « Ne pas envoyer d'accusés de lecture » (profil), avec effacement des accusés existants.
+async function toggleReceipts() {
+  const user = auth.currentUser;
+  const box = $("no-receipts");
+  const on = box.checked;
+  if (!user) return;
+  if (rateWait()) {
+    box.checked = !on;
+    setStatus(`Trop de modifications en une minute : réessaie dans ${rateWait()} s.`, true);
+    return;
+  }
+  box.disabled = true;
+  try {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "users", user.uid), { noReceipts: on });
+    bumpRate(batch);
+    await batch.commit();
+    state.noReceipts = on;
+    if (on) {
+      const reads = await getDocs(query(collectionGroup(db, "reads"), where("uid", "==", user.uid)));
+      for (let i = 0; i < reads.docs.length; i += 400) {
+        const del = writeBatch(db);
+        reads.docs.slice(i, i + 400).forEach((d) => del.delete(d.ref));
+        await del.commit();
+      }
+      setStatus(`Accusés de lecture désactivés (${reads.size} supprimé(s)).`);
+    } else {
+      setStatus("Accusés de lecture réactivés.");
+    }
+  } catch (err) {
+    console.error(err);
+    box.checked = !on;
+    setStatus("Modification impossible : " + err.message, true);
+  } finally {
+    box.disabled = false;
+  }
+}
+
+// Préférences et dates de lecture gardées dans ce navigateur (clés « canal-dev.* »).
+function clearLocalData() {
+  try {
+    for (const key of Object.keys(localStorage)) if (key.startsWith("canal-dev.")) localStorage.removeItem(key);
+  } catch { /* stockage indisponible */ }
 }
 
 async function exportData() {
@@ -193,6 +241,7 @@ async function deleteAccount() {
     setStatus("Suppression de tes messages, photos et accès…");
     await purgeUserData(user.uid, user.email);
     await deleteUser(user);
+    clearLocalData();
     $("dlg-account").close();
     toast("Ton compte et toutes tes données ont été supprimés.", { timeout: 15000 });
   } catch (err) {
@@ -213,4 +262,5 @@ export function initAccount() {
   document.querySelectorAll(".btn-account").forEach((b) => b.addEventListener("click", openAccount));
   $("btn-export").addEventListener("click", exportData);
   $("btn-delete-account").addEventListener("click", deleteAccount);
+  $("no-receipts").addEventListener("change", toggleReceipts);
 }
