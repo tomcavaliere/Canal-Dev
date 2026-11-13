@@ -16,7 +16,7 @@ import { clearAttachment } from "./composer.js";
 import { clearReply, listenMessages, PAGE, renderMessages, resetImages } from "./messages.js";
 import { renderReceipt, syncMyRead } from "./receipts.js";
 import { closeSearch } from "./search.js";
-import { projectOf, renderConversationList, sortedConversations } from "./sidebar.js";
+import { projectColor, projectOf, renderConversationList, sortedConversations } from "./sidebar.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
@@ -456,6 +456,7 @@ function renderChatHeader() {
   const pid = projectOf(c);
   $("chat-project").textContent = pid ? state.projects.get(pid).title || "" : "";
   $("chat-project").hidden = !pid;
+  $("chat-project").style.setProperty("--proj", projectColor(pid ?? ""));
   $("chat-title").textContent = c.title || "(sans titre)";
   $("chat-desc").textContent = c.description || "";
   $("chat-desc").hidden = !c.description;

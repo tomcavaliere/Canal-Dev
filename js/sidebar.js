@@ -20,6 +20,16 @@ export function projectOf(c) {
   return c.projectId && state.projects.get(c.projectId) ? c.projectId : null;
 }
 
+// Couleur d'un projet : choisie dans une palette à partir de son identifiant, donc stable
+// d'une session à l'autre et identique pour tous les utilisateurs. "" (sans projet) : neutre.
+const PROJECT_COLORS = 8;
+export function projectColor(projectId) {
+  if (!projectId) return "var(--muted)";
+  let h = 0;
+  for (const ch of projectId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `var(--proj-${h % PROJECT_COLORS})`;
+}
+
 // Projets repliés dans la barre latérale (préférence locale, sans importance si perdue).
 const COLLAPSED_KEY = "canal-dev.collapsedProjects";
 const collapsed = new Set((() => {
@@ -112,7 +122,8 @@ function smallButton(text, label, onClick, focusKey) {
 // Un groupe repliable : en-tête (titre du projet) + liste de ses conversations.
 function projectGroup(projectId, title, convs) {
   const li = document.createElement("li");
-  li.className = "group";
+  li.className = "group" + (projectId ? "" : " group-loose");
+  li.style.setProperty("--proj", projectColor(projectId));
   const isOpen = !collapsed.has(projectId);
 
   const head = document.createElement("div");
@@ -125,13 +136,16 @@ function projectGroup(projectId, title, convs) {
   caret.className = "caret";
   caret.setAttribute("aria-hidden", "true");
   caret.textContent = isOpen ? "▾" : "▸";
+  const dot = document.createElement("span");
+  dot.className = "group-dot";
+  dot.setAttribute("aria-hidden", "true");
   const name = document.createElement("span");
   name.className = "group-title";
   name.textContent = title;
   const count = document.createElement("span");
   count.className = "group-count";
   count.textContent = String(convs.length);
-  toggle.append(caret, name, count);
+  toggle.append(caret, dot, name, count);
   // Projet replié : ses non-lus restent visibles sur l'en-tête.
   const groupUnread = isOpen ? 0 : convs.reduce((sum, [id]) => sum + (state.unread.get(id) || 0), 0);
   if (groupUnread) toggle.append(unreadBadge(groupUnread, unreadLabel(groupUnread)));
