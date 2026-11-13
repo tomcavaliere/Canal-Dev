@@ -269,6 +269,7 @@ function openAccount() {
   $("no-receipts").checked = state.noReceipts;
   $("no-presence").checked = state.noPresence;
   setStatus("");
+  /** @type {HTMLInputElement | null} */
   const theme = document.querySelector(`#dlg-account input[name="theme"][value="${currentTheme()}"]`);
   if (theme) theme.checked = true;
   $("dlg-account").showModal();
