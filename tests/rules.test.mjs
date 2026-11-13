@@ -11,7 +11,7 @@ import {
   assertFails, assertSucceeds, initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
-  arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, getDoc, getDocs,
+  arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, increment,
   query, serverTimestamp, setDoc, setLogLevel, Timestamp, updateDoc, where, writeBatch,
 } from "firebase/firestore";
 import { ADMIN_UID } from "../js/firebase-config.js";
@@ -72,6 +72,18 @@ const message = (uid, extra = {}) => ({
   text: "Coucou", authorUid: uid, authorName: "Nom", createdAt: serverTimestamp(), ...extra,
 });
 const newMessageRef = (db, conv = "c1") => doc(collection(db, `conversations/${conv}/messages`));
+
+// Toute écriture de message doit mettre à jour, dans le même batch, le compteur rate/{uid}.
+const freshRate = () => ({ windowStart: serverTimestamp(), count: 1, at: serverTimestamp() });
+function rated(db, uid, write) {
+  const batch = writeBatch(db);
+  write(batch);
+  batch.set(doc(db, `rate/${uid}`), freshRate());
+  return batch.commit();
+}
+const post = (db, uid, data) => rated(db, uid, (b) => b.set(newMessageRef(db), data));
+const change = (db, uid, path, data) => rated(db, uid, (b) => b.update(doc(db, path), data));
+const changeRef = (ref, uid, data) => rated(ref.firestore, uid, (b) => b.update(ref, data));
 
 /* ---------- Tests ---------- */
 
@@ -140,18 +152,19 @@ describe("Conversations", () => {
   it("l'admin ajoute un membre", () =>
     assertSucceeds(updateDoc(doc(admin(), "conversations/c1"), { members: arrayUnion("bob"), updatedAt: serverTimestamp() })));
   it("un membre met à jour la date du dernier message, à l'heure du serveur", () =>
-    assertSucceeds(updateDoc(doc(alice(), "conversations/c1"), { lastMessageAt: serverTimestamp() })));
+    assertSucceeds(change(alice(), "alice", "conversations/c1", { lastMessageAt: serverTimestamp() })));
   it("une date du dernier message fixée par le client est refusée", () =>
-    assertFails(updateDoc(doc(alice(), "conversations/c1"), { lastMessageAt: Timestamp.now() })));
+    assertFails(change(alice(), "alice", "conversations/c1", { lastMessageAt: Timestamp.now() })));
   it("un membre ne modifie rien d'autre en même temps", () =>
-    assertFails(updateDoc(doc(alice(), "conversations/c1"), { lastMessageAt: serverTimestamp(), title: "Pirate" })));
+    assertFails(change(alice(), "alice", "conversations/c1", { lastMessageAt: serverTimestamp(), title: "Pirate" })));
   it("un non-membre ne touche pas à la date du dernier message", () =>
-    assertFails(updateDoc(doc(bob(), "conversations/c1"), { lastMessageAt: serverTimestamp() })));
+    assertFails(change(bob(), "bob", "conversations/c1", { lastMessageAt: serverTimestamp() })));
   it("l'admin met à jour la date du dernier message en envoyant un message", async () => {
     const db = admin();
     const batch = writeBatch(db);
     batch.set(newMessageRef(db), message(ADMIN));
     batch.update(doc(db, "conversations/c1"), { lastMessageAt: serverTimestamp() });
+    batch.set(doc(db, `rate/${ADMIN}`), freshRate());
     await assertSucceeds(batch.commit());
   });
   it("seul l'admin supprime une conversation", async () => {
@@ -161,52 +174,48 @@ describe("Conversations", () => {
 });
 
 describe("Messages", () => {
-  it("un membre écrit un message", () => assertSucceeds(setDoc(newMessageRef(alice()), message("alice"))));
-  it("un non-membre n'écrit pas", () => assertFails(setDoc(newMessageRef(bob()), message("bob"))));
+  it("un membre écrit un message", () => assertSucceeds(post(alice(), "alice", message("alice"))));
+  it("un non-membre n'écrit pas", () => assertFails(post(bob(), "bob", message("bob"))));
   it("écrire au nom d'un autre UID est refusé", () =>
-    assertFails(setDoc(newMessageRef(alice()), message("carol"))));
+    assertFails(post(alice(), "alice", message("carol"))));
   it("une date fixée par le client est refusée", () =>
-    assertFails(setDoc(newMessageRef(alice()), message("alice", { createdAt: Timestamp.now() }))));
+    assertFails(post(alice(), "alice", message("alice", { createdAt: Timestamp.now() }))));
   it("un message vide sans photo est refusé", () =>
-    assertFails(setDoc(newMessageRef(alice()), message("alice", { text: "" }))));
+    assertFails(post(alice(), "alice", message("alice", { text: "" }))));
   it("un texte de plus de 4000 caractères est refusé", () =>
-    assertFails(setDoc(newMessageRef(alice()), message("alice", { text: "x".repeat(4001) }))));
+    assertFails(post(alice(), "alice", message("alice", { text: "x".repeat(4001) }))));
   it("un champ inconnu est refusé", () =>
-    assertFails(setDoc(newMessageRef(alice()), message("alice", { pinned: true }))));
+    assertFails(post(alice(), "alice", message("alice", { pinned: true }))));
   const edit = (text, extra = {}) => ({ text, editedAt: serverTimestamp(), ...extra });
   it("l'auteur modifie le texte de son message", () =>
-    assertSucceeds(updateDoc(doc(alice(), "conversations/c1/messages/m1"), edit("Bonjour à tous"))));
+    assertSucceeds(change(alice(), "alice", "conversations/c1/messages/m1", edit("Bonjour à tous"))));
   it("une modification sans date serveur est refusée", async () => {
-    await assertFails(updateDoc(doc(alice(), "conversations/c1/messages/m1"), { text: "modifié" }));
-    await assertFails(updateDoc(doc(alice(), "conversations/c1/messages/m1"), edit("x", { editedAt: Timestamp.now() })));
+    await assertFails(change(alice(), "alice", "conversations/c1/messages/m1", { text: "modifié" }));
+    await assertFails(change(alice(), "alice", "conversations/c1/messages/m1", edit("x", { editedAt: Timestamp.now() })));
   });
   it("un membre ne modifie pas le message d'un autre, l'admin non plus", async () => {
-    await assertFails(updateDoc(doc(alice(), "conversations/c1/messages/m2"), edit("piraté")));
-    await assertFails(updateDoc(doc(admin(), "conversations/c1/messages/m2"), edit("piraté")));
+    await assertFails(change(alice(), "alice", "conversations/c1/messages/m2", edit("piraté")));
+    await assertFails(change(admin(), ADMIN, "conversations/c1/messages/m2", edit("piraté")));
   });
   it("seul le texte peut changer (pas l'auteur, le nom, la date ni la réponse)", async () => {
     const ref = doc(alice(), "conversations/c1/messages/m1");
-    await assertFails(updateDoc(ref, edit("x", { authorUid: "carol" })));
-    await assertFails(updateDoc(ref, edit("x", { authorName: "Admin" })));
-    await assertFails(updateDoc(ref, edit("x", { createdAt: serverTimestamp() })));
-    await assertFails(updateDoc(ref, edit("x", { replyTo: "m2" })));
+    await assertFails(changeRef(ref, "alice", edit("x", { authorUid: "carol" })));
+    await assertFails(changeRef(ref, "alice", edit("x", { authorName: "Admin" })));
+    await assertFails(changeRef(ref, "alice", edit("x", { createdAt: serverTimestamp() })));
+    await assertFails(changeRef(ref, "alice", edit("x", { replyTo: "m2" })));
   });
   it("un texte vidé est refusé, sauf pour un message avec photo", async () => {
-    const db = alice();
-    await assertFails(updateDoc(doc(db, "conversations/c1/messages/m1"), edit("")));
-    const ref = newMessageRef(db);
-    const batch = writeBatch(db);
-    batch.set(ref, message("alice", { image: { w: 10, h: 10 } }));
-    batch.set(doc(db, `conversations/c1/images/${ref.id}`), { data: JPEG, authorUid: "alice", createdAt: serverTimestamp() });
-    await batch.commit();
-    await assertSucceeds(updateDoc(ref, edit("")));
+    await assertFails(change(alice(), "alice", "conversations/c1/messages/m1", edit("")));
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), "conversations/c1/messages/photo"), message("alice", { text: "", image: { w: 10, h: 10 } })));
+    await assertSucceeds(change(alice(), "alice", "conversations/c1/messages/photo", edit("")));
   });
   it("un ancien membre ne modifie plus ses messages", () =>
-    assertFails(updateDoc(doc(dave(), "conversations/c1/messages/m3"), edit("tardif"))));
+    assertFails(change(dave(), "dave", "conversations/c1/messages/m3", edit("tardif"))));
   it("une réponse à un message existant est acceptée", () =>
-    assertSucceeds(setDoc(newMessageRef(alice()), message("alice", { replyTo: "m2" }))));
+    assertSucceeds(post(alice(), "alice", message("alice", { replyTo: "m2" }))));
   it("une réponse à un message inexistant est refusée", () =>
-    assertFails(setDoc(newMessageRef(alice()), message("alice", { replyTo: "inexistant" }))));
+    assertFails(post(alice(), "alice", message("alice", { replyTo: "inexistant" }))));
   it("l'auteur supprime son message", () =>
     assertSucceeds(deleteDoc(doc(alice(), "conversations/c1/messages/m1"))));
   it("un membre ne supprime pas le message d'un autre", () =>
@@ -225,6 +234,7 @@ describe("Photos", () => {
     const batch = writeBatch(db);
     batch.set(ref, message(uid, { image: { w, h } }));
     batch.set(doc(db, `conversations/c1/images/${ref.id}`), { data, authorUid: uid, createdAt: serverTimestamp() });
+    batch.set(doc(db, `rate/${uid}`), freshRate());
     return batch.commit();
   }
 
@@ -240,7 +250,7 @@ describe("Photos", () => {
       data: JPEG, authorUid: "alice", createdAt: serverTimestamp(),
     })));
   it("un message qui annonce une photo absente est refusé", () =>
-    assertFails(setDoc(newMessageRef(alice()), message("alice", { image: { w: 10, h: 10 } }))));
+    assertFails(post(alice(), "alice", message("alice", { image: { w: 10, h: 10 } }))));
   it("une photo rattachée au message d'un autre est refusée", () =>
     assertFails(setDoc(doc(alice(), "conversations/c1/images/m2"), {
       data: JPEG, authorUid: "alice", createdAt: serverTimestamp(),
@@ -254,6 +264,7 @@ describe("Photos", () => {
     batch.set(ref, message(uid, { image: { w: 800, h: 600, ...(declare ? { thumb: true } : {}) } }));
     batch.set(doc(db, `conversations/c1/images/${ref.id}`), { data: JPEG, authorUid: uid, createdAt: serverTimestamp() });
     if (write) batch.set(doc(db, `conversations/c1/thumbs/${ref.id}`), { data: thumb, authorUid: uid, createdAt: serverTimestamp() });
+    batch.set(doc(db, `rate/${uid}`), freshRate());
     return batch.commit();
   }
   it("une photo avec sa miniature dans le même batch est acceptée", () => assertSucceeds(sendWithThumb(alice(), "alice")));
@@ -317,6 +328,50 @@ describe("Annuaire des noms (names)", () => {
   it("un utilisateur supprime sa propre entrée, pas celle d'un autre", async () => {
     await assertFails(deleteDoc(doc(bob(), "names/alice")));
     await assertSucceeds(deleteDoc(doc(alice(), "names/alice")));
+  });
+});
+
+describe("Limitation anti-abus (rate)", () => {
+  const seedRate = (data) => env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "rate/alice"), data));
+  const bump = () => ({ count: increment(1), at: serverTimestamp() });
+
+  it("un message sans mise à jour du compteur est refusé", () =>
+    assertFails(setDoc(newMessageRef(alice()), message("alice"))));
+  it("une modification ou une date d'activité sans compteur est refusée", async () => {
+    await assertFails(updateDoc(doc(alice(), "conversations/c1/messages/m1"), { text: "x", editedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(alice(), "conversations/c1"), { lastMessageAt: serverTimestamp() }));
+  });
+  it("le compteur avance d'un, jusqu'à 30 par minute", async () => {
+    await seedRate({ windowStart: Timestamp.now(), count: 29, at: Timestamp.now() });
+    const send = () => rated2(alice());
+    function rated2(db) {
+      const batch = writeBatch(db);
+      batch.set(newMessageRef(db), message("alice"));
+      batch.update(doc(db, "rate/alice"), bump());
+      return batch.commit();
+    }
+    await assertSucceeds(send());
+    await assertFails(send());
+  });
+  it("la fenêtre ne repart de zéro qu'après une minute", async () => {
+    await seedRate({ windowStart: Timestamp.now(), count: 30, at: Timestamp.now() });
+    await assertFails(post(alice(), "alice", message("alice")));
+    const old = Timestamp.fromMillis(Date.now() - 61_000);
+    await seedRate({ windowStart: old, count: 30, at: old });
+    await assertSucceeds(post(alice(), "alice", message("alice")));
+  });
+  it("le compteur ne peut être ni falsifié, ni écrit pour un autre, ni supprimé par son titulaire", async () => {
+    await seedRate({ windowStart: Timestamp.now(), count: 5, at: Timestamp.now() });
+    await assertFails(updateDoc(doc(alice(), "rate/alice"), { count: 0, at: serverTimestamp() }));
+    await assertFails(setDoc(doc(bob(), "rate/alice"), freshRate()));
+    await assertFails(deleteDoc(doc(alice(), "rate/alice")));
+    await assertSucceeds(deleteDoc(doc(admin(), "rate/alice")));
+  });
+  it("un profil n'est mis à jour qu'une fois par minute", async () => {
+    const db = bob();
+    const profile = { email: "bob@gmail.com", displayName: "Bob", createdAt: serverTimestamp(), lastLogin: serverTimestamp() };
+    await assertSucceeds(setDoc(doc(db, "users/bob"), profile));
+    await assertFails(updateDoc(doc(db, "users/bob"), { lastLogin: serverTimestamp() }));
   });
 });
 

@@ -42,6 +42,9 @@ export async function purgeUserData(uid, email) {
   }
 
   if (email) await deleteDoc(doc(db, "invites", email.toLowerCase()));
+  // Compteur anti-abus : seul l'admin peut le supprimer (sinon, le supprimer le remettrait à
+  // zéro) ; après une suppression par la personne elle-même, l'admin le retire à sa prochaine visite.
+  if (auth.currentUser?.uid === ADMIN_UID) await deleteDoc(doc(db, "rate", uid));
   await deleteDoc(doc(db, "names", uid));
   await deleteDoc(doc(db, "users", uid));
 }

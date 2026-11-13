@@ -45,12 +45,27 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         });
       }
     }
+    if (!usersLoaded) cleanOrphanRates();
     usersLoaded = true;
     renderUsers();
     if ($("dlg-members").open) renderMembers();
     ensureNames();
   }, (err) => console.error("Lecture des utilisateurs impossible", err));
   cleanups.push(unsubUsers);
+
+  /* --- Compteurs anti-abus orphelins --- */
+  // Une personne qui supprime elle-même son compte ne peut pas supprimer son compteur rate/{uid}
+  // (les règles le réservent à l'admin) : il est retiré ici, à la première ouverture qui suit.
+  async function cleanOrphanRates() {
+    try {
+      const snap = await getDocs(collection(db, "rate"));
+      for (const d of snap.docs) {
+        if (d.id !== ADMIN_UID && !users.has(d.id)) await deleteDoc(d.ref);
+      }
+    } catch (err) {
+      console.error("Nettoyage des compteurs impossible", err);
+    }
+  }
 
   /* --- Invitations (invites/{email}) --- */
   let invites = new Map(); // email -> data

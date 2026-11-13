@@ -1,7 +1,7 @@
 // Conversation ouverte : écoute paginée des messages, rendu, réponses, modification, photos.
 
 import {
-  collection, doc, getCountFromServer, getDoc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where, writeBatch,
+  collection, doc, getCountFromServer, getDoc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch,
 } from "./sdk/firebase-firestore.js";
 import { confirmDialog, toast } from "./dialogs.js";
 import { ADMIN_UID, db } from "./firebase.js";
@@ -12,6 +12,7 @@ import { syncNames } from "./app.js";
 import { renderReceipt, syncMyRead } from "./receipts.js";
 import { applySearch } from "./search.js";
 import { state } from "./state.js";
+import { bumpRate, rateWait } from "./rate.js";
 
 /* ---------- Fenêtre de messages (pagination) ---------- */
 
@@ -415,10 +416,17 @@ function saveEdit(id, m) {
     return;
   }
   const convId = state.selectedId;
+  if (text !== (m.text || "") && rateWait()) {
+    toast(`Tu as envoyé beaucoup de messages en une minute : réessaie dans ${rateWait()} s.`, { error: true });
+    return;
+  }
   state.editing = null;
   if (text !== (m.text || "")) {
     // Comme pour l'envoi : affiché aussitôt, confirmé par le serveur ensuite.
-    updateDoc(doc(db, "conversations", convId, "messages", id), { text, editedAt: serverTimestamp() })
+    const batch = writeBatch(db);
+    batch.update(doc(db, "conversations", convId, "messages", id), { text, editedAt: serverTimestamp() });
+    bumpRate(batch);
+    batch.commit()
       .catch((err) => {
         console.error(err);
         toast("Modification impossible : " + err.message, { error: true });

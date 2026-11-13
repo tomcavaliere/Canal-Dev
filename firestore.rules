@@ -28,6 +28,12 @@ service cloud.firestore {
       return signedIn() && (isAdmin() || isMember(convId));
     }
 
+    // Limitation anti-abus : chaque écriture de message (envoi, modification, date d'activité)
+    // doit mettre à jour, dans le même batch, le compteur rate/{uid} de son auteur (30 par minute).
+    function rateBumped() {
+      return getAfter(/databases/$(database)/documents/rate/$(request.auth.uid)).data.at == request.time;
+    }
+
     // Invitation adressée à l'utilisateur connecté (identifiant = son email en minuscules).
     function myInvite() {
       return /databases/$(database)/documents/invites/$(request.auth.token.email.lower());
@@ -48,9 +54,11 @@ service cloud.firestore {
       allow create: if signedIn() && request.auth.uid == uid
         && validProfile()
         && request.resource.data.createdAt == request.time;
+      // Au plus une mise à jour par minute (elle n'a lieu qu'à la connexion).
       allow update: if signedIn() && request.auth.uid == uid
         && validProfile()
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.time > resource.data.lastLogin + duration.value(60, 's');
       // Droit à l'effacement : l'utilisateur peut supprimer son propre profil.
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
@@ -108,6 +116,31 @@ service cloud.firestore {
       allow delete: if isAdmin() || isInvitee();
     }
 
+    // ---------- Compteur anti-abus (un par utilisateur) ----------
+    // Fenêtre d'une minute : `count` messages depuis `windowStart` (30 au plus) ; `at` = dernière écriture.
+    // Une fois la minute écoulée, la fenêtre repart de zéro. Seul l'admin le supprime (sinon le
+    // supprimer remettrait le compteur à zéro) : il le fait pour les comptes supprimés.
+    match /rate/{uid} {
+      function validRate() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['windowStart', 'count', 'at'])
+          && d.at == request.time && d.count is int;
+      }
+      function freshWindow() {
+        return request.resource.data.windowStart == request.time && request.resource.data.count == 1;
+      }
+
+      allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow list: if isAdmin();
+      allow create: if signedIn() && request.auth.uid == uid && validRate() && freshWindow();
+      allow update: if signedIn() && request.auth.uid == uid && validRate() && (
+        (request.time > resource.data.windowStart + duration.value(60, 's') && freshWindow())
+        || (request.resource.data.windowStart == resource.data.windowStart
+          && request.resource.data.count == resource.data.count + 1
+          && request.resource.data.count <= 30));
+      allow delete: if isAdmin();
+    }
+
     // ---------- Projets (regroupent des conversations) ----------
     match /projects/{projectId} {
       function validProject() {
@@ -152,7 +185,8 @@ service cloud.firestore {
       allow update: if signedIn()
         && request.auth.uid in resource.data.members
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt'])
-        && request.resource.data.lastMessageAt == request.time;
+        && request.resource.data.lastMessageAt == request.time
+        && rateBumped();
       // Invitation : la personne invitée s'ajoute elle-même (et rien d'autre), à condition que la
       // conversation figure dans son invitation et qu'elle l'en retire dans le même batch.
       allow update: if signedIn()
@@ -206,8 +240,8 @@ service cloud.firestore {
         }
 
         allow read: if canAccess(convId);
-        allow create: if canAccess(convId) && validMessage();
-        allow update: if canAccess(convId) && resource.data.authorUid == request.auth.uid && validEdit();
+        allow create: if canAccess(convId) && validMessage() && rateBumped();
+        allow update: if canAccess(convId) && resource.data.authorUid == request.auth.uid && validEdit() && rateBumped();
         allow delete: if isAdmin()
           || (canAccess(convId) && resource.data.authorUid == request.auth.uid);
       }

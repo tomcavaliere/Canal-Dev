@@ -4,6 +4,7 @@ import { collection, doc, serverTimestamp, writeBatch } from "./sdk/firebase-fir
 import { toast } from "./dialogs.js";
 import { db } from "./firebase.js";
 import { prepareImage } from "./images.js";
+import { bumpRate, rateReady, rateWait } from "./rate.js";
 import { $ } from "./ui.js";
 import { clearReply, images, startReply } from "./messages.js";
 import { state } from "./state.js";
@@ -87,8 +88,14 @@ $("msg-input").addEventListener("paste", (e) => {
 // Le message s'affiche aussitôt (« Envoi… ») et la saisie est libérée sans attendre le serveur :
 // hors ligne, Firestore le garde et l'envoie au retour du réseau. En cas de refus, le texte,
 // la photo et la réponse sont rendus pour pouvoir réessayer.
-$("composer").addEventListener("submit", (e) => {
+$("composer").addEventListener("submit", async (e) => {
   e.preventDefault();
+  await rateReady();
+  const wait = rateWait();
+  if (wait) {
+    toast(`Tu as envoyé beaucoup de messages en une minute : réessaie dans ${wait} s.`, { error: true });
+    return;
+  }
   const input = $("msg-input");
   const text = input.value.trim();
   const image = attachment;
@@ -124,6 +131,7 @@ $("composer").addEventListener("submit", (e) => {
   }
   // Date de la dernière activité, pour classer la conversation en tête de liste chez tous ses membres.
   batch.update(doc(db, "conversations", convId), { lastMessageAt: serverTimestamp() });
+  bumpRate(batch); // limitation anti-abus, exigée par les règles
   input.value = "";
   if (image) clearAttachment();
   if (replyTo) clearReply();

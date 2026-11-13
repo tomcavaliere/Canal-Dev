@@ -172,4 +172,14 @@ Au quotidien :
 - La clé `apiKey` Firebase est publique par conception ; elle n'ouvre aucun droit à elle seule.
 - Toutes les autorisations sont vérifiées par `firestore.rules` : un utilisateur ne peut ni lire une conversation dont il n'est pas membre, ni modifier la liste des membres, ni écrire un message sous l'identifiant (UID) d'un autre.
 - Le nom affiché vient de l'annuaire `names/{uid}`, que seul l'admin peut écrire : le champ `authorName` d'un message est saisi par son auteur (il peut y mettre n'importe quoi depuis la console du navigateur) et n'est affiché qu'en dernier recours, marqué « non vérifié ». Le badge **Admin** dépend de l'UID, pas du nom.
+- Limitation anti-abus (règles) : 30 messages par minute et par personne (compteur `rate/{uid}` mis à jour dans le batch
+  de chaque envoi ou modification), profil réécrit au plus une fois par minute. Elle ralentit un abus sans l'empêcher
+  totalement : sans serveur, un compte malveillant peut encore épuiser le quota gratuit. Retirer alors ses accès.
+- Restreindre la clé API (à faire une fois) : Google Cloud Console → projet `canal-dev-c18d7` → **API et services →
+  Identifiants** → la clé « Browser key (auto created by Firebase) » :
+  - **Restrictions relatives aux applications → Sites web** : `https://canal-dev-c18d7.web.app/*`,
+    `https://canal-dev-c18d7.firebaseapp.com/*`, `http://localhost/*` (développement local) ;
+  - **Restrictions relatives aux API** : *Identity Toolkit API*, *Token Service API*, *Cloud Firestore API*.
+  Une autre page ne peut alors plus utiliser la clé depuis un navigateur (un script hors navigateur, si : les règles
+  restent la vraie protection).
 - Tester : `npm test` (voir plus haut), et pour un essai manuel la console du navigateur d'un compte non admin (`permission-denied` attendu).

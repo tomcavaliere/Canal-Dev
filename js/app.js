@@ -18,6 +18,7 @@ import { renderReceipt, syncMyRead } from "./receipts.js";
 import { closeSearch } from "./search.js";
 import { projectOf, renderConversationList, sortedConversations } from "./sidebar.js";
 import { isMobile, state } from "./state.js";
+import { listenRate, stopRate } from "./rate.js";
 import {
   listenMyReads, loadLastRead, markRead, markViewedRead, pruneLastRead, renderUnreadTotal, syncMessageWatchers,
 } from "./unread.js";
@@ -116,6 +117,7 @@ async function startSession(user, id) {
   state.isAdmin = user.uid === ADMIN_UID;
   loadLastRead(user.uid);
   startNames({ isAdmin: state.isAdmin, onChange: scheduleNamesRender });
+  listenRate(user.uid);
   show("screen-loading");
 
   await upsertUser(user);
@@ -226,6 +228,7 @@ function teardown() {
   state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
   stopNames();
+  stopRate();
   resetImages();
   clearAttachment();
   clearReply();
@@ -254,6 +257,9 @@ async function upsertUser(user) {
   };
   try {
     const snap = await getDoc(ref);
+    // Les règles refusent une mise à jour moins d'une minute après la précédente (rechargement de page).
+    const last = snap.exists() ? snap.data().lastLogin?.toMillis?.() ?? 0 : 0;
+    if (snap.exists() && Date.now() - last < 65_000) return;
     // deleteField retire la photo des profils créés avant la mise en conformité.
     if (snap.exists()) await updateDoc(ref, { ...data, photoURL: deleteField() });
     else await setDoc(ref, { ...data, createdAt: serverTimestamp() });
