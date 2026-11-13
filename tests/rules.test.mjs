@@ -54,6 +54,16 @@ async function seed(ctx) {
     // Ancien format (avec un nom) : doit rester lisible et supprimable.
     set("conversations/c1/reads/dave", { uid: "dave", name: "Dave", lastRead: T0 }),
     set("conversations/c2/messages/m4", { text: "Privé", authorUid: "bob", authorName: "Bob", createdAt: T0 }),
+    // Calendrier du projet p1 : alice et carol (membres de c1) ont leur fiche ; celle de dave
+    // (retiré de c1) est périmée.
+    set("projects/p1/members/alice", { uid: "alice", via: "c1", at: T0 }),
+    set("projects/p1/members/carol", { uid: "carol", via: "c1", at: T0 }),
+    set("projects/p1/members/dave", { uid: "dave", via: "c1", at: T0 }),
+    set("projects/p1/events/e1", {
+      title: "Point", description: "", place: "", start: T0, end: T0, createdBy: "alice",
+      attendees: ["carol"], createdAt: T0, updatedAt: T0,
+    }),
+    set("projects/p1/goals/g1", { title: "Version 1", done: false, createdBy: "alice", createdAt: T0, updatedAt: T0 }),
   ]);
 }
 
@@ -84,6 +94,8 @@ function rated(db, uid, write) {
 const post = (db, uid, data) => rated(db, uid, (b) => b.set(newMessageRef(db), data));
 const change = (db, uid, path, data) => rated(db, uid, (b) => b.update(doc(db, path), data));
 const changeRef = (ref, uid, data) => rated(ref.firestore, uid, (b) => b.update(ref, data));
+// Entre deux écritures réussies du même compte : `rated` ouvre chaque fois une nouvelle fenêtre.
+const clearRate = (uid) => env.withSecurityRulesDisabled((ctx) => deleteDoc(doc(ctx.firestore(), `rate/${uid}`)));
 
 /* ---------- Tests ---------- */
 
@@ -663,6 +675,166 @@ describe("Rôles des projets", () => {
     assertFails(updateDoc(doc(alice(), "projects/p1"), { "roleMembers.alice": ["r1", "r2"] })));
   it("sans rôle, on ne s'ajoute pas", () =>
     assertFails(updateDoc(doc(bob(), "projects/p1"), { "roleMembers.bob": ["r1"], roleUids: arrayUnion("bob") })));
+});
+
+describe("Calendrier : membres du projet", () => {
+  const ticket = (uid, via) => ({ uid, via, at: serverTimestamp() });
+  const carol = () => as("carol");
+
+  it("un membre d'une conversation du projet enregistre sa fiche", async () => {
+    const db = carol();
+    await assertSucceeds(deleteDoc(doc(db, "projects/p1/members/carol")));
+    await assertSucceeds(rated(db, "carol", (b) => b.set(doc(db, "projects/p1/members/carol"), ticket("carol", "c1"))));
+  });
+  it("pas avec une conversation dont on n'est pas membre, ni hors du projet", async () => {
+    const db = bob();
+    await assertFails(rated(db, "bob", (b) => b.set(doc(db, "projects/p1/members/bob"), ticket("bob", "c1"))));
+    await assertFails(rated(db, "bob", (b) => b.set(doc(db, "projects/p1/members/bob"), ticket("bob", "c2"))));
+  });
+  it("ni pour quelqu'un d'autre, ni sans passer par le compteur anti-abus", async () => {
+    const db = alice();
+    await assertFails(rated(db, "alice", (b) => b.set(doc(db, "projects/p1/members/carol"), ticket("carol", "c1"))));
+    await assertFails(setDoc(doc(db, "projects/p1/members/alice"), ticket("alice", "c1")));
+  });
+  it("l'admin écrit la fiche d'un membre", () =>
+    assertSucceeds(setDoc(doc(admin(), "projects/p1/members/carol"), ticket("carol", "c1"))));
+  it("un membre lit la liste des membres du projet, pas un autre", async () => {
+    await assertSucceeds(getDocs(collection(alice(), "projects/p1/members")));
+    await assertFails(getDocs(collection(bob(), "projects/p1/members")));
+  });
+  it("on lit toujours sa propre fiche (pour la vérifier)", () =>
+    assertSucceeds(getDoc(doc(dave(), "projects/p1/members/dave"))));
+});
+
+describe("Calendrier : réunions", () => {
+  const carol = () => as("carol");
+  const meeting = (uid, extra = {}) => ({
+    title: "Réunion", description: "", place: "", start: T0, end: Timestamp.fromMillis(T0.toMillis() + 3600_000),
+    createdBy: uid, attendees: ["carol"], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  });
+  const newEvent = (db) => doc(collection(db, "projects/p1/events"));
+
+  it("un membre du projet lit le calendrier", () =>
+    assertSucceeds(getDocs(collection(carol(), "projects/p1/events"))));
+  it("un non-membre ne le lit pas, ni un ancien membre à la fiche périmée", async () => {
+    await assertFails(getDocs(collection(bob(), "projects/p1/events")));
+    await assertFails(getDocs(collection(dave(), "projects/p1/events")));
+    await assertFails(getDoc(doc(dave(), "projects/p1/events/e1")));
+  });
+  it("un membre crée une réunion et y invite d'autres membres", () => {
+    const db = alice();
+    return assertSucceeds(rated(db, "alice", (b) => b.set(newEvent(db), meeting("alice"))));
+  });
+  it("pas au nom d'un autre, ni sans compteur, ni avec des réponses toutes faites", async () => {
+    const db = alice();
+    await assertFails(rated(db, "alice", (b) => b.set(newEvent(db), meeting("carol"))));
+    await assertFails(setDoc(newEvent(db), meeting("alice")));
+    await assertFails(rated(db, "alice", (b) => b.set(newEvent(db), meeting("alice", { responses: { carol: "yes" } }))));
+  });
+  it("la fin ne précède pas le début et la réunion dure 24 h au plus", async () => {
+    const db = alice();
+    await assertFails(rated(db, "alice", (b) => b.set(newEvent(db), meeting("alice", { end: Timestamp.fromMillis(T0.toMillis() - 1) }))));
+    await assertFails(rated(db, "alice", (b) => b.set(newEvent(db), meeting("alice", { end: Timestamp.fromMillis(T0.toMillis() + 25 * 3600_000) }))));
+  });
+  it("un non-membre ne crée pas de réunion", () => {
+    const db = bob();
+    return assertFails(rated(db, "bob", (b) => b.set(newEvent(db), meeting("bob"))));
+  });
+  it("l'invité répond présent ou absent, et seulement pour lui", async () => {
+    const db = carol();
+    await assertSucceeds(change(db, "carol", "projects/p1/events/e1", { "responses.carol": "yes" }));
+    await clearRate("carol");
+    await assertSucceeds(change(db, "carol", "projects/p1/events/e1", { "responses.carol": "no" }));
+    await clearRate("carol");
+    await assertFails(change(db, "carol", "projects/p1/events/e1", { "responses.carol": "peut-être" }));
+    await assertFails(change(db, "carol", "projects/p1/events/e1", { "responses.alice": "yes" }));
+  });
+  it("un non-invité ne répond pas, l'invité ne change pas le titre", async () => {
+    await assertFails(change(alice(), "alice", "projects/p1/events/e1", { "responses.alice": "yes" }));
+    await assertFails(change(carol(), "carol", "projects/p1/events/e1", { title: "Autre", updatedAt: serverTimestamp() }));
+  });
+  it("l'organisateur modifie sa réunion et peut effacer les réponses, pas en ajouter", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "projects/p1/events/e1"), { responses: { carol: "yes" } }));
+    const db = alice();
+    await assertFails(change(db, "alice", "projects/p1/events/e1", { "responses.carol": "no", updatedAt: serverTimestamp() }));
+    await assertSucceeds(change(db, "alice", "projects/p1/events/e1", {
+      title: "Point déplacé", responses: {}, updatedAt: serverTimestamp(),
+    }));
+  });
+  it("seuls l'organisateur et l'admin suppriment une réunion", async () => {
+    await assertFails(deleteDoc(doc(carol(), "projects/p1/events/e1")));
+    await assertSucceeds(deleteDoc(doc(alice(), "projects/p1/events/e1")));
+  });
+  it("l'admin modifie et supprime toute réunion", async () => {
+    const db = admin();
+    await assertSucceeds(change(db, ADMIN, "projects/p1/events/e1", { title: "Par l'admin", updatedAt: serverTimestamp() }));
+    await assertSucceeds(deleteDoc(doc(db, "projects/p1/events/e1")));
+  });
+  it("un invité retrouve ses réunions dans tous les projets, et s'en retire", async () => {
+    const db = carol();
+    await assertSucceeds(getDocs(query(collectionGroup(db, "events"), where("attendees", "array-contains", "carol"))));
+    await assertFails(getDocs(query(collectionGroup(db, "events"), where("attendees", "array-contains", "alice"))));
+    await assertSucceeds(updateDoc(doc(db, "projects/p1/events/e1"), { attendees: arrayRemove("carol") }));
+  });
+  it("l'organisateur retrouve les réunions qu'il a créées", () =>
+    assertSucceeds(getDocs(query(collectionGroup(alice(), "events"), where("createdBy", "==", "alice")))));
+});
+
+describe("Calendrier : objectifs", () => {
+  const carol = () => as("carol");
+  const goal = (uid, extra = {}) => ({
+    title: "Livrer", due: "2026-12-01", done: false, createdBy: uid,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  });
+  const newGoal = (db) => doc(collection(db, "projects/p1/goals"));
+  const now = () => ({ updatedAt: serverTimestamp() });
+
+  it("un membre ajoute un objectif, pas un non-membre", async () => {
+    const db = carol();
+    await assertSucceeds(rated(db, "carol", (b) => b.set(newGoal(db), goal("carol"))));
+    const other = bob();
+    await assertFails(rated(other, "bob", (b) => b.set(newGoal(other), goal("bob"))));
+  });
+  it("l'échéance est une date AAAA-MM-JJ, l'objectif est créé non atteint", async () => {
+    const db = carol();
+    await assertFails(rated(db, "carol", (b) => b.set(newGoal(db), goal("carol", { due: "demain" }))));
+    await assertFails(rated(db, "carol", (b) => b.set(newGoal(db), goal("carol", { done: true }))));
+  });
+  it("tout membre coche un objectif, en son nom", async () => {
+    const db = carol();
+    await assertFails(change(db, "carol", "projects/p1/goals/g1", { done: true, doneBy: "alice", doneAt: serverTimestamp(), ...now() }));
+    await assertSucceeds(change(db, "carol", "projects/p1/goals/g1", { done: true, doneBy: "carol", doneAt: serverTimestamp(), ...now() }));
+    await clearRate("carol");
+    await assertSucceeds(change(db, "carol", "projects/p1/goals/g1", { done: false, doneBy: deleteField(), doneAt: deleteField(), ...now() }));
+  });
+  it("seuls l'auteur et l'admin renomment ou suppriment", async () => {
+    await assertFails(change(carol(), "carol", "projects/p1/goals/g1", { title: "Autre", ...now() }));
+    await assertFails(deleteDoc(doc(carol(), "projects/p1/goals/g1")));
+    await assertSucceeds(change(alice(), "alice", "projects/p1/goals/g1", { title: "Version 1.0", due: "2027-01-15", ...now() }));
+    await assertSucceeds(change(admin(), ADMIN, "projects/p1/goals/g1", { title: "Version 1.1", ...now() }));
+    await assertSucceeds(deleteDoc(doc(alice(), "projects/p1/goals/g1")));
+  });
+  it("un ancien membre ne lit plus les objectifs", () =>
+    assertFails(getDocs(collection(dave(), "projects/p1/goals"))));
+  it("on retire son nom d'un objectif coché (effacement), sans le décocher", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "projects/p1/goals/g1"), { done: true, doneBy: "dave", doneAt: T0 }));
+    const db = dave();
+    await assertSucceeds(getDocs(query(collectionGroup(db, "goals"), where("doneBy", "==", "dave"))));
+    await assertFails(updateDoc(doc(db, "projects/p1/goals/g1"), { doneBy: deleteField(), done: false }));
+    await assertSucceeds(updateDoc(doc(db, "projects/p1/goals/g1"), { doneBy: deleteField() }));
+  });
+  it("on retrouve et supprime ses objectifs et ses fiches, même hors du projet", async () => {
+    const db = dave();
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "projects/p1/goals/g2"),
+      { title: "Ancien", done: false, createdBy: "dave", createdAt: T0, updatedAt: T0 }));
+    await assertSucceeds(getDocs(query(collectionGroup(db, "goals"), where("createdBy", "==", "dave"))));
+    await assertSucceeds(deleteDoc(doc(db, "projects/p1/goals/g2")));
+    await assertSucceeds(getDocs(query(collectionGroup(db, "members"), where("uid", "==", "dave"))));
+    await assertSucceeds(deleteDoc(doc(db, "projects/p1/members/dave")));
+    await assertFails(getDocs(query(collectionGroup(db, "members"), where("uid", "==", "alice"))));
+  });
 });
 
 describe("Droits RGPD (requêtes sur toutes les conversations)", () => {

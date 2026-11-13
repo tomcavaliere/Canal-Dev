@@ -39,6 +39,25 @@ service cloud.firestore {
       return /databases/$(database)/documents/invites/$(request.auth.token.email.lower());
     }
 
+    // Membre d'un projet : membre d'au moins une de ses conversations. Les règles ne pouvant pas
+    // chercher parmi les conversations, chacun enregistre une fiche projects/{p}/members/{uid} qui
+    // nomme une conversation du projet dont il est membre (`via`). Elle est revérifiée à chaque
+    // accès : retiré de cette conversation (ou elle a changé de projet), on perd l'accès.
+    function projectTicket(projectId) {
+      return /databases/$(database)/documents/projects/$(projectId)/members/$(request.auth.uid);
+    }
+    function inProjectConv(projectId, convId) {
+      let c = get(/databases/$(database)/documents/conversations/$(convId)).data;
+      return request.auth.uid in c.members && c.get('projectId', '') == projectId;
+    }
+    function isProjectMember(projectId) {
+      return signedIn() && exists(projectTicket(projectId))
+        && inProjectConv(projectId, get(projectTicket(projectId)).data.via);
+    }
+    function canSeeProject(projectId) {
+      return isAdmin() || isProjectMember(projectId);
+    }
+
     // ---------- Profils utilisateurs ----------
     match /users/{uid} {
       function validProfile() {
@@ -186,6 +205,134 @@ service cloud.firestore {
         && request.resource.data.roleMembers.diff(resource.data.roleMembers).affectedKeys().hasOnly([request.auth.uid])
         && !(request.auth.uid in request.resource.data.roleMembers);
       allow delete: if isAdmin();
+
+      // ---------- Membres du projet (fiches, voir isProjectMember) ----------
+      // Écrites par la personne elle-même (à l'ouverture de l'application) ou par l'admin, qui
+      // les tient à jour. Lues par les membres du projet : c'est la liste des personnes invitables.
+      match /members/{uid} {
+        function validTicket() {
+          let d = request.resource.data;
+          let c = get(/databases/$(database)/documents/conversations/$(d.via)).data;
+          return d.keys().hasOnly(['uid', 'via', 'at'])
+            && d.uid == uid && d.at == request.time
+            && d.via is string && d.via.matches('[A-Za-z0-9]{1,128}')
+            && uid in c.members && c.get('projectId', '') == projectId;
+        }
+
+        allow get: if signedIn() && request.auth.uid == uid;
+        allow read: if canSeeProject(projectId);
+        allow create, update: if isAdmin() && validTicket();
+        allow create, update: if signedIn() && request.auth.uid == uid && validTicket() && rateBumped();
+        allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      }
+
+      // ---------- Réunions du calendrier ----------
+      // Visibles par tous les membres du projet. Créées par un membre (l'organisateur, `createdBy`),
+      // qui seul (avec l'admin) les modifie ou les supprime. Chaque invité (`attendees`) répond
+      // présent ou absent dans `responses` = { uid: 'yes' | 'no' }, et rien d'autre.
+      match /events/{eventId} {
+        function responsesOf(data) {
+          return data.get('responses', {});
+        }
+        function responseDiff() {
+          return responsesOf(request.resource.data).diff(responsesOf(resource.data));
+        }
+        function validEvent() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['title', 'description', 'place', 'start', 'end', 'createdBy', 'attendees', 'responses', 'createdAt', 'updatedAt'])
+            && d.title is string && d.title.size() > 0 && d.title.size() <= 120
+            && d.description is string && d.description.size() <= 2000
+            && d.place is string && d.place.size() <= 200
+            && d.start is timestamp && d.end is timestamp
+            && d.end >= d.start && d.end <= d.start + duration.value(24, 'h')
+            && d.attendees is list && d.attendees.size() <= 50
+            && responsesOf(d) is map && responsesOf(d).size() <= 50
+            && d.createdBy is string
+            && d.updatedAt == request.time;
+        }
+
+        allow read: if canSeeProject(projectId);
+        allow create: if canSeeProject(projectId) && validEvent()
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && responsesOf(request.resource.data).size() == 0
+          && rateBumped();
+        // Organisateur ou admin : tout modifier, sauf les réponses, qu'il peut seulement effacer
+        // (invité retiré, horaire changé).
+        allow update: if canSeeProject(projectId)
+          && (isAdmin() || resource.data.createdBy == request.auth.uid)
+          && validEvent()
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && responseDiff().addedKeys().size() == 0
+          && responseDiff().changedKeys().size() == 0
+          && rateBumped();
+        // Invité : donner, changer ou retirer sa propre réponse.
+        allow update: if canSeeProject(projectId)
+          && request.auth.uid in resource.data.attendees
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responses'])
+          && responseDiff().affectedKeys().hasOnly([request.auth.uid])
+          && (!(request.auth.uid in responsesOf(request.resource.data))
+            || responsesOf(request.resource.data)[request.auth.uid] in ['yes', 'no'])
+          && rateBumped();
+        // Droit à l'effacement : un invité se retire de la liste (avec sa réponse).
+        allow update: if signedIn()
+          && request.auth.uid in resource.data.attendees
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees', 'responses'])
+          && request.resource.data.attendees == resource.data.attendees.removeAll([request.auth.uid])
+          && responseDiff().affectedKeys().hasOnly([request.auth.uid])
+          && !(request.auth.uid in responsesOf(request.resource.data));
+        allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+      }
+
+      // ---------- Objectifs du projet ----------
+      // Tout membre en ajoute et coche ceux qui sont atteints (`doneBy` = qui a coché, `doneAt` = quand).
+      // Seuls l'auteur et l'admin modifient le reste ou suppriment. `due` : date « AAAA-MM-JJ ».
+      match /goals/{goalId} {
+        function validGoal() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['title', 'due', 'done', 'doneBy', 'doneAt', 'createdBy', 'createdAt', 'updatedAt'])
+            && d.title is string && d.title.size() > 0 && d.title.size() <= 200
+            && (!('due' in d) || (d.due is string && d.due.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')))
+            && d.done is bool
+            && (d.done || (!('doneBy' in d) && !('doneAt' in d)))
+            && d.createdBy is string
+            && d.updatedAt == request.time;
+        }
+        // Cocher : signé et daté par la personne qui coche. Décocher : efface. Sinon : inchangé.
+        function validDoneChange() {
+          let n = request.resource.data;
+          let o = resource.data;
+          return (n.done == o.done && n.get('doneBy', null) == o.get('doneBy', null)
+              && n.get('doneAt', null) == o.get('doneAt', null))
+            || (n.done && !o.done && n.get('doneBy', null) == request.auth.uid && n.get('doneAt', null) == request.time)
+            || (!n.done && o.done);
+        }
+
+        allow read: if canSeeProject(projectId);
+        allow create: if canSeeProject(projectId) && validGoal()
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.done == false
+          && rateBumped();
+        // Auteur ou admin : tout modifier.
+        allow update: if canSeeProject(projectId)
+          && (isAdmin() || resource.data.createdBy == request.auth.uid)
+          && validGoal() && validDoneChange()
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && rateBumped();
+        // Tout membre : cocher ou décocher.
+        allow update: if canSeeProject(projectId) && validGoal() && validDoneChange()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneBy', 'doneAt', 'updatedAt'])
+          && rateBumped();
+        // Droit à l'effacement : retirer son nom d'un objectif qu'on a coché.
+        allow update: if signedIn()
+          && resource.data.get('doneBy', '') == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['doneBy'])
+          && !('doneBy' in request.resource.data);
+        allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+      }
     }
 
     // ---------- Conversations ----------
@@ -410,6 +557,19 @@ service cloud.firestore {
     match /{path=**}/reads/{readId} {
       allow read, delete: if isAdmin()
         || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+    // Calendrier : ses fiches de membre, les réunions qu'on organise ou où l'on est invité
+    // (aussi pour la pastille des invitations), les objectifs qu'on a créés ou cochés.
+    match /{path=**}/members/{uid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+    match /{path=**}/events/{eventId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.createdBy == request.auth.uid
+        || request.auth.uid in resource.data.attendees));
+    }
+    match /{path=**}/goals/{goalId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.createdBy == request.auth.uid
+        || resource.data.get('doneBy', '') == request.auth.uid));
     }
 
     // Tout le reste est interdit.
