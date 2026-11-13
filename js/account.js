@@ -179,6 +179,22 @@ function download(filename, data) {
 
 /* ---------- Dialogue « Mon compte » ---------- */
 
+// Thème : voir js/theme.js, qui l'applique dès le chargement de la page.
+const THEME_KEY = "canal-dev.theme";
+function currentTheme() {
+  const t = document.documentElement.dataset.theme;
+  return t === "light" || t === "dark" ? t : "auto";
+}
+function changeTheme(e) {
+  const value = e.target.value;
+  if (value === "light" || value === "dark") document.documentElement.dataset.theme = value;
+  else delete document.documentElement.dataset.theme;
+  try {
+    if (value === "auto") localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, value);
+  } catch { /* stockage indisponible : le choix vaut pour cette session */ }
+}
+
 function setStatus(msg, isError = false) {
   $("account-status").textContent = msg;
   $("account-status").classList.toggle("error", isError);
@@ -198,6 +214,8 @@ function openAccount() {
   $("no-receipts").checked = state.noReceipts;
   $("no-presence").checked = state.noPresence;
   setStatus("");
+  const theme = document.querySelector(`#dlg-account input[name="theme"][value="${currentTheme()}"]`);
+  if (theme) theme.checked = true;
   $("dlg-account").showModal();
 }
 
@@ -340,4 +358,5 @@ export function initAccount() {
   $("btn-delete-account").addEventListener("click", deleteAccount);
   $("no-receipts").addEventListener("change", toggleReceipts);
   $("no-presence").addEventListener("change", togglePresence);
+  document.querySelectorAll('#dlg-account input[name="theme"]').forEach((r) => r.addEventListener("change", changeTheme));
 }

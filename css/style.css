@@ -18,8 +18,10 @@
   color-scheme: light;
 }
 
+/* Thème sombre : suit le système (« Automatique »), sauf si l'utilisateur a choisi
+   « Clair » ou « Sombre » dans « Mon compte » (attribut data-theme posé par js/theme.js). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #14171b;
     --surface: #1c2026;
     --surface-2: #262b33;
@@ -36,6 +38,23 @@
     --proj-4: #b393f5; --proj-5: #4fc3dc; --proj-6: #d9bd4a; --proj-7: #f5885a;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #14171b;
+  --surface: #1c2026;
+  --surface-2: #262b33;
+  --border: #333a44;
+  --text: #e6e9ed;
+  --muted: #98a1ad;
+  --accent: #5b8ff0;
+  --accent-text: #0d1117;
+  --mine: #1f2f4d;
+  --muted-on-mine: #a7b0bc;
+  --danger: #ef6b6b;
+  --online: #3fcf7f;
+  --proj-0: #6ea0f5; --proj-1: #4cc58f; --proj-2: #e2a052; --proj-3: #f07aa3;
+  --proj-4: #b393f5; --proj-5: #4fc3dc; --proj-6: #d9bd4a; --proj-7: #f5885a;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -563,6 +582,9 @@ dialog::backdrop { background: rgb(0 0 0 / .4); }
 .members input[type="checkbox"] { width: auto; }
 label.check { flex-direction: row; align-items: center; gap: .5rem; }
 label.check input { width: auto; }
+.theme-choice { gap: 1rem; flex-wrap: wrap; }
+fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.plain legend { padding: 0; margin-bottom: .2rem; }
 .purge-row { padding: .5rem 1rem 0; margin: 0; }
 #admin-users .sidebar-head { gap: .5rem; }
 #dlg-invite fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }

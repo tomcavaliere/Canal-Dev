@@ -11,6 +11,7 @@
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <script src="js/redirect.js"></script>
+  <script src="js/theme.js"></script>
   <link rel="stylesheet" href="css/style.css">
   <script type="module" src="js/app.js"></script>
 </head>
@@ -489,6 +490,16 @@
       <p class="small">Connecté avec <strong id="account-email"></strong><br>
         Nom affiché aux autres membres : <strong id="account-name"></strong>
         <span class="muted">(fixé par l'administrateur, qui le corrige sur demande)</span></p>
+
+      <fieldset class="stack tight plain">
+        <legend><h3>Apparence</h3></legend>
+        <div class="row theme-choice">
+          <label class="check"><input type="radio" name="theme" value="auto"> Automatique</label>
+          <label class="check"><input type="radio" name="theme" value="light"> Clair</label>
+          <label class="check"><input type="radio" name="theme" value="dark"> Sombre</label>
+        </div>
+        <p class="muted small">« Automatique » suit le réglage de ton appareil. Ce choix est gardé dans ce navigateur.</p>
+      </fieldset>
 
       <section class="stack tight">
         <h3>Mes données</h3>
