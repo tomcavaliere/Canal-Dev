@@ -153,19 +153,35 @@ service cloud.firestore {
 
     // ---------- Projets (regroupent des conversations) ----------
     match /projects/{projectId} {
+      // Rôles (facultatifs, écrits par l'admin seul, filtrés à l'affichage) :
+      //   `roles`       : liste [{ id, name }] (20 au plus), dans l'ordre d'affichage ;
+      //   `roleMembers` : map uid -> [id de rôle] (qui tient quel rôle) ;
+      //   `roleUids`    : les mêmes UID à plat, pour retrouver ses rôles (export, effacement RGPD).
       function validProject() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['title', 'description', 'createdAt', 'updatedAt'])
+        return d.keys().hasOnly(['title', 'description', 'createdAt', 'updatedAt', 'roles', 'roleMembers', 'roleUids'])
           && d.title is string && d.title.size() > 0 && d.title.size() <= 120
-          && d.description is string && d.description.size() <= 500;
+          && d.description is string && d.description.size() <= 500
+          && (!('roles' in d) || (d.roles is list && d.roles.size() <= 20))
+          && ('roleMembers' in d) == ('roleUids' in d)
+          && (!('roleMembers' in d) || (d.roleMembers is map && d.roleMembers.size() <= 200
+            && d.roleUids is list && d.roleUids.toSet() == d.roleMembers.keys().toSet()));
       }
 
-      // Lister les projets : admin uniquement. Lire UN projet par son identifiant
-      // (aléatoire, connu seulement via une conversation dont on est membre) :
-      // tout utilisateur connecté, pour afficher le nom du projet. Aucune donnée personnelle.
-      allow list: if isAdmin();
+      // Lister les projets : admin, ou ceux où l'on tient un rôle (requête filtrée sur roleUids).
+      // Lire UN projet par son identifiant (aléatoire, connu seulement via une conversation dont on
+      // est membre ou un rôle) : tout utilisateur connecté, pour afficher le projet et ses rôles.
+      // Seules données personnelles : les UID des personnes qui tiennent un rôle (noms dans l'annuaire).
+      allow list: if isAdmin() || (signedIn() && request.auth.uid in resource.data.roleUids);
       allow get: if signedIn();
       allow create, update: if isAdmin() && validProject();
+      // Droit à l'effacement : une personne peut uniquement se retirer de tous ses rôles.
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.roleUids
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['roleMembers', 'roleUids'])
+        && request.resource.data.roleUids == resource.data.roleUids.removeAll([request.auth.uid])
+        && request.resource.data.roleMembers.diff(resource.data.roleMembers).affectedKeys().hasOnly([request.auth.uid])
+        && !(request.auth.uid in request.resource.data.roleMembers);
       allow delete: if isAdmin();
     }
 

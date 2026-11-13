@@ -620,6 +620,42 @@ describe("Projets", () => {
   });
 });
 
+describe("Rôles des projets", () => {
+  const roles = {
+    roles: [{ id: "r1", name: "Dev" }, { id: "r2", name: "Design" }],
+    roleMembers: { alice: ["r1"], carol: ["r1", "r2"] },
+    roleUids: ["alice", "carol"],
+  };
+  beforeEach(() => env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), "projects/p1"), roles)));
+
+  it("l'admin définit les rôles d'un projet", () =>
+    assertSucceeds(updateDoc(doc(admin(), "projects/p1"), {
+      roles: [{ id: "r3", name: "Test" }], roleMembers: { bob: ["r3"] }, roleUids: ["bob"],
+    })));
+  it("un membre ne modifie pas les rôles", () =>
+    assertFails(updateDoc(doc(alice(), "projects/p1"), { roles: [{ id: "r1", name: "Chef" }] })));
+  it("roleUids doit correspondre aux clés de roleMembers, même pour l'admin", async () => {
+    await assertFails(updateDoc(doc(admin(), "projects/p1"), { roleUids: ["alice"] }));
+    await assertFails(updateDoc(doc(admin(), "projects/p1"), { roleMembers: { bob: ["r1"] } }));
+  });
+  it("plus de 20 rôles sont refusés, même pour l'admin", () =>
+    assertFails(updateDoc(doc(admin(), "projects/p1"), {
+      roles: Array.from({ length: 21 }, (_, i) => ({ id: "r" + i, name: "R" + i })),
+    })));
+  it("une personne retrouve les projets où elle tient un rôle, pas ceux des autres", async () => {
+    await assertSucceeds(getDocs(query(collection(alice(), "projects"), where("roleUids", "array-contains", "alice"))));
+    await assertFails(getDocs(query(collection(alice(), "projects"), where("roleUids", "array-contains", "carol"))));
+  });
+  it("une personne se retire de ses rôles", () =>
+    assertSucceeds(updateDoc(doc(alice(), "projects/p1"), { "roleMembers.alice": deleteField(), roleUids: arrayRemove("alice") })));
+  it("elle ne retire pas quelqu'un d'autre", () =>
+    assertFails(updateDoc(doc(alice(), "projects/p1"), { "roleMembers.carol": deleteField(), roleUids: arrayRemove("carol") })));
+  it("elle ne se donne pas un autre rôle", () =>
+    assertFails(updateDoc(doc(alice(), "projects/p1"), { "roleMembers.alice": ["r1", "r2"] })));
+  it("sans rôle, on ne s'ajoute pas", () =>
+    assertFails(updateDoc(doc(bob(), "projects/p1"), { "roleMembers.bob": ["r1"], roleUids: arrayUnion("bob") })));
+});
+
 describe("Droits RGPD (requêtes sur toutes les conversations)", () => {
   const mine = (db, group, field, uid) => getDocs(query(collectionGroup(db, group), where(field, "==", uid)));
 
