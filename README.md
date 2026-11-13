@@ -12,9 +12,9 @@ Canal de communication pour suivre le développement d'un outil.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
-Hébergement : Firebase Hosting (fichiers statiques, <https://canal-dev-c18d7.web.app>). Auth + données : Firebase (Authentication + Cloud Firestore, plan gratuit Spark).
+Hébergement : Firebase Hosting (fichiers statiques, <https://canal-dev-c18d7.web.app>). Auth + données : Firebase (Authentication + Cloud Firestore, plan gratuit Spark). Présence « en ligne » : Firebase Realtime Database.
 L'ancienne adresse GitHub Pages redirige vers la nouvelle ([js/redirect.js](js/redirect.js)).
-Le contrôle d'accès est appliqué côté serveur par [firestore.rules](firestore.rules).
+Le contrôle d'accès est appliqué côté serveur par [firestore.rules](firestore.rules) et [database.rules.json](database.rules.json).
 
 ## Structure
 
@@ -67,11 +67,17 @@ tests/rules.test.mjs    tests des règles de sécurité
 3. **Authentication → Sign-in method** : active **Google**.
 4. **Authentication → Settings → Authorized domains** : vérifie que `canal-dev-c18d7.web.app` y figure (`localhost` y est déjà).
 5. **Firestore Database** : crée la base en **mode production**.
+6. **Realtime Database** (présence « en ligne ») : **Créer une base de données**, emplacement **Belgique (europe-west1)**,
+   **mode verrouillé**. Son URL doit être `https://<projet>-default-rtdb.europe-west1.firebasedatabase.app`
+   (`databaseURL` dans [js/firebase-config.js](js/firebase-config.js)). Elle ne contient que des entrées
+   `status/{uid}/{onglet} = true`, effacées par le serveur à la déconnexion (aucun historique).
 
 ### 2. Règles de sécurité (première version)
 Déploie [firestore.rules](firestore.rules) :
 - soit en copiant son contenu dans **Firestore → Règles → Publier** ;
 - soit avec la CLI : `npm i -g firebase-tools && firebase login && firebase use --add && firebase deploy --only firestore`.
+
+Et [database.rules.json](database.rules.json) : **Realtime Database → Règles → Publier**, ou `firebase deploy --only database`.
 
 La CLI déploie aussi [firestore.indexes.json](firestore.indexes.json). Si tu passes par la console, crée l'exemption d'index à la main :
 **Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour les collections `images` et `thumbs`, et pour la collection `reads` avec le champ `uid`.
@@ -83,6 +89,7 @@ Sans cet index, « Télécharger mes données » et la suppression de compte éc
 3. Remplace `REMPLACER_PAR_TON_UID` par cet UID dans **les deux** fichiers :
    - [js/firebase-config.js](js/firebase-config.js) (`ADMIN_UID`)
    - [firestore.rules](firestore.rules) (`adminUid()`)
+   - [database.rules.json](database.rules.json) (UID dans la règle `.write` de `status/$uid`)
 4. Redéploie les règles, recharge la page : tu as le badge **Admin**.
 
 ### 4. Publier sur Firebase Hosting
@@ -99,7 +106,7 @@ des règles à chaque push et pull request, puis, sur `main` uniquement et si to
 et index. Le code et les règles partent donc toujours ensemble. Mise en place, une fois :
 1. Google Cloud Console → projet `canal-dev-c18d7` → **IAM → Comptes de service → Créer** (par ex. `github-deploy`),
    avec les rôles : *Administrateur Firebase Hosting*, *Administrateur des règles Firebase*,
-   *Administrateur des index Cloud Datastore*, *Consommateur Service Usage*.
+   *Administrateur des index Cloud Datastore*, *Administrateur Firebase Realtime Database*, *Consommateur Service Usage*.
 2. Sur ce compte : **Clés → Ajouter une clé → JSON**. Le fichier téléchargé est un secret : ne le commite jamais.
 3. GitHub → **Settings → Secrets and variables → Actions → New repository secret** :
    nom `FIREBASE_SERVICE_ACCOUNT`, valeur = contenu du fichier JSON. Supprime ensuite le fichier.
@@ -181,7 +188,7 @@ Au quotidien :
   Identifiants** → la clé « Browser key (auto created by Firebase) » :
   - **Restrictions relatives aux applications → Sites web** : `https://canal-dev-c18d7.web.app/*`,
     `https://canal-dev-c18d7.firebaseapp.com/*`, `http://localhost/*` (développement local) ;
-  - **Restrictions relatives aux API** : *Identity Toolkit API*, *Token Service API*, *Cloud Firestore API*.
+  - **Restrictions relatives aux API** : *Identity Toolkit API*, *Token Service API*, *Cloud Firestore API*, *Firebase Realtime Database API*.
   Une autre page ne peut alors plus utiliser la clé depuis un navigateur (un script hors navigateur, si : les règles
   restent la vraie protection).
 - Tester : `npm test` (voir plus haut), et pour un essai manuel la console du navigateur d'un compte non admin (`permission-denied` attendu).

@@ -41,6 +41,7 @@
           <tr><td>Contenu et date de tes messages (et date de leur dernière modification)</td><td>Saisis par toi</td><td>Fonctionnement du canal</td></tr>
           <tr><td>Photos que tu joins à tes messages</td><td>Choisies par toi</td><td>Partage avec les membres de la conversation</td></tr>
           <tr><td>Date à laquelle tu as vu une conversation pour la dernière fois</td><td>Enregistrée quand tu lis la conversation</td><td>Indiquer aux autres membres que tu as vu leur dernier message (« Vu par … ») ; synchroniser tes messages non lus entre tes appareils</td></tr>
+          <tr><td>Ta présence « en ligne » (application ouverte en ce moment ou non)</td><td>Enregistrée tant que l'application est ouverte et au premier plan, effacée dès que tu la fermes ou la quittes</td><td>Indiquer aux membres de tes conversations que tu es là. Aucun historique ni aucune date n'est gardé ; tu peux la masquer (§ 9)</td></tr>
           <tr><td>Données techniques de connexion (adresse IP, navigateur)</td><td>Ton navigateur</td><td>Traitées par les hébergeurs (§ 5) pour délivrer le service et le sécuriser</td></tr>
         </tbody>
       </table>
@@ -89,7 +90,7 @@
           <li>Les pages du site sont servies par Firebase Hosting, un réseau de serveurs mondial de Google
             (dont les États-Unis), qui reçoit ton adresse IP et des informations techniques de navigation
             pour délivrer les pages et en assurer la sécurité.</li>
-          <li>Les messages, photos, profils et conversations (Cloud Firestore) sont hébergés <strong>dans l'Union européenne</strong>.</li>
+          <li>Les messages, photos, profils et conversations (Cloud Firestore), ainsi que la présence « en ligne » (Firebase Realtime Database), sont hébergés <strong>dans l'Union européenne</strong>.</li>
           <li>Le compte de connexion (Firebase Authentication : email, nom, UID, dates) peut être traité
             aux <strong>États-Unis</strong>. Ce transfert est encadré par la décision d'adéquation
             <em>EU-US Data Privacy Framework</em> (Google LLC y est certifiée) et par les clauses
@@ -158,6 +159,8 @@
         pour une photo, supprime-la et republie-la.</li>
       <li><strong>Accusés de lecture</strong> : <em>Mon compte → Ne pas envoyer d'accusés de lecture</em>.
         Les autres membres ne voient plus quand tu as lu leurs messages, et tes accusés existants sont supprimés.</li>
+      <li><strong>Présence « en ligne »</strong> : <em>Mon compte → Masquer ma présence « en ligne »</em>.
+        Les autres membres ne voient plus quand tu as l'application ouverte.</li>
       <li><strong>Une photo te représente sans ton accord</strong> : écris à l'adresse ci-dessous en
         indiquant la conversation et la date ; elle est supprimée sans délai, que tu sois membre du canal ou non.</li>
       <li><strong>Opposition, limitation, ou toute autre demande</strong> : écris à
