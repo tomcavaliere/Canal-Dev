@@ -142,7 +142,8 @@ export function roleUids() {
   return uids;
 }
 
-// Bloc « rôles » affiché sous l'en-tête d'un projet ouvert. Un rôle sans personne n'est montré qu'à l'admin.
+// Bloc « rôles » affiché sous l'en-tête d'un projet ouvert. Tous les rôles sont montrés à tout le
+// monde, y compris ceux que personne ne tient encore (« à pourvoir »).
 function rolesBlock(projectId) {
   const roles = projectRoles(state.projects.get(projectId))
     .map((r) => ({
@@ -151,8 +152,7 @@ function rolesBlock(projectId) {
         .filter((uid) => uid === state.user?.uid || typeof nameOf(uid) === "string")
         .map((uid) => (uid === state.user?.uid ? "toi" : displayText(uid)))
         .sort((a, b) => a.localeCompare(b, "fr")),
-    }))
-    .filter((r) => r.names.length || state.isAdmin);
+    }));
   if (!roles.length) return null;
   const ul = document.createElement("ul");
   ul.className = "list group-roles";
@@ -165,7 +165,7 @@ function rolesBlock(projectId) {
     name.textContent = r.name;
     const people = document.createElement("span");
     people.className = "role-people" + (r.names.length ? "" : " muted");
-    people.textContent = r.names.length ? r.names.join(", ") : "personne";
+    people.textContent = r.names.length ? r.names.join(", ") : "à pourvoir";
     li.append(name, people);
     ul.append(li);
   }
