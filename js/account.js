@@ -20,6 +20,17 @@ function reactedQuery(convId, uid) {
   return query(collection(db, "conversations", convId, "messages"), where(`reactions.${uid}`, "in", REACTIONS));
 }
 
+// Données de `uid` dans les calendriers de tous les projets (réunions, objectifs, fiches de membre).
+/**
+ * @param {string} group
+ * @param {string} field
+ * @param {string} uid
+ * @param {import("./sdk/firebase-firestore.js").WhereFilterOp} [op]
+ */
+function calendarDocs(group, field, uid, op = "==") {
+  return getDocs(query(collectionGroup(db, group), where(field, op, uid)));
+}
+
 /* ---------- Suppression des données d'un utilisateur ---------- */
 
 // Supprime tous les messages de `uid`, le retire de toutes les conversations,
@@ -49,6 +60,25 @@ export async function purgeUserData(uid, email) {
   const projects = await getDocs(query(collection(db, "projects"), where("roleUids", "array-contains", uid)));
   for (const p of projects.docs) {
     await updateDoc(p.ref, { [`roleMembers.${uid}`]: deleteField(), roleUids: arrayRemove(uid) });
+  }
+
+  // Calendriers des projets : réunions organisées et objectifs créés (supprimés), invitations
+  // (retirée de la liste, avec sa réponse), objectifs cochés (son nom est retiré), fiches de membre.
+  /** @type {[string, string][]} */
+  const owned = [["events", "createdBy"], ["goals", "createdBy"], ["members", "uid"]];
+  for (const [group, field] of owned) {
+    const snap = await calendarDocs(group, field, uid);
+    for (let i = 0; i < snap.docs.length; i += 400) {
+      const batch = writeBatch(db);
+      snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }
+  for (const d of (await calendarDocs("events", "attendees", uid, "array-contains")).docs) {
+    await updateDoc(d.ref, { attendees: arrayRemove(uid), [`responses.${uid}`]: deleteField() });
+  }
+  for (const d of (await calendarDocs("goals", "doneBy", uid)).docs) {
+    await updateDoc(d.ref, { doneBy: deleteField() });
   }
 
   const convs = await getDocs(query(collection(db, "conversations"), where("members", "array-contains", uid)));
@@ -99,6 +129,14 @@ async function collectMyData(user) {
     getDocs(query(collection(db, "projects"), where("roleUids", "array-contains", user.uid))),
   ]);
   const reacted = await Promise.all(convs.docs.map((c) => getDocs(reactedQuery(c.id, user.uid))));
+  const [tickets, organized, invited, goalsCreated, goalsDone] = await Promise.all([
+    calendarDocs("members", "uid", user.uid),
+    calendarDocs("events", "createdBy", user.uid),
+    calendarDocs("events", "attendees", user.uid, "array-contains"),
+    calendarDocs("goals", "createdBy", user.uid),
+    calendarDocs("goals", "doneBy", user.uid),
+  ]);
+  const projectOf = (d) => d.ref.parent.parent.id;
   return {
     exportedAt: new Date().toISOString(),
     service: "Canal Dev",
@@ -163,6 +201,23 @@ async function collectMyData(user) {
         roles: (p.roles ?? []).filter((r) => ids.includes(r.id)).map((r) => r.name),
       };
     }),
+    // Calendriers des projets. Fiches de membre : elles ouvrent l'accès au calendrier d'un projet.
+    projectCalendars: tickets.docs.map((d) => ({ projectId: projectOf(d), ...plain(d.data()) })),
+    // Réunions organisées (visibles par les membres du projet), avec les réponses des invités.
+    meetingsOrganized: organized.docs.map((d) => ({ projectId: projectOf(d), id: d.id, ...plain(d.data()) })),
+    // Réunions où l'on est invité, et sa réponse (présent / absent).
+    meetingInvitations: invited.docs.map((d) => {
+      const e = d.data();
+      return {
+        projectId: projectOf(d), id: d.id, title: e.title, start: plain(e.start), end: plain(e.end),
+        organizerUid: e.createdBy, response: e.responses?.[user.uid] ?? null,
+      };
+    }),
+    goalsCreated: goalsCreated.docs.map((d) => ({ projectId: projectOf(d), id: d.id, ...plain(d.data()) })),
+    // Objectifs que l'on a cochés comme atteints.
+    goalsCompleted: goalsDone.docs.map((d) => ({
+      projectId: projectOf(d), id: d.id, title: d.data().title, doneAt: plain(d.data().doneAt),
+    })),
   };
 }
 

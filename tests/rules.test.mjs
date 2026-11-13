@@ -777,6 +777,13 @@ describe("Calendrier : réunions", () => {
     await assertFails(getDocs(query(collectionGroup(db, "events"), where("attendees", "array-contains", "alice"))));
     await assertSucceeds(updateDoc(doc(db, "projects/p1/events/e1"), { attendees: arrayRemove("carol") }));
   });
+  it("l'admin retire un invité (suppression de compte), sans en ajouter", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "projects/p1/events/e1"), { responses: { carol: "yes" } }));
+    const db = admin();
+    await assertFails(updateDoc(doc(db, "projects/p1/events/e1"), { attendees: arrayUnion("bob") }));
+    await assertSucceeds(updateDoc(doc(db, "projects/p1/events/e1"), { attendees: arrayRemove("carol"), "responses.carol": deleteField() }));
+  });
   it("l'organisateur retrouve les réunions qu'il a créées", () =>
     assertSucceeds(getDocs(query(collectionGroup(alice(), "events"), where("createdBy", "==", "alice")))));
 });
@@ -824,6 +831,12 @@ describe("Calendrier : objectifs", () => {
     await assertSucceeds(getDocs(query(collectionGroup(db, "goals"), where("doneBy", "==", "dave"))));
     await assertFails(updateDoc(doc(db, "projects/p1/goals/g1"), { doneBy: deleteField(), done: false }));
     await assertSucceeds(updateDoc(doc(db, "projects/p1/goals/g1"), { doneBy: deleteField() }));
+  });
+  it("l'admin retire le nom de quelqu'un d'un objectif coché, un membre non", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "projects/p1/goals/g1"), { done: true, doneBy: "dave", doneAt: T0 }));
+    await assertFails(updateDoc(doc(alice(), "projects/p1/goals/g1"), { doneBy: deleteField() }));
+    await assertSucceeds(updateDoc(doc(admin(), "projects/p1/goals/g1"), { doneBy: deleteField() }));
   });
   it("on retrouve et supprime ses objectifs et ses fiches, même hors du projet", async () => {
     const db = dave();

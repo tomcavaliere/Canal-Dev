@@ -282,6 +282,13 @@ service cloud.firestore {
           && request.resource.data.attendees == resource.data.attendees.removeAll([request.auth.uid])
           && responseDiff().affectedKeys().hasOnly([request.auth.uid])
           && !(request.auth.uid in responsesOf(request.resource.data));
+        // Admin (suppression d'un compte) : retirer des invités et leurs réponses, sans rien ajouter.
+        allow update: if isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees', 'responses'])
+          && request.resource.data.attendees is list
+          && resource.data.attendees.hasAll(request.resource.data.attendees)
+          && responseDiff().addedKeys().size() == 0
+          && responseDiff().changedKeys().size() == 0;
         allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
       }
 
@@ -326,9 +333,9 @@ service cloud.firestore {
         allow update: if canSeeProject(projectId) && validGoal() && validDoneChange()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneBy', 'doneAt', 'updatedAt'])
           && rateBumped();
-        // Droit à l'effacement : retirer son nom d'un objectif qu'on a coché.
+        // Droit à l'effacement : retirer son nom d'un objectif qu'on a coché (l'admin : celui de n'importe qui).
         allow update: if signedIn()
-          && resource.data.get('doneBy', '') == request.auth.uid
+          && (isAdmin() || resource.data.get('doneBy', '') == request.auth.uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['doneBy'])
           && !('doneBy' in request.resource.data);
         allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
