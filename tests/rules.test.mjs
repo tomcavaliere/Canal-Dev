@@ -677,6 +677,21 @@ describe("Rôles des projets", () => {
     assertFails(updateDoc(doc(bob(), "projects/p1"), { "roleMembers.bob": ["r1"], roleUids: arrayUnion("bob") })));
 });
 
+describe("Organigramme des projets", () => {
+  const levels = [{ id: "n1", name: "Direction", roles: ["r1"] }, { id: "n2", name: "", roles: ["r2"] }];
+
+  it("l'admin définit l'organigramme d'un projet", () =>
+    assertSucceeds(updateDoc(doc(admin(), "projects/p1"), { orgLevels: levels })));
+  it("un membre ne modifie pas l'organigramme", () =>
+    assertFails(updateDoc(doc(alice(), "projects/p1"), { orgLevels: levels })));
+  it("plus de 10 niveaux sont refusés, même pour l'admin", () =>
+    assertFails(updateDoc(doc(admin(), "projects/p1"), {
+      orgLevels: Array.from({ length: 11 }, (_, i) => ({ id: "n" + i, name: "", roles: [] })),
+    })));
+  it("l'organigramme doit être une liste", () =>
+    assertFails(updateDoc(doc(admin(), "projects/p1"), { orgLevels: { n1: ["r1"] } })));
+});
+
 describe("Calendrier : membres du projet", () => {
   const ticket = (uid, via) => ({ uid, via, at: serverTimestamp() });
   const carol = () => as("carol");
