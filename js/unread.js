@@ -42,6 +42,7 @@ export function syncMessageWatchers() {
       for (const ch of snap.docChanges()) {
         if (ch.type !== "added") continue;
         const m = ch.doc.data({ serverTimestamps: "estimate" });
+        if (m.event) continue; // « X a rejoint la conversation » : ni son, ni notification, ni non-lu
         const t = m.createdAt?.toMillis?.() ?? 0;
         // Ni au chargement, ni pour ses propres messages, ni pour un ancien message
         // qui redevient visible après une suppression.
@@ -49,7 +50,7 @@ export function syncMessageWatchers() {
         latest = Math.max(latest, t);
       }
       if (!snap.metadata.fromCache) first = false;
-      state.recent.set(id, snap.docs.map((d) => {
+      state.recent.set(id, snap.docs.filter((d) => !d.get("event")).map((d) => {
         const m = d.data({ serverTimestamps: "estimate" });
         return { t: m.createdAt?.toMillis?.() ?? 0, authorUid: m.authorUid, authorName: m.authorName, excerpt: excerpt(m) };
       }));

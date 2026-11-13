@@ -27,6 +27,8 @@ export function applySearch() {
       sepUsed = false;
       continue;
     }
+    // Annonces (« X a rejoint la conversation ») : masquées pendant une recherche.
+    if (el.classList.contains("msg-event")) { el.hidden = terms.length > 0; continue; }
     if (!el.classList.contains("msg")) continue;
     const m = state.msgById.get(el.id.slice(4));
     const hay = normalize(`${m?.text || ""} ${m ? displayText(m.authorUid, m.authorName) : ""}`);

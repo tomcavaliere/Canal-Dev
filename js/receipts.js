@@ -22,7 +22,7 @@ export function renderReceipt() {
   if (!state.reads) return;
 
   let last = null;
-  for (const [id, m] of state.msgById) if (m.authorUid === state.user.uid) last = [id, m];
+  for (const [id, m] of state.msgById) if (m.authorUid === state.user.uid && !m.event) last = [id, m];
   if (!last) return;
   const li = document.getElementById("msg-" + last[0]);
   if (!li) return;
@@ -55,7 +55,7 @@ export function syncMyRead() {
   if (!id || !state.reads || !isViewing(id) || state.noReceipts) return;
   let latest = 0;
   for (const m of state.msgById.values()) {
-    if (m.authorUid !== state.user.uid) latest = Math.max(latest, m.createdAt?.toMillis?.() ?? 0);
+    if (m.authorUid !== state.user.uid && !m.event) latest = Math.max(latest, m.createdAt?.toMillis?.() ?? 0);
   }
   const mine = state.reads.get(state.user.uid)?.t ?? 0;
   if (!latest || latest <= mine || latest <= state.readWrite) return;

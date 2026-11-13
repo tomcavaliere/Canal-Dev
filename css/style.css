@@ -312,6 +312,10 @@ a.edit-user { display: inline-flex; align-items: center; justify-content: center
 }
 .msg.mine .bubble { --muted: var(--muted-on-mine); background: var(--mine); border-radius: var(--radius); border-top-right-radius: 3px; }
 .msg.pending .bubble { opacity: .65; }
+/* Annonce « X a rejoint la conversation ». */
+.msg-event { align-self: center; max-width: 85%; text-align: center; font-size: .8rem; color: var(--muted); scroll-margin: 1rem; }
+.msg-event span { display: inline-block; padding: .15rem .7rem; border-radius: 999px; background: var(--surface-2); }
+.msg-event.pending { opacity: .65; }
 .offline-banner { margin: 0; padding: .4rem 1rem; border-top: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
 .msg.flash .bubble { animation: flash 1.4s ease-out; }
 @keyframes flash { from { box-shadow: 0 0 0 3px var(--accent); } to { box-shadow: 0 0 0 3px transparent; } }

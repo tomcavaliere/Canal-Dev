@@ -251,9 +251,26 @@ service cloud.firestore {
             && (d.text.size() > 0 || 'image' in d);
         }
 
+        // Annonce « X a rejoint la conversation » : `authorUid` est la personne qui rejoint
+        // (export et suppression de ses données la couvrent ainsi). Écrite par l'admin qui l'ajoute
+        // ou par elle-même (invitation), uniquement dans le batch qui l'ajoute aux membres.
+        function validJoin() {
+          let d = request.resource.data;
+          let conv = /databases/$(database)/documents/conversations/$(convId);
+          return d.keys().hasOnly(['event', 'authorUid', 'createdAt'])
+            && d.event == 'join'
+            && d.createdAt == request.time
+            && d.authorUid is string
+            && (isAdmin() || d.authorUid == request.auth.uid)
+            && !(d.authorUid in get(conv).data.members)
+            && d.authorUid in getAfter(conv).data.members;
+        }
+
         allow read: if canAccess(convId);
         allow create: if canAccess(convId) && validMessage() && rateBumped();
-        allow update: if canAccess(convId) && resource.data.authorUid == request.auth.uid && validEdit() && rateBumped();
+        allow create: if signedIn() && validJoin();
+        allow update: if canAccess(convId) && resource.data.authorUid == request.auth.uid
+          && !('event' in resource.data) && validEdit() && rateBumped();
         allow delete: if isAdmin()
           || (canAccess(convId) && resource.data.authorUid == request.auth.uid);
       }

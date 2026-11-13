@@ -15,7 +15,7 @@ import { isSoundEnabled, setSoundEnabled } from "./sound.js";
 import { $, initials } from "./ui.js";
 import { clearAttachment } from "./composer.js";
 import { renderLinks } from "./links.js";
-import { clearReply, listenMessages, PAGE, renderMessages, resetImages } from "./messages.js";
+import { addJoinEvent, clearReply, listenMessages, PAGE, renderMessages, resetImages } from "./messages.js";
 import { renderReceipt, syncMyRead } from "./receipts.js";
 import { closeSearch } from "./search.js";
 import { projectColor, projectOf, renderConversationList, sortedConversations } from "./sidebar.js";
@@ -180,6 +180,7 @@ function listenInvite(user) {
     const last = inv.convIds.length === 1;
     const batch = writeBatch(db);
     batch.update(doc(db, "conversations", convId), { members: arrayUnion(user.uid) });
+    addJoinEvent(batch, convId, user.uid);
     if (last) batch.delete(ref);
     else batch.update(ref, { convIds: arrayRemove(convId) });
     try {

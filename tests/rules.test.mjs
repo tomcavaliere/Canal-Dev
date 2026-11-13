@@ -470,6 +470,46 @@ describe("Invitations", () => {
   });
 });
 
+describe("Annonce « a rejoint la conversation »", () => {
+  const joinEvent = (uid) => ({ event: "join", authorUid: uid, createdAt: serverTimestamp() });
+  function addMember(db, uid, { conv = "c1", event = joinEvent(uid), members = true } = {}) {
+    const batch = writeBatch(db);
+    if (members) batch.update(doc(db, `conversations/${conv}`), { members: arrayUnion(uid), updatedAt: serverTimestamp() });
+    batch.set(newMessageRef(db, conv), event);
+    return batch.commit();
+  }
+
+  it("l'admin l'écrit en ajoutant un membre, sans compteur anti-abus", () => assertSucceeds(addMember(admin(), "bob")));
+  it("sans ajout aux membres dans le même batch, elle est refusée", () =>
+    assertFails(addMember(admin(), "bob", { members: false })));
+  it("pour quelqu'un qui est déjà membre, elle est refusée", () =>
+    assertFails(addMember(admin(), "alice", { members: false })));
+  it("pour une autre personne que celle ajoutée, elle est refusée", () =>
+    assertFails(addMember(admin(), "bob", { event: joinEvent("dave") })));
+  it("un champ en plus (texte) ou une date client sont refusés", async () => {
+    await assertFails(addMember(admin(), "bob", { event: { ...joinEvent("bob"), text: "x" } }));
+    await assertFails(addMember(admin(), "bob", { event: { ...joinEvent("bob"), createdAt: Timestamp.now() } }));
+  });
+  it("un membre n'annonce pas l'arrivée d'un autre", () =>
+    assertFails(post(alice(), "alice", joinEvent("carol"))));
+  it("la personne invitée l'écrit en rejoignant la conversation", async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "invites/erin@gmail.com"), {
+      email: "erin@gmail.com", name: "Erin", convIds: ["c1"], createdAt: T0, updatedAt: T0,
+    }));
+    const db = as("erin");
+    const batch = writeBatch(db);
+    batch.update(doc(db, "conversations/c1"), { members: arrayUnion("erin") });
+    batch.set(newMessageRef(db), joinEvent("erin"));
+    batch.delete(doc(db, "invites/erin@gmail.com"));
+    await assertSucceeds(batch.commit());
+  });
+  it("on ne transforme pas une annonce en message", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), "conversations/c1/messages/j1"), { event: "join", authorUid: "alice", createdAt: T0 }));
+    await assertFails(change(alice(), "alice", "conversations/c1/messages/j1", { text: "piraté", editedAt: serverTimestamp() }));
+  });
+});
+
 describe("Projets", () => {
   const project = { title: "P", description: "", createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
 

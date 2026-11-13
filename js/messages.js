@@ -5,7 +5,7 @@ import {
 } from "./sdk/firebase-firestore.js";
 import { confirmDialog, toast } from "./dialogs.js";
 import { ADMIN_UID, db } from "./firebase.js";
-import { displayName, displayText } from "./names.js";
+import { displayName, displayText, nameOf } from "./names.js";
 import { renderRichText } from "./richtext.js";
 import { $, avatarEl } from "./ui.js";
 import { syncNames } from "./app.js";
@@ -13,6 +13,16 @@ import { renderReceipt, syncMyRead } from "./receipts.js";
 import { applySearch } from "./search.js";
 import { state } from "./state.js";
 import { bumpRate, rateWait } from "./rate.js";
+
+/* ---------- Annonce « X a rejoint la conversation » ---------- */
+
+// Ajoutée au batch qui ajoute `uid` aux membres (les règles l'exigent). `authorUid` est la
+// personne qui rejoint : l'export et la suppression de ses données la couvrent ainsi.
+export function addJoinEvent(batch, convId, uid) {
+  batch.set(doc(collection(db, "conversations", convId, "messages")), {
+    event: "join", authorUid: uid, createdAt: serverTimestamp(),
+  });
+}
 
 /* ---------- Fenêtre de messages (pagination) ---------- */
 
@@ -203,7 +213,12 @@ function messageItems(docs) {
       day = dayKey(date);
       items.push(keyed("day-" + day, dayLabel(date), () => daySeparator(date)));
     }
-    items.push(keyed("msg-" + d.id, messageSig(d.id, m), () => renderMessage(d.id, m)));
+    if (m.event) {
+      const sig = JSON.stringify([eventText(m), millis(m.createdAt), state.pending.has(d.id)]);
+      items.push(keyed("msg-" + d.id, sig, () => renderEvent(d.id, m)));
+    } else {
+      items.push(keyed("msg-" + d.id, messageSig(d.id, m), () => renderMessage(d.id, m)));
+    }
   }
   return items;
 }
@@ -259,6 +274,25 @@ function tag(className, text, title) {
   s.textContent = text;
   s.title = title;
   return s;
+}
+
+// Annonce (« X a rejoint la conversation ») : une ligne centrée, sans réponse ni modification.
+export function eventText(m) {
+  // Personne absente de l'annuaire (compte supprimé, nom pas encore chargé) : pas de nom inventé.
+  const n = nameOf(m.authorUid);
+  return m.event === "join" ? `${typeof n === "string" ? n : "Un membre"} a rejoint la conversation` : "";
+}
+
+function renderEvent(id, m) {
+  const li = document.createElement("li");
+  li.className = "msg-event" + (state.pending.has(id) ? " pending" : "");
+  li.id = "msg-" + id;
+  const span = document.createElement("span");
+  span.textContent = eventText(m);
+  const date = m.createdAt?.toDate?.();
+  if (date) span.title = fullFmt.format(date);
+  li.append(span);
+  return li;
 }
 
 function renderMessage(id, m) {
@@ -444,6 +478,7 @@ function saveEdit(id, m) {
 // Seul l'identifiant du message cité est enregistré : si l'original est supprimé,
 // son contenu disparaît aussi de la citation.
 export function excerpt(m) {
+  if (m.event) return eventText(m);
   const t = (m.text || "").replace(/\s+/g, " ").trim();
   if (t) return t.length > 140 ? t.slice(0, 140) + "…" : t;
   return m.image ? "📷 Photo" : "";
