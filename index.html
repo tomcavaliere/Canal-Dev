@@ -55,6 +55,7 @@
   <div id="screen-app" class="screen app" hidden>
     <header class="topbar">
       <button id="btn-back" class="btn icon only-mobile" aria-label="Retour aux conversations">←</button>
+      <button id="btn-sidebar" class="btn icon only-desktop" type="button" aria-controls="sidebar" aria-expanded="true">☰</button>
       <span class="brand">Canal Dev</span>
       <span class="spacer"></span>
       <span id="admin-badge" class="badge" hidden>Admin</span>
@@ -66,7 +67,7 @@
       <button class="btn small btn-logout">Déconnexion</button>
     </header>
 
-    <aside class="sidebar">
+    <aside id="sidebar" class="sidebar">
       <div id="sidebar-admin-actions" class="sidebar-actions" hidden>
         <button id="btn-new-conv" class="btn small">+ Conversation</button>
         <button id="btn-new-project" class="btn small">+ Projet</button>

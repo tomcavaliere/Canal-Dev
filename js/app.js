@@ -552,6 +552,25 @@ $("btn-back").addEventListener("click", () => {
   closeCalendar();
 });
 
+// Barre latérale repliable (ordinateur) : le choix est gardé dans ce navigateur.
+const SIDEBAR_KEY = "canal-dev.sidebar-collapsed";
+function renderSidebarToggle() {
+  const collapsed = $("screen-app").classList.contains("sidebar-collapsed");
+  const b = $("btn-sidebar");
+  b.setAttribute("aria-expanded", String(!collapsed));
+  b.title = collapsed ? "Afficher la liste des conversations" : "Replier la liste des conversations";
+  b.setAttribute("aria-label", b.title);
+}
+try {
+  if (localStorage.getItem(SIDEBAR_KEY) === "1") $("screen-app").classList.add("sidebar-collapsed");
+} catch { /* stockage indisponible */ }
+$("btn-sidebar").addEventListener("click", () => {
+  const collapsed = $("screen-app").classList.toggle("sidebar-collapsed");
+  try { localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0"); } catch { /* ignoré */ }
+  renderSidebarToggle();
+});
+renderSidebarToggle();
+
 // Calendrier d'un projet (bouton 📅 de la barre latérale) : il prend la place de la conversation.
 /** @param {string} projectId */
 export function openProjectCalendar(projectId) {

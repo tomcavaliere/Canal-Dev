@@ -165,6 +165,11 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 }
 .user-name { font-size: .9rem; }
 .only-mobile { display: none; }
+/* Barre latérale repliée (ordinateur seulement : sur mobile, elle a déjà sa propre vue). */
+@media (min-width: 721px) {
+  .app.sidebar-collapsed { grid-template-columns: 0 1fr; }
+  .app.sidebar-collapsed .sidebar { display: none; }
+}
 
 .sidebar {
   grid-area: side;
@@ -760,6 +765,7 @@ fieldset.plain legend { padding: 0; margin-bottom: .2rem; }
   .app.show-chat .chat { display: flex; }
   .app.show-chat .sidebar { display: none; }
   .app.show-chat .only-mobile { display: inline-block; }
+  .only-desktop { display: none; }
   .user-name, #user-avatar { display: none; }
   .topbar { padding: .5rem 16px; }
   .messages, .composer, .chat-head, .attach-preview, .attach-error, .offline-banner, .reply-preview, .search-bar, .chat-pinned { padding-left: 16px; padding-right: 16px; }
