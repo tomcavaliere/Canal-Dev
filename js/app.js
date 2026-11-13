@@ -141,6 +141,7 @@ async function startSession(user, id) {
       getProjects: () => state.projects,
       getSelected: () => (state.selectedId ? { id: state.selectedId, ...state.conversations.get(state.selectedId) } : null),
       selectConversation,
+      onUsersChanged: syncPresence,
     });
   }
   if (state.isAdmin) listenAllProjects();
@@ -383,10 +384,12 @@ export function syncNames() {
   watchNames(uids);
 }
 
-// Présence suivie : les autres membres de ses conversations et l'admin (l'admin : tous les membres).
+// Présence suivie : les autres membres de ses conversations et l'admin (l'admin : tous les inscrits).
 function syncPresence() {
+  if (!state.user) return;
   const uids = new Set([ADMIN_UID]);
   for (const c of state.conversations.values()) for (const uid of c.members || []) uids.add(uid);
+  for (const uid of state.admin?.userIds() ?? []) uids.add(uid);
   uids.delete(state.user.uid);
   watchPresence(uids);
 }

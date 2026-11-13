@@ -20,7 +20,7 @@ const INVITE_MS = 90 * 24 * 3600 * 1000;
 const INVITE_EMAIL_RE = /^[a-z0-9._+-]+@gmail\.com$/;
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
 
-export function setupAdmin({ getConversations, getProjects, getSelected, selectConversation }) {
+export function setupAdmin({ getConversations, getProjects, getSelected, selectConversation, onUsersChanged }) {
   let users = new Map(); // uid -> data
   const cleanups = [];
 
@@ -48,6 +48,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     }
     if (!usersLoaded) cleanOrphanRates();
     usersLoaded = true;
+    onUsersChanged(); // présence suivie pour tous les inscrits
     renderUsers();
     if ($("dlg-members").open) renderMembers();
     ensureNames();
@@ -262,7 +263,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     info.className = "info";
     const name = document.createElement("span");
     name.textContent = displayedName(uid, u);
-    if (uid && isOnline(uid)) name.append(onlineLabel());
+    if (uid) name.append(presenceDot(isOnline(uid)));
     const email = document.createElement("span");
     email.className = "muted small";
     email.textContent = u.email;
@@ -272,14 +273,15 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     return wrap;
   }
 
-  // Pastille « en ligne » (le texte caché est lu par les lecteurs d'écran).
-  function onlineLabel() {
+  // Pastille de présence : pleine si en ligne, cerclée sinon (le texte caché est lu par les
+  // lecteurs d'écran). « Hors ligne » couvre aussi les personnes qui masquent leur présence.
+  function presenceDot(online) {
     const dot = document.createElement("span");
-    dot.className = "online-dot";
-    dot.title = "En ligne";
+    dot.className = online ? "online-dot" : "online-dot offline";
+    dot.title = online ? "En ligne" : "Hors ligne";
     const sr = document.createElement("span");
     sr.className = "visually-hidden";
-    sr.textContent = " (en ligne)";
+    sr.textContent = online ? " (en ligne)" : " (hors ligne)";
     dot.append(sr);
     return dot;
   }
@@ -637,7 +639,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       });
       const text = document.createElement("span");
       text.textContent = `${displayedName(uid, u)} — ${u.email}`;
-      if (isOnline(uid)) text.append(onlineLabel());
+      if (isOnline(uid)) text.append(presenceDot(true));
       label.append(cb, text);
       li.append(label);
       return li;
@@ -698,6 +700,10 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       renderUsers();
       if (dlgMembers.open) renderMembers();
       ensureNames(); // nouveau membre : entrée dans l'annuaire
+    },
+    // Inscrits dont l'admin suit la présence (liste « Utilisateurs »).
+    userIds() {
+      return users.keys();
     },
     onPresenceChanged() {
       renderUsers();
