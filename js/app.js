@@ -15,6 +15,7 @@ import { isSoundEnabled, setSoundEnabled } from "./sound.js";
 import { $, initials } from "./ui.js";
 import { clearAttachment } from "./composer.js";
 import { renderLinks } from "./links.js";
+import { renderPinned } from "./pinned.js";
 import { addJoinEvent, clearReply, listenMessages, PAGE, renderMessages, resetImages } from "./messages.js";
 import { renderReceipt, syncMyRead } from "./receipts.js";
 import { closeSearch } from "./search.js";
@@ -494,6 +495,7 @@ function renderChatHeader() {
   $("chat-desc").hidden = !c.description;
   renderOnline();
   renderLinks();
+  renderPinned();
 }
 
 // « En ligne : … » : les autres participants de la conversation ouverte qui ont l'application ouverte.

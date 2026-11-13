@@ -42,6 +42,7 @@ js/ui.js                helpers d'affichage (avatar à initiales)
 js/dialogs.js           dialogue de confirmation et messages brefs (remplacent alert/confirm)
 js/richtext.js          liens cliquables et code dans les messages
 js/links.js             liens attachés à une conversation (barre au-dessus de la saisie)
+js/pinned.js            messages épinglés par l'admin (barre sous l'en-tête de la conversation)
 js/notify.js            notifications et enregistrement du service worker
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting
@@ -123,6 +124,7 @@ puis retire `tomcavaliere.github.io` des domaines autorisés d'Authentication.
 1. **+ Projet** (facultatif) : crée un projet. Le ✎ à côté d'un projet permet de le renommer ou de le supprimer (ses conversations sont conservées et passent « Sans projet »).
 1. **+ Conversation** (ou **+** à côté d'un projet) : crée une conversation, dans un projet ou non. En haut d'une conversation : **Renommer** (titre et description) et **Déplacer** (changer de projet).
 1. **+ Lien** (en bas d'une conversation, au-dessus de la saisie) : attache une adresse à un texte (par exemple « sport » → `https://www.basketusa.com/`). Les membres voient la barre des liens et les ouvrent dans un nouvel onglet ; le ✕ retire un lien (30 au plus par conversation).
+1. **Épingler** (à côté de « Répondre » sur chaque message) : met un message important en avant. Il apparaît dans la barre 📌 en haut de la conversation (un clic y mène, même s'il est ancien) et porte la mention « Épinglé » dans le fil. **Désépingler** ou le ✕ de la barre le retire (10 au plus par conversation ; supprimer le message retire aussi l'épingle).
 2. Demande à la personne de se connecter une fois : elle apparaît dans **Utilisateurs** avec la mention « en attente ».
    Ou, sans attendre : **Utilisateurs → + Inviter** (adresse Gmail, nom affiché, conversations à cocher),
    ou **Membres → Inviter par email** pour la conversation ouverte. À sa première connexion, elle rejoint

@@ -117,6 +117,11 @@
           <span id="search-count" class="muted small" role="status"></span>
           <button id="btn-search-close" type="button" class="btn small">Fermer</button>
         </div>
+        <section id="chat-pinned" class="chat-pinned" aria-label="Messages épinglés" hidden>
+          <button id="btn-pinned-toggle" class="pinned-toggle" type="button" aria-expanded="false"
+            aria-controls="pinned-list"><span aria-hidden="true">📌</span><span id="pinned-count"></span></button>
+          <ul id="pinned-list" class="pinned-list"></ul>
+        </section>
         <ol id="messages" class="messages" aria-label="Messages de la conversation" tabindex="-1"></ol>
         <p id="announcer" class="visually-hidden" role="status" aria-live="polite"></p>
         <nav id="chat-links" class="chat-links" aria-label="Liens de la conversation" hidden>

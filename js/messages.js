@@ -1,7 +1,7 @@
 // Conversation ouverte : écoute paginée des messages, rendu, réponses, modification, photos.
 
 import {
-  collection, doc, getCountFromServer, getDoc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch,
+  arrayRemove, collection, doc, getCountFromServer, getDoc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch,
 } from "./sdk/firebase-firestore.js";
 import { confirmDialog, toast } from "./dialogs.js";
 import { ADMIN_UID, db } from "./firebase.js";
@@ -13,6 +13,7 @@ import { renderReceipt, syncMyRead } from "./receipts.js";
 import { applySearch } from "./search.js";
 import { state } from "./state.js";
 import { bumpRate, rateWait } from "./rate.js";
+import { isPinned, renderPinned, togglePin } from "./pinned.js";
 
 /* ---------- Annonce « X a rejoint la conversation » ---------- */
 
@@ -88,7 +89,7 @@ function renderLoadMore() {
 }
 
 // Montre un message cité (défilement + surbrillance), en agrandissant la fenêtre s'il est trop ancien.
-async function revealMessage(targetId) {
+export async function revealMessage(targetId) {
   if (state.msgById.has(targetId)) {
     flashMessage(targetId);
     return;
@@ -199,7 +200,7 @@ function messageSig(id, m) {
     m.text, m.image?.w, m.image?.h, m.image?.thumb, m.replyTo, millis(m.createdAt), millis(m.editedAt),
     displayText(m.authorUid, m.authorName),
     target ? [displayText(target.authorUid, target.authorName), excerpt(target)] : state.hasMore,
-    state.pending.has(id), state.editing?.id === id,
+    state.pending.has(id), state.editing?.id === id, isPinned(id),
   ]);
 }
 
@@ -255,12 +256,14 @@ export function renderMessages(docs, forceScroll) {
     li.textContent = "Aucun message pour l'instant.";
     list.replaceChildren(li);
     rendered = new Map();
+    renderPinned();
     return;
   }
 
   next = new Map();
   patchList(list, messageItems(docs));
   rendered = next;
+  renderPinned();
   renderReceipt();
   if (forceScroll || nearBottom) list.scrollTop = list.scrollHeight;
   else restoreAnchor(list, anchor);
@@ -297,8 +300,9 @@ function renderEvent(id, m) {
 
 function renderMessage(id, m) {
   const mine = m.authorUid === state.user.uid;
+  const pinned = isPinned(id);
   const li = document.createElement("li");
-  li.className = "msg" + (mine ? " mine" : "") + (state.pending.has(id) ? " pending" : "");
+  li.className = "msg" + (mine ? " mine" : "") + (state.pending.has(id) ? " pending" : "") + (pinned ? " pinned" : "");
   li.id = "msg-" + id;
 
   // Nom tiré de l'annuaire (authorName n'est pas fiable : saisi par l'auteur).
@@ -329,6 +333,7 @@ function renderMessage(id, m) {
   head.append(time);
   const edited = m.editedAt?.toDate?.();
   if (edited) head.append(tag("edited", "modifié", "Modifié le " + fullFmt.format(edited)));
+  if (pinned) head.append(tag("pin-tag", "📌 Épinglé", "Message mis en avant par l'administrateur"));
 
   const actions = document.createElement("div");
   actions.className = "msg-actions";
@@ -338,6 +343,16 @@ function renderMessage(id, m) {
   reply.addEventListener("click", () => startReply(id));
   actions.append(reply);
   head.append(actions);
+
+  // Mise en avant : l'admin seul (règles), et pas un message encore en attente d'envoi.
+  if (state.isAdmin && !state.pending.has(id)) {
+    const pin = document.createElement("button");
+    pin.type = "button";
+    pin.textContent = pinned ? "Désépingler" : "Épingler";
+    pin.title = pinned ? "Retirer ce message des messages épinglés" : "Mettre ce message en avant en haut de la conversation";
+    pin.addEventListener("click", () => togglePin(id));
+    actions.append(pin);
+  }
 
   if (mine) {
     const edit = document.createElement("button");
@@ -359,6 +374,11 @@ function renderMessage(id, m) {
         batch.delete(doc(db, "conversations", state.selectedId, "messages", id));
         if (m.image) batch.delete(doc(db, "conversations", state.selectedId, "images", id));
         if (m.image?.thumb) batch.delete(doc(db, "conversations", state.selectedId, "thumbs", id));
+        // Épingle retirée en même temps (l'admin seul peut modifier la conversation ; une épingle
+        // orpheline laissée par un membre est simplement ignorée à l'affichage).
+        if (state.isAdmin && isPinned(id)) {
+          batch.update(doc(db, "conversations", state.selectedId), { pinned: arrayRemove(id) });
+        }
         await batch.commit();
       } catch (err) {
         console.error(err);

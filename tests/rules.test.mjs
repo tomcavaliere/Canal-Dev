@@ -152,6 +152,22 @@ describe("Conversations", () => {
       { links: Array.from({ length: 31 }, (_, i) => ({ label: `l${i}`, url: `https://x.fr/${i}` })) })));
   it("des liens qui ne sont pas une liste sont refusés", () =>
     assertFails(updateDoc(doc(admin(), "conversations/c1"), { links: "https://x.fr/" })));
+  it("l'admin épingle un message", () =>
+    assertSucceeds(updateDoc(doc(admin(), "conversations/c1"), { pinned: ["m1"] })));
+  it("un membre n'épingle pas de message", () =>
+    assertFails(updateDoc(doc(alice(), "conversations/c1"), { pinned: ["m1"] })));
+  it("plus de 10 messages épinglés sont refusés, même pour l'admin", () =>
+    assertFails(updateDoc(doc(admin(), "conversations/c1"), { pinned: Array.from({ length: 11 }, (_, i) => `m${i}`) })));
+  it("des épingles qui ne sont pas une liste sont refusées", () =>
+    assertFails(updateDoc(doc(admin(), "conversations/c1"), { pinned: "m1" })));
+  it("l'admin supprime un message épinglé et retire l'épingle dans le même batch", async () => {
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), "conversations/c1"), { pinned: ["m2"] }));
+    const db = admin();
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "conversations/c1/messages/m2"));
+    batch.update(doc(db, "conversations/c1"), { pinned: arrayRemove("m2") });
+    await assertSucceeds(batch.commit());
+  });
   it("un membre se retire lui-même", () =>
     assertSucceeds(updateDoc(doc(alice(), "conversations/c1"), { members: arrayRemove("alice") })));
   it("un membre ne retire pas quelqu'un d'autre", () =>
