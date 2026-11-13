@@ -311,6 +311,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         old.title = "Durée de conservation dépassée : supprimer ce compte.";
         extras.unshift(old);
       }
+      if (n > 0 && !isOnline(entry[0])) extras.push(alertMailButton(entry));
       extras.push(editUserButton(entry), deleteUserButton(entry));
       li.append(userRow(entry, extras));
       return li;
@@ -408,6 +409,30 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     btn.setAttribute("aria-label", `Modifier le nom affiché de ${u.email}`);
     btn.addEventListener("click", () => openUserDialog(uid));
     return btn;
+  }
+
+  /* --- Alerte par email d'un inscrit hors ligne --- */
+  // Sans serveur (plan Spark), le site ne peut pas envoyer d'email lui-même : le bouton ouvre
+  // Gmail avec le message déjà rédigé, il ne reste qu'à cliquer sur « Envoyer ».
+  function alertMailButton([uid, u]) {
+    const name = displayedName(uid, u);
+    const url = location.origin + location.pathname;
+    const params = new URLSearchParams({
+      view: "cm",
+      fs: "1",
+      to: u.email,
+      su: "Nouveaux messages sur Canal Dev",
+      body: `Bonjour ${name},\n\nDe nouveaux messages t'attendent sur Canal Dev :\n${url}\n\nÀ bientôt !`,
+    });
+    const link = document.createElement("a");
+    link.className = "edit-user";
+    link.href = "https://mail.google.com/mail/?" + params;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "✉";
+    link.title = "Prévenir par email (ouvre Gmail avec le message prêt)";
+    link.setAttribute("aria-label", `Prévenir ${u.email} par email`);
+    return link;
   }
 
   /* --- Suppression d'un utilisateur (conservation / droit à l'effacement) --- */

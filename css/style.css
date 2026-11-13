@@ -257,6 +257,7 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 }
 .del-user:hover { color: var(--danger); }
 .edit-user:hover { color: var(--accent); }
+a.edit-user { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .sidebar-foot { padding: 1.5rem 1rem 0; margin: 0; }
 .user-row .info { min-width: 0; flex: 1; }
 .user-row .info span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
