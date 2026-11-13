@@ -79,6 +79,9 @@
         <div class="sidebar-head">
           <h2>Utilisateurs</h2>
           <span id="users-pending" class="tag-pending" hidden></span>
+          <span class="spacer"></span>
+          <button id="btn-invite-user" class="btn small" type="button"
+            title="Inviter une adresse Gmail qui ne s'est jamais connectée">+ Inviter</button>
         </div>
         <ul id="user-list" class="list"></ul>
         <p class="purge-row"><button id="btn-purge-inactive" class="btn small danger" type="button" hidden></button></p>
@@ -244,6 +247,30 @@
         <span class="spacer"></span>
         <button type="button" class="btn" data-close>Annuler</button>
         <button type="submit" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialogue : inviter une personne jamais connectée (admin) -->
+  <dialog id="dlg-invite">
+    <form id="form-invite-user" class="stack">
+      <h2>Inviter une personne</h2>
+      <p class="muted small">Pour une adresse Gmail qui ne s'est encore jamais connectée : à sa première connexion,
+        elle rejoint les conversations cochées, sous le nom indiqué. Préviens-la ensuite avec ✉ dans « Utilisateurs ».</p>
+      <label>Adresse Gmail
+        <input id="inv-email" type="email" placeholder="adresse@gmail.com" required autocomplete="off" spellcheck="false">
+      </label>
+      <label>Nom affiché aux membres
+        <input id="inv-name" maxlength="200" required autocomplete="off">
+      </label>
+      <fieldset class="stack tight">
+        <legend>Conversations</legend>
+        <ul id="inv-convs" class="list members"></ul>
+      </fieldset>
+      <p id="inv-error" class="error small" role="alert" hidden></p>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button id="inv-submit" type="submit" class="btn primary">Inviter</button>
       </div>
     </form>
   </dialog>

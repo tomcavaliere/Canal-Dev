@@ -124,8 +124,10 @@ puis retire `tomcavaliere.github.io` des domaines autorisés d'Authentication.
 1. **+ Conversation** (ou **+** à côté d'un projet) : crée une conversation, dans un projet ou non. En haut d'une conversation : **Renommer** (titre et description) et **Déplacer** (changer de projet).
 1. **+ Lien** (en bas d'une conversation, au-dessus de la saisie) : attache une adresse à un texte (par exemple « sport » → `https://www.basketusa.com/`). Les membres voient la barre des liens et les ouvrent dans un nouvel onglet ; le ✕ retire un lien (30 au plus par conversation).
 2. Demande à la personne de se connecter une fois : elle apparaît dans **Utilisateurs** avec la mention « en attente ».
-   Ou, sans attendre : **Membres → Inviter par email** (adresse Gmail + nom affiché). À sa première connexion,
-   elle rejoint directement la conversation sous ce nom (aucun email n'est envoyé : préviens-la toi-même).
+   Ou, sans attendre : **Utilisateurs → + Inviter** (adresse Gmail, nom affiché, conversations à cocher),
+   ou **Membres → Inviter par email** pour la conversation ouverte. À sa première connexion, elle rejoint
+   directement ces conversations sous ce nom. Le site n'envoie pas d'email : le ✉ à côté de l'invitation
+   ouvre Gmail avec le message prêt, et le ✎ permet de changer le nom ou les conversations.
 3. Ouvre la conversation → **Membres** → coche la personne. Elle voit la conversation apparaître instantanément.
    Son **nom affiché** est repris de son compte Google à ce moment-là (un nom déjà pris devient « Nom (2) ») ;
    le ✎ à côté d'elle dans « Utilisateurs » permet de le corriger. Il n'est jamais mis à jour automatiquement,

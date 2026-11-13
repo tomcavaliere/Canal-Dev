@@ -90,34 +90,137 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     $("invite-error").hidden = !msg;
   }
 
+  // Motif de refus d'une invitation, ou "" si elle est valable.
+  function inviteProblem(email, name) {
+    if (!INVITE_EMAIL_RE.test(email)) return "Il faut une adresse Gmail (…@gmail.com).";
+    if ([...users.values()].some((u) => (u.email || "").toLowerCase() === email)) {
+      return "Cette personne s'est déjà connectée : donne-lui accès avec « Membres » dans la conversation.";
+    }
+    if (!name) return "Indique le nom affiché aux membres.";
+    if (nameInUse(name, { email })) return "Ce nom est déjà celui d'une autre personne.";
+    return "";
+  }
+
+  // Crée l'invitation, ou remplace le nom et les conversations d'une invitation existante.
+  function saveInvite(email, name, convIds) {
+    const ref = doc(db, "invites", email);
+    if (invites.has(email)) return updateDoc(ref, { name, convIds, updatedAt: serverTimestamp() });
+    return setDoc(ref, { email, name, convIds, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  }
+
   on($("form-invite"), "submit", async (e) => {
     e.preventDefault();
     const conv = getSelected();
     if (!conv) return;
     const email = $("invite-email").value.trim().toLowerCase();
     const name = $("invite-name").value.trim();
-    if (!INVITE_EMAIL_RE.test(email)) return showInviteError("Il faut une adresse Gmail (…@gmail.com).");
-    if ([...users.values()].some((u) => (u.email || "").toLowerCase() === email)) {
-      return showInviteError("Cette personne est déjà inscrite : coche-la dans la liste ci-dessus.");
-    }
-    if (!name) return showInviteError("Indique le nom affiché aux membres.");
-    if (nameInUse(name, { email })) return showInviteError("Ce nom est déjà celui d'une autre personne.");
-    const existing = invites.get(email);
-    if (existing?.convIds?.length >= 50) return showInviteError("Cette invitation compte déjà 50 conversations.");
+    const problem = inviteProblem(email, name);
+    if (problem) return showInviteError(problem);
+    const convIds = [...new Set([...(invites.get(email)?.convIds || []), conv.id])];
+    if (convIds.length > 50) return showInviteError("Cette invitation compte déjà 50 conversations.");
     showInviteError("");
     try {
-      const ref = doc(db, "invites", email);
-      if (existing) {
-        await updateDoc(ref, { name, convIds: arrayUnion(conv.id), updatedAt: serverTimestamp() });
-      } else {
-        await setDoc(ref, { email, name, convIds: [conv.id], createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      }
+      await saveInvite(email, name, convIds);
       $("invite-email").value = "";
       $("invite-name").value = "";
       toast(`Invitation enregistrée : préviens ${name} de se connecter avec ${email}.`);
     } catch (err) {
       console.error(err);
       showInviteError("Invitation impossible : " + err.message);
+    }
+  });
+
+  /* --- Inviter depuis « Utilisateurs » (sans ouvrir de conversation) --- */
+  const dlgInvite = $("dlg-invite");
+
+  function showInvError(msg) {
+    $("inv-error").textContent = msg;
+    $("inv-error").hidden = !msg;
+  }
+
+  // Conversations à cocher, rangées par projet puis par titre.
+  function renderInviteConvs(checked) {
+    const projects = getProjects();
+    const label = (c) => {
+      const p = c.projectId && projects.get(c.projectId);
+      return p ? `${p.title || "(sans titre)"} · ${c.title || ""}` : c.title || "";
+    };
+    const convs = [...getConversations().values()]
+      .sort((a, b) => label(a).localeCompare(label(b), "fr"));
+    const items = convs.map((c) => {
+      const li = document.createElement("li");
+      const lab = document.createElement("label");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = c.id;
+      cb.checked = checked.has(c.id);
+      const text = document.createElement("span");
+      text.textContent = label(c);
+      const count = document.createElement("span");
+      count.className = "muted small";
+      count.textContent = `${c.members?.length || 0} membre(s)`;
+      lab.append(cb, text, count);
+      li.append(lab);
+      return li;
+    });
+    if (!items.length) {
+      const li = document.createElement("li");
+      li.className = "muted small";
+      li.style.padding = ".75rem";
+      li.textContent = "Crée d'abord une conversation.";
+      items.push(li);
+    }
+    $("inv-convs").replaceChildren(...items);
+  }
+
+  // Une invitation existante est rouverte avec son nom et ses conversations, pour la modifier.
+  function openInviteDialog(email = "") {
+    const inv = email ? invites.get(email) : null;
+    $("form-invite-user").reset();
+    showInvError("");
+    $("inv-email").value = email;
+    $("inv-email").readOnly = !!inv;
+    $("inv-name").value = inv?.name || "";
+    $("inv-submit").textContent = inv ? "Enregistrer" : "Inviter";
+    const sel = getSelected();
+    renderInviteConvs(new Set(inv ? inv.convIds : sel ? [sel.id] : []));
+    dlgInvite.showModal();
+    (inv ? $("inv-name") : $("inv-email")).focus();
+  }
+  on($("btn-invite-user"), "click", () => openInviteDialog());
+
+  // Adresse déjà invitée : on reprend son nom et ses conversations.
+  on($("inv-email"), "change", () => {
+    const inv = invites.get($("inv-email").value.trim().toLowerCase());
+    if (!inv) return;
+    $("inv-name").value = inv.name;
+    renderInviteConvs(new Set(inv.convIds));
+    $("inv-submit").textContent = "Enregistrer";
+  });
+
+  on($("form-invite-user"), "submit", async (e) => {
+    e.preventDefault();
+    const email = $("inv-email").value.trim().toLowerCase();
+    const name = $("inv-name").value.trim();
+    const problem = inviteProblem(email, name);
+    if (problem) return showInvError(problem);
+    const convIds = [...$("inv-convs").querySelectorAll("input:checked")].map((cb) => cb.value);
+    if (!convIds.length) return showInvError("Coche au moins une conversation.");
+    if (convIds.length > 50) return showInvError("50 conversations au plus par invitation.");
+    showInvError("");
+    const btn = $("inv-submit");
+    btn.disabled = true;
+    try {
+      const existed = invites.has(email);
+      await saveInvite(email, name, convIds);
+      dlgInvite.close();
+      toast(existed ? `Invitation de ${name} modifiée.`
+        : `Invitation enregistrée : préviens ${name} avec ✉ dans « Utilisateurs ».`);
+    } catch (err) {
+      console.error(err);
+      showInvError("Invitation impossible : " + err.message);
+    } finally {
+      btn.disabled = false;
     }
   });
 
@@ -324,7 +427,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       if (created && Date.now() - created > INVITE_MS) {
         extras.unshift(tagEl("tag-pending", "> 3 mois", "Invitation jamais utilisée : l'annuler."));
       }
-      extras.push(cancelInviteButton(i));
+      extras.push(inviteMailButton(i), editInviteButton(i), cancelInviteButton(i));
       li.append(userRow(["", { displayName: i.name, email: i.email }], extras));
       items.push(li);
     }
@@ -414,25 +517,44 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   /* --- Alerte par email d'un inscrit hors ligne --- */
   // Sans serveur (plan Spark), le site ne peut pas envoyer d'email lui-même : le bouton ouvre
   // Gmail avec le message déjà rédigé, il ne reste qu'à cliquer sur « Envoyer ».
-  function alertMailButton([uid, u]) {
-    const name = displayedName(uid, u);
-    const url = location.origin + location.pathname;
-    const params = new URLSearchParams({
-      view: "cm",
-      fs: "1",
-      to: u.email,
-      su: "Nouveaux messages sur Canal Dev",
-      body: `Bonjour ${name},\n\nDe nouveaux messages t'attendent sur Canal Dev :\n${url}\n\nÀ bientôt !`,
-    });
+  function gmailButton(to, subject, body, title, ariaLabel) {
+    const params = new URLSearchParams({ view: "cm", fs: "1", to, su: subject, body });
     const link = document.createElement("a");
     link.className = "edit-user";
     link.href = "https://mail.google.com/mail/?" + params;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.textContent = "✉";
-    link.title = "Prévenir par email (ouvre Gmail avec le message prêt)";
-    link.setAttribute("aria-label", `Prévenir ${u.email} par email`);
+    link.title = title;
+    link.setAttribute("aria-label", ariaLabel);
     return link;
+  }
+
+  const siteUrl = () => location.origin + location.pathname;
+
+  function alertMailButton([uid, u]) {
+    const name = displayedName(uid, u);
+    return gmailButton(u.email, "Nouveaux messages sur Canal Dev",
+      `Bonjour ${name},\n\nDe nouveaux messages t'attendent sur Canal Dev :\n${siteUrl()}\n\nÀ bientôt !`,
+      "Prévenir par email (ouvre Gmail avec le message prêt)", `Prévenir ${u.email} par email`);
+  }
+
+  // Invitation : la personne doit se connecter avec exactement cette adresse Google.
+  function inviteMailButton(i) {
+    return gmailButton(i.email, "Invitation sur Canal Dev",
+      `Bonjour ${i.name},\n\nJe t'ai ajouté(e) sur Canal Dev. Pour y accéder, connecte-toi avec ton compte Google ${i.email} :\n${siteUrl()}\n\nÀ bientôt !`,
+      "Envoyer l'invitation par email (ouvre Gmail avec le message prêt)", `Envoyer l'invitation à ${i.email} par email`);
+  }
+
+  function editInviteButton(i) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "edit-user";
+    btn.textContent = "✎";
+    btn.title = "Modifier le nom ou les conversations de l'invitation";
+    btn.setAttribute("aria-label", `Modifier l'invitation de ${i.email}`);
+    btn.addEventListener("click", () => openInviteDialog(i.email));
+    return btn;
   }
 
   /* --- Suppression d'un utilisateur (conservation / droit à l'effacement) --- */
@@ -746,6 +868,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       if (dlgProject.open) dlgProject.close();
       if (dlgMove.open) dlgMove.close();
       if (dlgUser.open) dlgUser.close();
+      if (dlgInvite.open) dlgInvite.close();
       $("user-list").replaceChildren();
     },
   };

@@ -460,6 +460,10 @@ dialog::backdrop { background: rgb(0 0 0 / .4); }
 label.check { flex-direction: row; align-items: center; gap: .5rem; }
 label.check input { width: auto; }
 .purge-row { padding: .5rem 1rem 0; margin: 0; }
+#admin-users .sidebar-head { gap: .5rem; }
+#dlg-invite fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+#dlg-invite legend { padding: 0; margin-bottom: .4rem; }
+#dlg-invite .members label .muted { margin-left: auto; }
 #form-invite { border-top: 1px solid var(--border); padding-top: .75rem; }
 .invite-fields { display: flex; flex-wrap: wrap; gap: .5rem; }
 .invite-fields input { flex: 1 1 10rem; }
