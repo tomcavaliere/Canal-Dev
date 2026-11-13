@@ -233,6 +233,27 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
   box-shadow: inset 3px 0 0 var(--proj);
 }
 .group-items .list-empty { padding-left: 1.1rem; }
+/* Rôles d'un projet, juste sous son en-tête */
+.group-roles {
+  margin: 0 0 .15rem 1rem; padding: .3rem .75rem .35rem 1.1rem;
+  border-left: 2px solid color-mix(in srgb, var(--proj) 35%, transparent);
+  display: flex; flex-direction: column; gap: .15rem; font-size: .78rem;
+}
+.role { display: flex; align-items: baseline; gap: .4rem; min-width: 0; }
+.role-name {
+  flex-shrink: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; color: var(--proj);
+}
+.role-name::after { content: " :"; color: var(--muted); font-weight: 400; }
+.role-people { min-width: 0; overflow-wrap: anywhere; }
+
+/* Éditeur des rôles (dialogue du projet) */
+.project-roles { border: 0; padding: 0; margin: 0; min-width: 0; }
+.project-roles legend { padding: 0; margin-bottom: .2rem; font-weight: 600; }
+.role-editors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .75rem; }
+.role-editor { padding: .5rem; border: 1px solid var(--border); border-radius: 8px; }
+.role-editor .row input { flex: 1; min-width: 0; }
+.role-people-picker { max-height: 9rem; }
 .chat-project { margin: 0 0 .1rem; text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; font-weight: 600; color: var(--proj, var(--muted)); }
 .chat-project::before { content: ""; display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; margin-right: .4rem; vertical-align: .05em; }
 

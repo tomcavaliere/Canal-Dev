@@ -13,6 +13,7 @@ import { playMessageSound } from "./sound.js";
 import { showNotification } from "./notify.js";
 import { isOnline } from "./presence.js";
 import { addMemberEvent } from "./messages.js";
+import { projectRoles, roleUids } from "./sidebar.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -52,6 +53,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     onUsersChanged(); // présence suivie pour tous les inscrits
     renderUsers();
     if ($("dlg-members").open) renderMembers();
+    if ($("dlg-project").open) renderRoleEditors();
     ensureNames();
   }, (err) => console.error("Lecture des utilisateurs impossible", err));
   cleanups.push(unsubUsers);
@@ -295,6 +297,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     if (!usersLoaded || !namesLoaded()) return;
     const needed = new Set([ADMIN_UID]);
     for (const c of getConversations().values()) for (const uid of c.members || []) needed.add(uid);
+    for (const uid of roleUids()) needed.add(uid); // personnes qui tiennent un rôle
     const reserved = new Set(); // noms attribués dans ce passage, pas encore revenus de l'annuaire
     for (const uid of needed) {
       if (nameOf(uid) != null || naming.has(uid) || !users.has(uid)) continue;
@@ -659,28 +662,134 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     if (projectId && !p) return;
     editingProjectId = projectId;
     $("form-project").reset();
-    $("project-dlg-title").textContent = p ? "Renommer le projet" : "Nouveau projet";
     $("project-title").value = p?.title || "";
     $("project-desc").value = p?.description || "";
     $("btn-delete-project").hidden = !p;
+    $("project-dlg-title").textContent = p ? "Modifier le projet" : "Nouveau projet";
+    $("project-error").hidden = true;
+    draftRoles = projectRoles(p).map((r) => ({ id: r.id, name: r.name, uids: new Set(r.uids) }));
+    renderRoleEditors();
     dlgProject.showModal();
   }
   on($("btn-new-project"), "click", () => openProjectDialog());
+
+  /* --- Rôles d'un projet (édités dans le dialogue du projet) --- */
+  const MAX_ROLES = 20;
+  /** @type {{ id: string, name: string, uids: Set<string> }[]} */
+  let draftRoles = [];
+
+  function newRoleId() {
+    return Math.random().toString(36).slice(2, 10);
+  }
+
+  // Personnes qu'on peut cocher : les inscrits, sous leur nom affiché (annuaire), sinon leur nom Google.
+  function roleCandidates() {
+    return [...users.entries()]
+      .map(([uid, u]) => ({ uid, label: nameOf(uid) || googleName(u) || u.email || uid }))
+      .sort((a, b) => a.label.localeCompare(b.label, "fr"));
+  }
+
+  function renderRoleEditors() {
+    const people = roleCandidates();
+    const items = draftRoles.map((role, i) => {
+      const li = document.createElement("li");
+      li.className = "role-editor stack tight";
+      const head = document.createElement("div");
+      head.className = "row";
+      const input = document.createElement("input");
+      input.maxLength = 60;
+      input.value = role.name;
+      input.placeholder = "Nom du rôle (ex. Développeur)";
+      input.setAttribute("aria-label", `Nom du rôle ${i + 1}`);
+      input.dataset.role = role.id;
+      input.addEventListener("input", () => { role.name = input.value; });
+      const up = document.createElement("button");
+      up.type = "button";
+      up.className = "btn small";
+      up.textContent = "↑";
+      up.title = "Monter ce rôle";
+      up.setAttribute("aria-label", `Monter le rôle ${role.name || i + 1}`);
+      up.disabled = i === 0;
+      up.addEventListener("click", () => {
+        [draftRoles[i - 1], draftRoles[i]] = [draftRoles[i], draftRoles[i - 1]];
+        renderRoleEditors();
+      });
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "btn small danger";
+      del.textContent = "Retirer";
+      del.setAttribute("aria-label", `Retirer le rôle ${role.name || i + 1}`);
+      del.addEventListener("click", () => {
+        draftRoles.splice(i, 1);
+        renderRoleEditors();
+      });
+      head.append(input, up, del);
+
+      const ul = document.createElement("ul");
+      ul.className = "list members role-people-picker";
+      for (const { uid, label } of people) {
+        const pli = document.createElement("li");
+        const lab = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = role.uids.has(uid);
+        cb.addEventListener("change", () => { if (cb.checked) role.uids.add(uid); else role.uids.delete(uid); });
+        lab.append(cb, document.createTextNode(label));
+        pli.append(lab);
+        ul.append(pli);
+      }
+      if (!people.length) ul.append(Object.assign(document.createElement("li"), { className: "muted small", textContent: "Aucun inscrit." }));
+      li.append(head, ul);
+      return li;
+    });
+    $("project-roles").replaceChildren(...items);
+    $("btn-add-role").disabled = draftRoles.length >= MAX_ROLES;
+  }
+
+  on($("btn-add-role"), "click", () => {
+    if (draftRoles.length >= MAX_ROLES) return;
+    draftRoles.push({ id: newRoleId(), name: "", uids: new Set() });
+    renderRoleEditors();
+    /** @type {HTMLInputElement | null} */ ($("project-roles").querySelector("li:last-child input"))?.focus();
+  });
+
+  // Champs Firestore des rôles (voir firestore.rules) : seuls les rôles nommés sont gardés,
+  // et seules les personnes encore inscrites.
+  function rolesFields() {
+    const roles = draftRoles
+      .map((r) => ({ id: r.id, name: r.name.trim().slice(0, 60), uids: r.uids }))
+      .filter((r) => r.name);
+    /** @type {Record<string, string[]>} */
+    const roleMembers = {};
+    for (const r of roles) {
+      for (const uid of r.uids) if (users.has(uid)) (roleMembers[uid] ??= []).push(r.id);
+    }
+    return { roles: roles.map(({ id, name }) => ({ id, name })), roleMembers, roleUids: Object.keys(roleMembers) };
+  }
 
   on($("form-project"), "submit", async (e) => {
     e.preventDefault();
     const title = $("project-title").value.trim();
     const description = $("project-desc").value.trim();
     if (!title) return;
+    const names = draftRoles.map((r) => r.name.trim().toLocaleLowerCase("fr")).filter(Boolean);
+    if (new Set(names).size !== names.length) {
+      $("project-error").textContent = "Deux rôles portent le même nom.";
+      $("project-error").hidden = false;
+      return;
+    }
     try {
       if (editingProjectId) {
-        await updateDoc(doc(db, "projects", editingProjectId), { title, description, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, "projects", editingProjectId), {
+          title, description, ...rolesFields(), updatedAt: serverTimestamp(),
+        });
       } else {
         await addDoc(collection(db, "projects"), {
-          title, description, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+          title, description, ...rolesFields(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
       }
       dlgProject.close();
+      ensureNames(); // personnes qui tiennent un rôle : entrée dans l'annuaire
     } catch (err) {
       console.error(err);
       toast("Enregistrement impossible : " + err.message, { error: true });

@@ -9,6 +9,7 @@ Canal de communication pour suivre le développement d'un outil.
   recherche dans les messages chargés, modification de ses messages, liens et `code` mis en forme.
 - Installable comme application (PWA) ; notifications tant que l'application est ouverte (pas de push : plan Spark).
 - L'administrateur peut ranger les conversations dans des **projets** (ou les laisser « Sans projet ») et les déplacer de l'un à l'autre. Les membres voient le nom du projet de leurs conversations, jamais la liste des autres projets.
+- Chaque projet peut avoir des **rôles** (Développeur, Design…) modifiables par l'administrateur. Les rôles et les personnes qui les tiennent s'affichent dans la barre latérale, juste sous le nom du projet.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
@@ -122,7 +123,7 @@ renvoie les anciens liens vers la nouvelle adresse. Désactive-le ensuite (GitHu
 puis retire `tomcavaliere.github.io` des domaines autorisés d'Authentication.
 
 ## Utilisation (admin)
-1. **+ Projet** (facultatif) : crée un projet. Le ✎ à côté d'un projet permet de le renommer ou de le supprimer (ses conversations sont conservées et passent « Sans projet »).
+1. **+ Projet** (facultatif) : crée un projet. Le ✎ à côté d'un projet permet de le renommer, de gérer ses **rôles** (ajouter, renommer, réordonner avec ↑, retirer, cocher les personnes) ou de le supprimer (ses conversations sont conservées et passent « Sans projet »).
 1. **+ Conversation** (ou **+** à côté d'un projet) : crée une conversation, dans un projet ou non. En haut d'une conversation : **Renommer** (titre et description) et **Déplacer** (changer de projet).
 1. **+ Lien** (en bas d'une conversation, au-dessus de la saisie) : attache une adresse à un texte (par exemple « sport » → `https://www.basketusa.com/`). Les membres voient la barre des liens et les ouvrent dans un nouvel onglet ; le ✕ retire un lien (30 au plus par conversation).
 1. **Épingler** (à côté de « Répondre » sur chaque message) : met un message important en avant. Il apparaît dans la barre 📌 en haut de la conversation (un clic y mène, même s'il est ancien) et porte la mention « Épinglé » dans le fil. **Désépingler** ou le ✕ de la barre le retire (10 au plus par conversation ; supprimer le message retire aussi l'épingle).

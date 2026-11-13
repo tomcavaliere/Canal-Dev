@@ -1,6 +1,6 @@
 // Barre latérale : liste des conversations, groupées par projet et triées par activité.
 
-import { displayText } from "./names.js";
+import { displayText, nameOf } from "./names.js";
 import { $ } from "./ui.js";
 import { selectConversation } from "./app.js";
 import { state } from "./state.js";
@@ -119,7 +119,59 @@ function smallButton(text, label, onClick, focusKey) {
   return b;
 }
 
-// Un groupe repliable : en-tête (titre du projet) + liste de ses conversations.
+// Rôles d'un projet, dans l'ordre choisi par l'admin : [{ id, name, uids }].
+// Les données sont filtrées (écrites par l'admin seul, mais jamais supposées bien formées) ;
+// une personne absente de l'annuaire (compte supprimé) n'est pas affichée.
+export function projectRoles(p) {
+  if (!p || !Array.isArray(p.roles)) return [];
+  const members = p.roleMembers && typeof p.roleMembers === "object" ? p.roleMembers : {};
+  return p.roles
+    .filter((r) => r && typeof r.id === "string" && typeof r.name === "string" && r.name)
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      uids: Object.keys(members).filter((uid) => Array.isArray(members[uid]) && members[uid].includes(r.id)),
+    }));
+}
+
+// Toutes les personnes qui tiennent un rôle dans les projets connus (pour suivre leurs noms).
+export function roleUids() {
+  const uids = new Set();
+  for (const p of state.projects.values()) for (const r of projectRoles(p)) r.uids.forEach((u) => uids.add(u));
+  return uids;
+}
+
+// Bloc « rôles » affiché sous l'en-tête d'un projet ouvert. Un rôle sans personne n'est montré qu'à l'admin.
+function rolesBlock(projectId) {
+  const roles = projectRoles(state.projects.get(projectId))
+    .map((r) => ({
+      ...r,
+      names: r.uids
+        .filter((uid) => uid === state.user?.uid || typeof nameOf(uid) === "string")
+        .map((uid) => (uid === state.user?.uid ? "toi" : displayText(uid)))
+        .sort((a, b) => a.localeCompare(b, "fr")),
+    }))
+    .filter((r) => r.names.length || state.isAdmin);
+  if (!roles.length) return null;
+  const ul = document.createElement("ul");
+  ul.className = "list group-roles";
+  ul.setAttribute("aria-label", "Rôles du projet");
+  for (const r of roles) {
+    const li = document.createElement("li");
+    li.className = "role";
+    const name = document.createElement("span");
+    name.className = "role-name";
+    name.textContent = r.name;
+    const people = document.createElement("span");
+    people.className = "role-people" + (r.names.length ? "" : " muted");
+    people.textContent = r.names.length ? r.names.join(", ") : "personne";
+    li.append(name, people);
+    ul.append(li);
+  }
+  return ul;
+}
+
+// Un groupe repliable : en-tête (titre du projet), ses rôles, puis la liste de ses conversations.
 function projectGroup(projectId, title, convs) {
   const li = document.createElement("li");
   li.className = "group" + (projectId ? "" : " group-loose");
@@ -156,12 +208,14 @@ function projectGroup(projectId, title, convs) {
   if (state.isAdmin && projectId) {
     head.append(
       smallButton("+", `Nouvelle conversation dans « ${title} »`, () => state.admin?.newConversation(projectId), "add:" + projectId),
-      smallButton("✎", `Renommer ou supprimer le projet « ${title} »`, () => state.admin?.editProject(projectId), "edit:" + projectId),
+      smallButton("✎", `Modifier le projet « ${title} » et ses rôles`, () => state.admin?.editProject(projectId), "edit:" + projectId),
     );
   }
   li.append(head);
 
   if (isOpen) {
+    const roles = projectId ? rolesBlock(projectId) : null;
+    if (roles) li.append(roles);
     const ul = document.createElement("ul");
     ul.className = "list group-items";
     const items = convs.map(([id, c]) => conversationItem(id, c));

@@ -216,6 +216,14 @@
         <textarea id="project-desc" maxlength="500" rows="3"></textarea>
       </label>
       <p class="muted small">Les membres d'une conversation voient le nom du projet qui la contient.</p>
+      <fieldset class="stack tight project-roles">
+        <legend>Rôles</legend>
+        <p class="muted small">Affichés sous le nom du projet, dans la barre latérale, avec les personnes cochées.
+          Visibles par les membres des conversations du projet.</p>
+        <ol id="project-roles" class="role-editors"></ol>
+        <div><button id="btn-add-role" type="button" class="btn small">+ Rôle</button></div>
+      </fieldset>
+      <p id="project-error" class="error small" role="alert" hidden></p>
       <div class="row end">
         <button id="btn-delete-project" type="button" class="btn danger" hidden>Supprimer le projet</button>
         <span class="spacer"></span>

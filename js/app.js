@@ -19,7 +19,7 @@ import { renderPinned } from "./pinned.js";
 import { addMemberEvent, clearReply, listenMessages, PAGE, renderMessages, resetImages } from "./messages.js";
 import { renderReceipt, syncMyRead } from "./receipts.js";
 import { closeSearch } from "./search.js";
-import { projectColor, projectOf, renderConversationList, sortedConversations } from "./sidebar.js";
+import { projectColor, projectOf, renderConversationList, roleUids, sortedConversations } from "./sidebar.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
@@ -368,6 +368,7 @@ function syncProjectListeners() {
     if (state.projectSubs.has(id)) continue;
     state.projectSubs.set(id, onSnapshot(doc(db, "projects", id), (snap) => {
       state.projects.set(id, snap.exists() ? snap.data({ serverTimestamps: "estimate" }) : null);
+      syncNames(); // personnes qui tiennent un rôle
       renderConversationList();
       if (state.selectedId) renderChatHeader();
     }, (err) => console.error("Lecture du projet impossible", err)));
@@ -376,11 +377,12 @@ function syncProjectListeners() {
 
 /* ---------- Annuaire des noms ---------- */
 
-// Noms à suivre : membres de ses conversations, l'admin, et les auteurs des messages
-// affichés (y compris d'anciens membres). L'admin, lui, écoute tout l'annuaire.
+// Noms à suivre : membres de ses conversations, l'admin, les personnes qui tiennent un rôle
+// dans ses projets, et les auteurs des messages affichés (y compris d'anciens membres).
+// L'admin, lui, écoute tout l'annuaire.
 export function syncNames() {
   if (state.isAdmin || !state.user) return;
-  const uids = new Set([ADMIN_UID]);
+  const uids = new Set([ADMIN_UID, ...roleUids()]);
   for (const c of state.conversations.values()) for (const uid of c.members || []) uids.add(uid);
   for (const m of state.msgById.values()) uids.add(m.authorUid);
   watchNames(uids);
@@ -410,6 +412,7 @@ function scheduleNamesRender() {
     namesFrame = 0;
     if (state.selectedId && state.msgDocs) renderMessages(state.msgDocs, false);
     if (state.selectedId) renderOnline();
+    renderConversationList(); // noms des rôles
     const replied = state.replyTo && state.msgById.get(state.replyTo);
     if (replied) $("reply-author").textContent = displayText(replied.authorUid, replied.authorName);
     state.admin?.onNamesChanged();
