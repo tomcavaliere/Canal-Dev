@@ -143,6 +143,15 @@ describe("Conversations", () => {
     assertFails(setDoc(doc(admin(), "conversations/c3"), conversation({ secret: true }))));
   it("un membre ne renomme pas la conversation", () =>
     assertFails(updateDoc(doc(alice(), "conversations/c1"), { title: "Pirate" })));
+  it("l'admin attache des liens à une conversation", () =>
+    assertSucceeds(updateDoc(doc(admin(), "conversations/c1"), { links: [{ label: "sport", url: "https://www.basketusa.com/" }] })));
+  it("un membre n'attache pas de lien", () =>
+    assertFails(updateDoc(doc(alice(), "conversations/c1"), { links: [{ label: "x", url: "https://x.fr/" }] })));
+  it("plus de 30 liens sont refusés, même pour l'admin", () =>
+    assertFails(updateDoc(doc(admin(), "conversations/c1"),
+      { links: Array.from({ length: 31 }, (_, i) => ({ label: `l${i}`, url: `https://x.fr/${i}` })) })));
+  it("des liens qui ne sont pas une liste sont refusés", () =>
+    assertFails(updateDoc(doc(admin(), "conversations/c1"), { links: "https://x.fr/" })));
   it("un membre se retire lui-même", () =>
     assertSucceeds(updateDoc(doc(alice(), "conversations/c1"), { members: arrayRemove("alice") })));
   it("un membre ne retire pas quelqu'un d'autre", () =>

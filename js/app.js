@@ -13,6 +13,7 @@ import { notificationState, registerServiceWorker, toggleNotifications } from ".
 import { isSoundEnabled, setSoundEnabled } from "./sound.js";
 import { $, initials } from "./ui.js";
 import { clearAttachment } from "./composer.js";
+import { renderLinks } from "./links.js";
 import { clearReply, listenMessages, PAGE, renderMessages, resetImages } from "./messages.js";
 import { renderReceipt, syncMyRead } from "./receipts.js";
 import { closeSearch } from "./search.js";
@@ -410,6 +411,7 @@ export function selectConversation(id) {
   state.revealId = null;
   state.editing = null;
   closeSearch();
+  if ($("dlg-link").open) $("dlg-link").close();
   state.selectedId = id;
   $("chat-empty").hidden = true;
   $("chat-view").hidden = false;
@@ -444,6 +446,7 @@ function closeConversation() {
   state.pending = new Set();
   state.editing = null;
   closeSearch();
+  if ($("dlg-link").open) $("dlg-link").close();
   state.selectedId = null;
   $("chat-view").hidden = true;
   $("chat-empty").hidden = false;
@@ -460,6 +463,7 @@ function renderChatHeader() {
   $("chat-title").textContent = c.title || "(sans titre)";
   $("chat-desc").textContent = c.description || "";
   $("chat-desc").hidden = !c.description;
+  renderLinks();
 }
 
 $("btn-back").addEventListener("click", () => $("screen-app").classList.remove("show-chat"));

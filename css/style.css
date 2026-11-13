@@ -349,6 +349,33 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .day-sep { display: flex; align-items: center; gap: .75rem; color: var(--muted); font-size: .75rem; margin: .25rem 0; }
 .day-sep::before, .day-sep::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 
+/* Liens attachés à la conversation (au-dessus de la saisie) */
+.chat-links {
+  display: flex; gap: .5rem; align-items: center;
+  padding: .4rem 1rem; border-top: 1px solid var(--border); background: var(--surface);
+}
+.chat-links-icon { font-size: .85rem; }
+.links-list {
+  list-style: none; margin: 0; padding: 0; flex: 1; min-width: 0;
+  display: flex; gap: .4rem; overflow-x: auto; scrollbar-width: thin;
+}
+.chat-link {
+  display: flex; align-items: center; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2);
+}
+.chat-link a {
+  padding: .15rem .65rem; font-size: .85rem; text-decoration: none; white-space: nowrap;
+  max-width: 14rem; overflow: hidden; text-overflow: ellipsis; border-radius: 999px;
+}
+.chat-link a:hover { text-decoration: underline; }
+.chat-link-del {
+  background: none; border: none; color: var(--muted); cursor: pointer; font: inherit; font-size: .75rem;
+  min-width: 24px; min-height: 24px; padding: 0 .4rem 0 0;
+}
+.chat-link-del:hover { color: var(--danger); }
+.links-list:empty { display: none; }
+.links-list:empty ~ .btn { margin-right: auto; }
+
 .composer {
   display: flex;
   gap: .5rem;

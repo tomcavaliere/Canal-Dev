@@ -115,6 +115,11 @@
         </div>
         <ol id="messages" class="messages" aria-label="Messages de la conversation" tabindex="-1"></ol>
         <p id="announcer" class="visually-hidden" role="status" aria-live="polite"></p>
+        <nav id="chat-links" class="chat-links" aria-label="Liens de la conversation" hidden>
+          <span class="chat-links-icon" aria-hidden="true">🔗</span>
+          <ul id="links-list" class="links-list"></ul>
+          <button id="btn-add-link" class="btn small" type="button" hidden>+ Lien</button>
+        </nav>
         <div id="reply-preview" class="reply-preview" hidden>
           <div class="reply-info small">
             <p>Réponse à <strong id="reply-author"></strong></p>
@@ -163,6 +168,26 @@
       <div class="row end">
         <button type="button" class="btn" data-close>Annuler</button>
         <button id="conv-dlg-submit" type="submit" class="btn primary">Créer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialogue : attacher un lien à la conversation (admin) -->
+  <dialog id="dlg-link">
+    <form id="form-link" method="dialog" class="stack">
+      <h2>Attacher un lien</h2>
+      <label>Texte affiché
+        <input id="link-label" maxlength="60" required autocomplete="off" placeholder="sport">
+      </label>
+      <label>Adresse
+        <input id="link-url" type="text" inputmode="url" maxlength="2000" required autocomplete="off"
+          spellcheck="false" placeholder="https://www.basketusa.com/">
+      </label>
+      <p id="link-error" class="error small" role="alert" hidden></p>
+      <p class="muted small">Le lien apparaît en bas de la conversation, visible par tous ses membres.</p>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button id="link-submit" type="submit" class="btn primary">Attacher</button>
       </div>
     </form>
   </dialog>
