@@ -15,6 +15,7 @@ import { isOnline } from "./presence.js";
 import { addMemberEvent } from "./messages.js";
 import { projectRoles, roleUids } from "./sidebar.js";
 import { isLogo, prepareLogo } from "./images.js";
+import { deleteProjectCalendar } from "./tickets.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -851,7 +852,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     const id = editingProjectId;
     const p = id && getProjects().get(id);
     if (!p) return;
-    if (!await confirmDialog(`Supprimer le projet « ${p.title} » ? Ses conversations sont conservées et passent dans « Sans projet ».`,
+    if (!await confirmDialog(`Supprimer le projet « ${p.title} » ? Ses conversations sont conservées et passent dans « Sans projet ». Son calendrier (réunions et objectifs) est supprimé.`,
       { ok: "Supprimer", danger: true })) return;
     try {
       const convs = await getDocs(query(collection(db, "conversations"), where("projectId", "==", id)));
@@ -861,6 +862,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
           batch.update(d.ref, { projectId: deleteField(), updatedAt: serverTimestamp() }));
         await batch.commit();
       }
+      await deleteProjectCalendar(id);
       await deleteDoc(doc(db, "projects", id));
       dlgProject.close();
     } catch (err) {

@@ -9,7 +9,9 @@ export const state = {
   conversations: new Map(), // id -> data
   convsLoaded: false,
   projects: new Map(), // id -> data (null si le projet n'existe plus)
+  projectsLoaded: false, // admin : liste complète des projets reçue
   selectedId: null,
+  calendarProjectId: null, // projet dont le calendrier est affiché (à la place d'une conversation)
   unsubConvs: null,
   unsubProjects: null, // admin : écoute de toute la collection
   projectSubs: new Map(), // non-admin : id -> unsubscribe (un écouteur par projet visible)

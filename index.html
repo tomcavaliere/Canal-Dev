@@ -162,6 +162,62 @@
           <button class="btn primary" type="submit">Envoyer</button>
         </form>
       </div>
+
+      <!-- Calendrier d'un projet (à la place de la conversation) -->
+      <section id="cal-view" class="cal-view" aria-labelledby="cal-heading" hidden>
+        <div class="chat-head">
+          <div class="chat-head-text">
+            <p id="cal-project" class="chat-project small"></p>
+            <h2 id="cal-heading">Calendrier</h2>
+            <p class="muted small">Réunions et objectifs, visibles par tous les membres du projet.</p>
+          </div>
+          <div class="row chat-tools">
+            <button id="btn-new-event" class="btn small primary" type="button">+ Réunion</button>
+            <button id="btn-new-goal" class="btn small" type="button">+ Objectif</button>
+            <button id="btn-cal-close" class="btn small" type="button">Fermer</button>
+          </div>
+        </div>
+        <div class="cal-body">
+          <p id="cal-error" class="error small cal-error" role="alert" hidden></p>
+          <div class="cal-main">
+            <section class="cal-month" aria-labelledby="cal-month-label">
+              <div class="cal-nav">
+                <button id="btn-cal-prev" class="btn small" type="button" aria-label="Mois précédent">‹</button>
+                <h3 id="cal-month-label"></h3>
+                <button id="btn-cal-next" class="btn small" type="button" aria-label="Mois suivant">›</button>
+                <span class="spacer"></span>
+                <button id="btn-cal-today" class="btn small" type="button">Aujourd'hui</button>
+              </div>
+              <table class="cal-grid">
+                <thead>
+                  <tr><th scope="col"><abbr title="lundi">lun.</abbr></th><th scope="col"><abbr title="mardi">mar.</abbr></th>
+                    <th scope="col"><abbr title="mercredi">mer.</abbr></th><th scope="col"><abbr title="jeudi">jeu.</abbr></th>
+                    <th scope="col"><abbr title="vendredi">ven.</abbr></th><th scope="col"><abbr title="samedi">sam.</abbr></th>
+                    <th scope="col"><abbr title="dimanche">dim.</abbr></th></tr>
+                </thead>
+                <tbody id="cal-grid"></tbody>
+              </table>
+            </section>
+            <section class="cal-panel" aria-labelledby="cal-day-label">
+              <div class="cal-panel-head">
+                <h3 id="cal-day-label"></h3>
+                <button id="btn-day-event" class="btn small" type="button">+ Réunion ce jour</button>
+              </div>
+              <ul id="cal-day-list" class="cal-items"></ul>
+            </section>
+          </div>
+          <div class="cal-side">
+            <section class="cal-panel" aria-labelledby="cal-upcoming-label">
+              <h3 id="cal-upcoming-label">Prochaines réunions</h3>
+              <ul id="cal-upcoming" class="cal-items"></ul>
+            </section>
+            <section class="cal-panel" aria-labelledby="cal-goals-label">
+              <h3 id="cal-goals-label">Objectifs <span id="cal-goals-count" class="muted small"></span></h3>
+              <ul id="cal-goals" class="cal-items cal-goals"></ul>
+            </section>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -327,6 +383,93 @@
         <button type="button" class="btn" data-close>Fermer</button>
       </div>
     </div>
+  </dialog>
+
+  <!-- Dialogue : nouvelle réunion / modifier une réunion -->
+  <dialog id="dlg-event">
+    <form id="form-event" class="stack">
+      <h2 id="event-dlg-title">Nouvelle réunion</h2>
+      <label>Titre
+        <input id="event-title" maxlength="120" required autocomplete="off">
+      </label>
+      <div class="event-when">
+        <label>Date
+          <input id="event-date" type="date" required>
+        </label>
+        <label>Début
+          <input id="event-start" type="time" required>
+        </label>
+        <label>Fin
+          <input id="event-end" type="time" required>
+        </label>
+      </div>
+      <label>Lieu ou lien de visio <span class="muted small">(facultatif)</span>
+        <input id="event-place" maxlength="200" autocomplete="off">
+      </label>
+      <label>Ordre du jour <span class="muted small">(facultatif)</span>
+        <textarea id="event-desc" maxlength="2000" rows="3"></textarea>
+      </label>
+      <fieldset class="stack tight event-invites">
+        <legend>Inviter des membres du projet <span id="event-invite-count" class="muted small"></span></legend>
+        <ul id="event-attendees" class="list members"></ul>
+      </fieldset>
+      <p id="event-reset-note" class="muted small" hidden>Si tu changes la date ou l'heure,
+        les réponses déjà données sont effacées et les invités devront répondre à nouveau.</p>
+      <p id="event-error" class="error small" role="alert" hidden></p>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button id="event-submit" type="submit" class="btn primary">Créer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialogue : détail d'une réunion (réponse des invités) -->
+  <dialog id="dlg-event-view" aria-labelledby="ev-title">
+    <div class="stack">
+      <div>
+        <h2 id="ev-title"></h2>
+        <p id="ev-when" class="ev-when"></p>
+        <p id="ev-place-row" class="small">📍 <span id="ev-place" class="ev-text"></span></p>
+        <p class="muted small">Organisée par <strong id="ev-organizer"></strong></p>
+      </div>
+      <p id="ev-desc" class="ev-text small"></p>
+      <section class="stack tight">
+        <h3>Invités <span id="ev-count" class="muted small"></span></h3>
+        <ul id="ev-attendees" class="ev-attendees"></ul>
+      </section>
+      <div id="ev-respond" class="ev-respond" role="group" aria-labelledby="ev-respond-label">
+        <span id="ev-respond-label" class="small">Ta réponse :</span>
+        <button id="btn-ev-yes" type="button" class="btn small ev-answer yes" aria-pressed="false">Présent</button>
+        <button id="btn-ev-no" type="button" class="btn small ev-answer no" aria-pressed="false">Absent</button>
+      </div>
+      <div class="row end wrap-end">
+        <button id="btn-ev-delete" type="button" class="btn danger">Supprimer</button>
+        <button id="btn-ev-edit" type="button" class="btn">Modifier</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialogue : nouvel objectif / modifier un objectif -->
+  <dialog id="dlg-goal">
+    <form id="form-goal" class="stack">
+      <h2 id="goal-dlg-title">Nouvel objectif</h2>
+      <label>Objectif
+        <input id="goal-title" maxlength="200" required autocomplete="off" placeholder="Publier la version 1">
+      </label>
+      <label>Échéance <span class="muted small">(facultatif)</span>
+        <input id="goal-due" type="date">
+      </label>
+      <p class="muted small">Tous les membres du projet le voient et peuvent le cocher une fois atteint.</p>
+      <p id="goal-error" class="error small" role="alert" hidden></p>
+      <div class="row end">
+        <button id="btn-delete-goal" type="button" class="btn danger" hidden>Supprimer</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button id="goal-submit" type="submit" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
   </dialog>
 
   <!-- Dialogue : photo en grand -->

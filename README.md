@@ -11,6 +11,10 @@ Canal de communication pour suivre le développement d'un outil.
 - L'administrateur peut ranger les conversations dans des **projets** (ou les laisser « Sans projet ») et les déplacer de l'un à l'autre. Les membres voient le nom du projet de leurs conversations, jamais la liste des autres projets.
 - Chaque projet peut avoir un **logo** (choisi par l'administrateur, réduit à 256 px et enregistré dans le document du projet), affiché dans la barre latérale et au-dessus du titre de ses conversations.
 - Chaque projet peut avoir des **rôles** (Développeur, Design…) modifiables par l'administrateur. Les rôles et les personnes qui les tiennent s'affichent dans la barre latérale, juste sous le nom du projet.
+- Chaque projet a un **calendrier** (📅 à côté de son nom), ouvert à tous ses membres (les membres de ses conversations) :
+  chacun y crée des **réunions** et y invite d'autres membres du projet, qui répondent « présent » ou « absent »
+  (une pastille sur le 📅 compte les invitations sans réponse), et y ajoute des **objectifs**, avec ou sans échéance,
+  que tout membre coche une fois atteints. L'organisateur d'une réunion ou l'auteur d'un objectif (et l'admin) les modifie ou les supprime.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
@@ -39,6 +43,8 @@ js/search.js            recherche dans les messages chargés
 js/composer.js          saisie, photo jointe, emojis, pouce, envoi
 js/emoji.js             réactions (liste fixe), sélecteur d'emojis, emojis affichés en grand
 js/admin.js             création de conversations, gestion des membres (admin)
+js/calendar.js          calendrier d'un projet : réunions, invitations et réponses, objectifs
+js/tickets.js           fiches de membre des projets (accès au calendrier), tenues à jour par l'admin
 js/account.js           « Mon compte » : export et suppression des données (RGPD)
 js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'admin seul)
 js/ui.js                helpers d'affichage (avatar à initiales)
@@ -52,7 +58,9 @@ js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase H
 confidentialite.html    politique de confidentialité
 RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
-firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid, thumbs.authorUid et reads.uid, requis pour l'export/la suppression)
+firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid, thumbs.authorUid, reads.uid, members.uid,
+                        events.createdBy, events.attendees, goals.createdBy et goals.doneBy, requis pour l'export/la suppression
+                        et la pastille des invitations)
 firebase.json           hébergement (en-têtes HTTP, fichiers exclus), règles, index, émulateur des tests
 .firebaserc             projet Firebase par défaut
 package.json            outils de test, de qualité et de déploiement (le site ne charge aucune de ces dépendances)
@@ -85,7 +93,9 @@ Et [database.rules.json](database.rules.json) : **Realtime Database → Règles 
 
 La CLI déploie aussi [firestore.indexes.json](firestore.indexes.json). Si tu passes par la console, crée l'exemption d'index à la main :
 **Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour les collections `images` et `thumbs`, et pour la collection `reads` avec le champ `uid`.
-Sans cet index, « Télécharger mes données » et la suppression de compte échouent.
+Idem pour le calendrier : `members` (champ `uid`), `events` (champ `createdBy`, et champ `attendees` avec « contient un tableau »),
+`goals` (champs `createdBy` et `doneBy`).
+Sans ces index, « Télécharger mes données », la suppression de compte et la pastille des invitations aux réunions échouent.
 
 ### 3. Devenir administrateur
 1. Lance le site en local (voir plus bas) et connecte-toi avec ton compte Gmail.
@@ -187,6 +197,9 @@ Au quotidien :
 ## Sécurité
 - La clé `apiKey` Firebase est publique par conception ; elle n'ouvre aucun droit à elle seule.
 - Toutes les autorisations sont vérifiées par `firestore.rules` : un utilisateur ne peut ni lire une conversation dont il n'est pas membre, ni modifier la liste des membres, ni écrire un message sous l'identifiant (UID) d'un autre.
+- Calendrier : les règles ne peuvent pas parcourir les conversations d'un projet. Chaque membre enregistre donc une fiche
+  `projects/{projet}/members/{uid}` qui nomme une conversation du projet dont il est membre ; elle est revérifiée à chaque
+  lecture ou écriture du calendrier. Retiré de cette conversation, on perd l'accès aussitôt (l'admin supprime ensuite la fiche).
 - Le nom affiché vient de l'annuaire `names/{uid}`, que seul l'admin peut écrire : le champ `authorName` d'un message est saisi par son auteur (il peut y mettre n'importe quoi depuis la console du navigateur) et n'est affiché qu'en dernier recours, marqué « non vérifié ». Le badge **Admin** dépend de l'UID, pas du nom.
 - Limitation anti-abus (règles) : 30 messages par minute et par personne (compteur `rate/{uid}` mis à jour dans le batch
   de chaque envoi ou modification), profil réécrit au plus une fois par minute. Elle ralentit un abus sans l'empêcher

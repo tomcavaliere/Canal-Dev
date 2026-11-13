@@ -3,7 +3,8 @@
 import { displayText, nameOf } from "./names.js";
 import { isLogo } from "./images.js";
 import { $ } from "./ui.js";
-import { selectConversation } from "./app.js";
+import { openProjectCalendar, selectConversation } from "./app.js";
+import { pendingInvitations } from "./calendar.js";
 import { state } from "./state.js";
 import { unreadBadge, unreadLabel, unreadMessages } from "./unread.js";
 
@@ -215,6 +216,25 @@ function projectGroup(projectId, title, convs) {
   toggle.addEventListener("click", () => toggleCollapsed(projectId));
   toggle.dataset.focus = "group:" + projectId;
   head.append(toggle);
+
+  // Calendrier du projet, avec le nombre d'invitations à des réunions qui attendent une réponse.
+  if (projectId) {
+    const pending = pendingInvitations(projectId);
+    const label = `Calendrier de « ${title} »` + (pending
+      ? ` : ${pending} invitation${pending > 1 ? "s" : ""} à une réunion sans réponse` : "");
+    const cal = smallButton("📅", label, () => openProjectCalendar(projectId), "cal:" + projectId);
+    cal.classList.add("group-cal");
+    if (state.calendarProjectId === projectId) {
+      cal.classList.add("active");
+      cal.setAttribute("aria-current", "page");
+    }
+    if (pending) {
+      const badge = unreadBadge(pending, "");
+      badge.setAttribute("aria-hidden", "true");
+      cal.append(badge);
+    }
+    head.append(cal);
+  }
 
   if (state.isAdmin && projectId) {
     head.append(

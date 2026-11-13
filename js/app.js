@@ -24,6 +24,10 @@ import { isLogo } from "./images.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
+  calendarUids, closeCalendar, listenInvitations, onCalendarContextChanged, openCalendar, renderCalendarNames, teardownCalendar,
+} from "./calendar.js";
+import { adminSyncTickets, resetTickets, syncMyTickets } from "./tickets.js";
+import {
   listenMyReads, loadLastRead, markRead, markViewedRead, pruneLastRead, renderUnreadTotal, syncMessageWatchers,
 } from "./unread.js";
 
@@ -150,6 +154,7 @@ async function startSession(user, id) {
   else listenInvite(user);
   listenMyReads();
   listenConversations();
+  listenInvitations();
 }
 
 /* ---------- Invitation ---------- */
@@ -240,6 +245,8 @@ function teardown() {
   state.unsubInvite?.();
   state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
+  teardownCalendar();
+  resetTickets();
   stopNames();
   stopPresence();
   stopRate();
@@ -247,7 +254,8 @@ function teardown() {
   clearAttachment();
   clearReply();
   Object.assign(state, {
-    user: null, isAdmin: false, conversations: new Map(), convsLoaded: false, projects: new Map(), selectedId: null,
+    user: null, isAdmin: false, conversations: new Map(), convsLoaded: false, projects: new Map(), projectsLoaded: false,
+    selectedId: null, calendarProjectId: null,
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
     unsubReads: null, reads: null, readWrite: 0, myReads: null, unsubMyReads: null, unsubInvite: null,
     recent: new Map(), unread: new Map(),
@@ -321,10 +329,13 @@ function listenConversations() {
       selectConversation(requestedConv);
       requestedConv = null;
     }
-    if (!state.selectedId && state.conversations.size > 0 && !isMobile()) {
+    if (!state.selectedId && !state.calendarProjectId && state.conversations.size > 0 && !isMobile()) {
       selectConversation(sortedConversations()[0][0]);
     }
     if (!state.isAdmin) syncProjectListeners();
+    syncMyTickets();
+    adminSyncTickets();
+    onCalendarContextChanged();
     syncNames();
     syncPresence();
     if (state.myReads) {
@@ -348,6 +359,9 @@ function listenConversations() {
 function listenAllProjects() {
   state.unsubProjects = onSnapshot(collection(db, "projects"), (snap) => {
     state.projects = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+    state.projectsLoaded = true;
+    adminSyncTickets();
+    onCalendarContextChanged();
     renderConversationList();
     if (state.selectedId) renderChatHeader();
     state.admin?.onProjectsChanged();
@@ -370,6 +384,7 @@ function syncProjectListeners() {
     state.projectSubs.set(id, onSnapshot(doc(db, "projects", id), (snap) => {
       state.projects.set(id, snap.exists() ? snap.data({ serverTimestamps: "estimate" }) : null);
       syncNames(); // personnes qui tiennent un rôle
+      onCalendarContextChanged();
       renderConversationList();
       if (state.selectedId) renderChatHeader();
     }, (err) => console.error("Lecture du projet impossible", err)));
@@ -379,11 +394,12 @@ function syncProjectListeners() {
 /* ---------- Annuaire des noms ---------- */
 
 // Noms à suivre : membres de ses conversations, l'admin, les personnes qui tiennent un rôle
-// dans ses projets, et les auteurs des messages affichés (y compris d'anciens membres).
+// dans ses projets, les auteurs des messages affichés (y compris d'anciens membres) et les
+// personnes du calendrier ouvert (membres du projet, organisateurs, invités).
 // L'admin, lui, écoute tout l'annuaire.
 export function syncNames() {
   if (state.isAdmin || !state.user) return;
-  const uids = new Set([ADMIN_UID, ...roleUids()]);
+  const uids = new Set([ADMIN_UID, ...roleUids(), ...calendarUids()]);
   for (const c of state.conversations.values()) for (const uid of c.members || []) uids.add(uid);
   for (const m of state.msgById.values()) uids.add(m.authorUid);
   watchNames(uids);
@@ -414,6 +430,7 @@ function scheduleNamesRender() {
     if (state.selectedId && state.msgDocs) renderMessages(state.msgDocs, false);
     if (state.selectedId) renderOnline();
     renderConversationList(); // noms des rôles
+    renderCalendarNames();
     const replied = state.replyTo && state.msgById.get(state.replyTo);
     if (replied) $("reply-author").textContent = displayText(replied.authorUid, replied.authorName);
     state.admin?.onNamesChanged();
@@ -422,6 +439,7 @@ function scheduleNamesRender() {
 
 export function selectConversation(id) {
   if (!state.conversations.has(id)) return;
+  closeCalendar();
   $("screen-app").classList.add("show-chat");
   if (state.selectedId === id) {
     markViewedRead(); // mobile : retour sur la conversation déjà sélectionnée
@@ -525,7 +543,19 @@ function renderOnline() {
   el.hidden = !names.length;
 }
 
-$("btn-back").addEventListener("click", () => $("screen-app").classList.remove("show-chat"));
+$("btn-back").addEventListener("click", () => {
+  $("screen-app").classList.remove("show-chat");
+  closeCalendar();
+});
+
+// Calendrier d'un projet (bouton 📅 de la barre latérale) : il prend la place de la conversation.
+/** @param {string} projectId */
+export function openProjectCalendar(projectId) {
+  if (!state.projects.get(projectId)) return;
+  if (state.selectedId) closeConversation();
+  $("screen-app").classList.add("show-chat");
+  openCalendar(projectId);
+}
 
 function renderSoundButton() {
   const on = isSoundEnabled();
