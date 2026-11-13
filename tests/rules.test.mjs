@@ -618,6 +618,15 @@ describe("Projets", () => {
     await assertFails(setDoc(doc(alice(), "projects/p2"), project));
     await assertSucceeds(setDoc(doc(admin(), "projects/p2"), project));
   });
+  it("l'admin ajoute un logo (petite image en data URL)", async () => {
+    await assertSucceeds(updateDoc(doc(admin(), "projects/p1"), { logo: "data:image/png;base64,iVBORw0KGgo=" }));
+    await assertFails(updateDoc(doc(alice(), "projects/p1"), { logo: "data:image/png;base64,iVBORw0KGgo=" }));
+  });
+  it("le logo doit être une image en data URL de taille limitée", async () => {
+    await assertFails(updateDoc(doc(admin(), "projects/p1"), { logo: "https://exemple.fr/logo.png" }));
+    await assertFails(updateDoc(doc(admin(), "projects/p1"), { logo: "data:image/svg+xml;base64,PHN2Zz4=" }));
+    await assertFails(updateDoc(doc(admin(), "projects/p1"), { logo: "data:image/png;base64," + "A".repeat(60_000) }));
+  });
 });
 
 describe("Rôles des projets", () => {

@@ -157,11 +157,14 @@ service cloud.firestore {
       //   `roles`       : liste [{ id, name }] (20 au plus), dans l'ordre d'affichage ;
       //   `roleMembers` : map uid -> [id de rôle] (qui tient quel rôle) ;
       //   `roleUids`    : les mêmes UID à plat, pour retrouver ses rôles (export, effacement RGPD).
+      // Logo (facultatif) : petite image PNG/WebP/JPEG en data URL (environ 45 Ko au plus).
       function validProject() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['title', 'description', 'createdAt', 'updatedAt', 'roles', 'roleMembers', 'roleUids'])
+        return d.keys().hasOnly(['title', 'description', 'createdAt', 'updatedAt', 'roles', 'roleMembers', 'roleUids', 'logo'])
           && d.title is string && d.title.size() > 0 && d.title.size() <= 120
           && d.description is string && d.description.size() <= 500
+          && (!('logo' in d) || (d.logo is string && d.logo.size() <= 60000
+            && d.logo.matches('data:image/(png|webp|jpeg);base64,[A-Za-z0-9+/=]+')))
           && (!('roles' in d) || (d.roles is list && d.roles.size() <= 20))
           && ('roleMembers' in d) == ('roleUids' in d)
           && (!('roleMembers' in d) || (d.roleMembers is map && d.roleMembers.size() <= 200
