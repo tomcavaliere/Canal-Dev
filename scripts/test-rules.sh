@@ -1,5 +1,5 @@
 #!/bin/sh
-# Lance les tests des règles Firestore dans l'émulateur (Java 21+ requis).
+# Lance les tests des règles Firestore et Realtime Database dans l'émulateur (Java 21+ requis).
 # Si le `java` par défaut est plus ancien, utilise le JDK 21 de Homebrew s'il est installé
 # (sans changer le Java par défaut de la machine).
 set -e
@@ -11,4 +11,4 @@ if [ "${major:-0}" -lt 21 ] && command -v brew >/dev/null 2>&1; then
     export PATH
   fi
 fi
-exec firebase emulators:exec --only firestore --project demo-canal-dev "node --test tests/*.test.mjs"
+exec firebase emulators:exec --only firestore,database --project demo-canal-dev "node --test tests/*.test.mjs"

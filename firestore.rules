@@ -45,10 +45,12 @@ service cloud.firestore {
         let d = request.resource.data;
         // Minimisation RGPD : plus de photo de profil (les anciens profils la perdent à la connexion suivante).
         // `noReceipts` : réglage « Ne pas envoyer d'accusés de lecture ».
-        return d.keys().hasOnly(['email', 'displayName', 'createdAt', 'lastLogin', 'noReceipts'])
+        // `noPresence` : réglage « Masquer ma présence en ligne ».
+        return d.keys().hasOnly(['email', 'displayName', 'createdAt', 'lastLogin', 'noReceipts', 'noPresence'])
           && d.email == request.auth.token.email
           && d.displayName is string && d.displayName.size() <= 200
-          && (!('noReceipts' in d) || d.noReceipts is bool);
+          && (!('noReceipts' in d) || d.noReceipts is bool)
+          && (!('noPresence' in d) || d.noPresence is bool);
       }
 
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
@@ -62,10 +64,10 @@ service cloud.firestore {
         && request.resource.data.lastLogin == request.time
         && request.resource.data.createdAt == resource.data.createdAt
         && request.time > resource.data.lastLogin + duration.value(60, 's');
-      // Réglage des accusés de lecture : ce seul champ, compté par la limitation anti-abus.
+      // Réglages (accusés de lecture, présence) : ces seuls champs, comptés par la limitation anti-abus.
       allow update: if signedIn() && request.auth.uid == uid
         && validProfile()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['noReceipts'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['noReceipts', 'noPresence'])
         && rateBumped();
       // Droit à l'effacement : l'utilisateur peut supprimer son propre profil.
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);

@@ -3,6 +3,9 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "database": {
+    "rules": "database.rules.json"
+  },
   "hosting": {
     "site": "canal-dev-c18d7",
     "public": ".",
@@ -10,6 +13,7 @@
       "firebase.json",
       "firestore.rules",
       "firestore.indexes.json",
+      "database.rules.json",
       "package.json",
       "package-lock.json",
       "**/*.md",
@@ -39,6 +43,9 @@
   "emulators": {
     "firestore": {
       "port": 8080
+    },
+    "database": {
+      "port": 9000
     },
     "ui": {
       "enabled": false

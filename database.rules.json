@@ -1,0 +1,16 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "status": {
+      "$uid": {
+        ".read": "auth != null && auth.token.email_verified == true && auth.token.email.matches(/.*@gmail\\.com$/)",
+        ".write": "auth != null && auth.token.email_verified == true && (auth.uid == $uid || auth.uid == 'WcAMpEXuhYbQjgeUnIsyMxJsO5f1') && !newData.exists()",
+        "$conn": {
+          ".write": "auth != null && auth.uid == $uid && auth.token.email_verified == true && auth.token.email.matches(/.*@gmail\\.com$/)",
+          ".validate": "newData.val() === true && $conn.length <= 36"
+        }
+      }
+    }
+  }
+}

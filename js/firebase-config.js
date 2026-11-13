@@ -1,10 +1,13 @@
 // Configuration du projet Firebase.
 // Console Firebase → Paramètres du projet → Vos applications → App Web → "Configuration du SDK".
-// Ces valeurs sont publiques par conception : la sécurité repose sur firestore.rules.
+// Ces valeurs sont publiques par conception : la sécurité repose sur firestore.rules
+// et database.rules.json.
 export const firebaseConfig = {
   apiKey: "AIzaSyBbNsC9L4zRaxJ3BrPoyAX2wv0TavsJH-Y",
   authDomain: "canal-dev-c18d7.firebaseapp.com",
   projectId: "canal-dev-c18d7",
+  // Realtime Database (région UE, europe-west1) : sert uniquement à la présence « en ligne ».
+  databaseURL: "https://canal-dev-c18d7-default-rtdb.europe-west1.firebasedatabase.app",
   storageBucket: "canal-dev-c18d7.firebasestorage.app",
   messagingSenderId: "259632246117",
   appId: "1:259632246117:web:f6e6ee3482e7cdc4d1858c",

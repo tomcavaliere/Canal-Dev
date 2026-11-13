@@ -12,6 +12,7 @@ import { toast } from "./dialogs.js";
 import { $ } from "./ui.js";
 import { state } from "./state.js";
 import { bumpRate, rateWait } from "./rate.js";
+import { purgePresence, setPresenceHidden, stopPresence } from "./presence.js";
 
 /* ---------- Suppression des données d'un utilisateur ---------- */
 
@@ -44,6 +45,8 @@ export async function purgeUserData(uid, email) {
   }
 
   if (email) await deleteDoc(doc(db, "invites", email.toLowerCase()));
+  // Présence « en ligne » (Realtime Database) : sans conséquence si elle échoue (rien de durable).
+  await purgePresence(uid).catch((err) => console.warn("Effacement de la présence impossible", err));
   // Compteur anti-abus : seul l'admin peut le supprimer (sinon, le supprimer le remettrait à
   // zéro) ; après une suppression par la personne elle-même, l'admin le retire à sa prochaine visite.
   if (auth.currentUser?.uid === ADMIN_UID) await deleteDoc(doc(db, "rate", uid));
@@ -154,6 +157,7 @@ function openAccount() {
   $("account-admin-note").hidden = user.uid !== ADMIN_UID;
   $("delete-confirm").value = "";
   $("no-receipts").checked = state.noReceipts;
+  $("no-presence").checked = state.noPresence;
   setStatus("");
   $("dlg-account").showModal();
 }
@@ -187,6 +191,38 @@ async function toggleReceipts() {
     } else {
       setStatus("Accusés de lecture réactivés.");
     }
+  } catch (err) {
+    console.error(err);
+    box.checked = !on;
+    setStatus("Modification impossible : " + err.message, true);
+  } finally {
+    box.disabled = false;
+  }
+}
+
+// Réglage « Masquer ma présence en ligne » (profil). Effet immédiat dans les onglets de ce navigateur ;
+// les entrées des autres appareils sont effacées (ils appliquent le réglage à leur prochaine connexion).
+async function togglePresence() {
+  const user = auth.currentUser;
+  const box = $("no-presence");
+  const on = box.checked;
+  if (!user) return;
+  if (rateWait()) {
+    box.checked = !on;
+    setStatus(`Trop de modifications en une minute : réessaie dans ${rateWait()} s.`, true);
+    return;
+  }
+  box.disabled = true;
+  try {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "users", user.uid), { noPresence: on });
+    bumpRate(batch);
+    await batch.commit();
+    state.noPresence = on;
+    await setPresenceHidden(on);
+    // Retire aussi les entrées des autres onglets/appareils encore ouverts.
+    if (on) await purgePresence(user.uid);
+    setStatus(on ? "Ta présence est masquée." : "Ta présence est de nouveau visible.");
   } catch (err) {
     console.error(err);
     box.checked = !on;
@@ -239,6 +275,7 @@ async function deleteAccount() {
     await reauthenticateWithPopup(user, provider);
 
     setStatus("Suppression de tes messages, photos et accès…");
+    await stopPresence(); // sinon cet onglet réécrirait sa présence
     await purgeUserData(user.uid, user.email);
     await deleteUser(user);
     clearLocalData();
@@ -263,4 +300,5 @@ export function initAccount() {
   $("btn-export").addEventListener("click", exportData);
   $("btn-delete-account").addEventListener("click", deleteAccount);
   $("no-receipts").addEventListener("change", toggleReceipts);
+  $("no-presence").addEventListener("change", togglePresence);
 }

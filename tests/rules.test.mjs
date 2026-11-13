@@ -391,6 +391,11 @@ describe("Réglage des accusés de lecture (noReceipts)", () => {
     await assertFails(updateDoc(doc(alice(), "users/alice"), { noReceipts: true }));
     await assertFails(change(alice(), "alice", "users/alice", { noReceipts: true, displayName: "Autre" }));
   });
+  it("le réglage de présence (noPresence) suit les mêmes règles", async () => {
+    await assertSucceeds(change(alice(), "alice", "users/alice", { noPresence: true }));
+    await assertFails(change(alice(), "alice", "users/alice", { noPresence: "oui" }));
+    await assertFails(change(bob(), "bob", "users/alice", { noPresence: true }));
+  });
   it("une valeur non booléenne est refusée, le profil d'un autre aussi", async () => {
     await assertFails(change(alice(), "alice", "users/alice", { noReceipts: "oui" }));
     await assertFails(change(bob(), "bob", "users/alice", { noReceipts: true }));

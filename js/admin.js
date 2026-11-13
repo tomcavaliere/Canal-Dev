@@ -11,6 +11,7 @@ import { nameOf, namesLoaded, isNameTaken } from "./names.js";
 import { confirmDialog, toast } from "./dialogs.js";
 import { playMessageSound } from "./sound.js";
 import { showNotification } from "./notify.js";
+import { isOnline } from "./presence.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -261,6 +262,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     info.className = "info";
     const name = document.createElement("span");
     name.textContent = displayedName(uid, u);
+    if (uid && isOnline(uid)) name.append(onlineLabel());
     const email = document.createElement("span");
     email.className = "muted small";
     email.textContent = u.email;
@@ -268,6 +270,18 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     wrap.append(avatar, info);
     if (extra) wrap.append(...[].concat(extra));
     return wrap;
+  }
+
+  // Pastille « en ligne » (le texte caché est lu par les lecteurs d'écran).
+  function onlineLabel() {
+    const dot = document.createElement("span");
+    dot.className = "online-dot";
+    dot.title = "En ligne";
+    const sr = document.createElement("span");
+    sr.className = "visually-hidden";
+    sr.textContent = " (en ligne)";
+    dot.append(sr);
+    return dot;
   }
 
   function renderUsers() {
@@ -623,6 +637,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       });
       const text = document.createElement("span");
       text.textContent = `${displayedName(uid, u)} — ${u.email}`;
+      if (isOnline(uid)) text.append(onlineLabel());
       label.append(cb, text);
       li.append(label);
       return li;
@@ -683,6 +698,10 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       renderUsers();
       if (dlgMembers.open) renderMembers();
       ensureNames(); // nouveau membre : entrée dans l'annuaire
+    },
+    onPresenceChanged() {
+      renderUsers();
+      if (dlgMembers.open) renderMembers();
     },
     onNamesChanged() {
       renderUsers();

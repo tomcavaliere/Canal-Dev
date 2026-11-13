@@ -8,7 +8,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p jsconfig.json",
     "test": "sh scripts/test-rules.sh",
-    "deploy": "firebase deploy --only hosting,firestore --project canal-dev-c18d7"
+    "deploy": "firebase deploy --only hosting,firestore,database --project canal-dev-c18d7"
   },
   "engines": {
     "node": ">=24.12.0"

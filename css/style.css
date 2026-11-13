@@ -10,6 +10,7 @@
   --mine: #e3edff;
   --muted-on-mine: #545d69; /* --muted n'atteint pas 4,5:1 sur --mine en clair */
   --danger: #c93636;
+  --online: #1e9e5a;
   --radius: 10px;
   /* Couleurs des projets (barre latérale) : texte ≥ 4,5:1 sur --surface. */
   --proj-0: #2563c9; --proj-1: #0f7a52; --proj-2: #a3560b; --proj-3: #b42c5a;
@@ -30,6 +31,7 @@
     --mine: #1f2f4d;
     --muted-on-mine: #a7b0bc;
     --danger: #ef6b6b;
+    --online: #3fcf7f;
     --proj-0: #6ea0f5; --proj-1: #4cc58f; --proj-2: #e2a052; --proj-3: #f07aa3;
     --proj-4: #b393f5; --proj-5: #4fc3dc; --proj-6: #d9bd4a; --proj-7: #f5885a;
     color-scheme: dark;
@@ -233,6 +235,15 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .group-items .list-empty { padding-left: 1.1rem; }
 .chat-project { margin: 0 0 .1rem; text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; font-weight: 600; color: var(--proj, var(--muted)); }
 .chat-project::before { content: ""; display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; margin-right: .4rem; vertical-align: .05em; }
+
+/* Présence « en ligne » */
+.chat-online { margin: .1rem 0 0; color: var(--muted); }
+.chat-online::before, .online-dot {
+  content: ""; display: inline-block; width: .5rem; height: .5rem; border-radius: 50%;
+  background: var(--online); vertical-align: .05em;
+}
+.chat-online::before { margin-right: .4rem; }
+.online-dot, .user-row .info .online-dot { display: inline-block; margin-left: .4rem; }
 
 .user-row { display: flex; align-items: center; gap: .5rem; padding: .4rem 1rem; }
 .user-row .avatar { width: 24px; height: 24px; font-size: .62rem; }

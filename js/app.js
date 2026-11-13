@@ -10,6 +10,7 @@ import { initAccount } from "./account.js";
 import { ADMIN_UID, auth, db, GMAIL_RE, isConfigured } from "./firebase.js";
 import { displayText, startNames, stopNames, watchNames } from "./names.js";
 import { notificationState, registerServiceWorker, toggleNotifications } from "./notify.js";
+import { isOnline, startPresence, stopPresence, watchPresence } from "./presence.js";
 import { isSoundEnabled, setSoundEnabled } from "./sound.js";
 import { $, initials } from "./ui.js";
 import { clearAttachment } from "./composer.js";
@@ -44,7 +45,7 @@ if (!isConfigured) {
   showLoginError("Firebase n'est pas encore configuré : renseigne js/firebase-config.js (voir README).");
 } else {
   $("btn-login").addEventListener("click", login);
-  document.querySelectorAll(".btn-logout").forEach((b) => b.addEventListener("click", () => signOut(auth)));
+  document.querySelectorAll(".btn-logout").forEach((b) => b.addEventListener("click", logout));
   initAccount();
   registerServiceWorker(openFromNotification);
   onAuthStateChanged(auth, onAuth);
@@ -66,6 +67,12 @@ function openFromNotification(id) {
 document.querySelectorAll("dialog [data-close]").forEach((b) => {
   b.addEventListener("click", () => b.closest("dialog").close());
 });
+
+// La présence est retirée avant la déconnexion : ensuite, les règles refuseraient l'effacement.
+async function logout() {
+  await stopPresence();
+  await signOut(auth);
+}
 
 async function login() {
   showLoginError("");
@@ -124,6 +131,7 @@ async function startSession(user, id) {
   await upsertUser(user);
   current();
   fillUserHeader(user);
+  startPresence(user.uid, { hide: state.noPresence, onChange: renderPresence });
 
   if (state.isAdmin) {
     const { setupAdmin } = await import("./admin.js");
@@ -229,6 +237,7 @@ function teardown() {
   state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
   stopNames();
+  stopPresence();
   stopRate();
   resetImages();
   clearAttachment();
@@ -260,6 +269,7 @@ async function upsertUser(user) {
     const snap = await getDoc(ref);
     // Les règles refusent une mise à jour moins d'une minute après la précédente (rechargement de page).
     state.noReceipts = snap.exists() && snap.data().noReceipts === true;
+    state.noPresence = snap.exists() && snap.data().noPresence === true;
     const last = snap.exists() ? snap.data().lastLogin?.toMillis?.() ?? 0 : 0;
     if (snap.exists() && Date.now() - last < 65_000) return;
     // deleteField retire la photo des profils créés avant la mise en conformité.
@@ -312,6 +322,7 @@ function listenConversations() {
     }
     if (!state.isAdmin) syncProjectListeners();
     syncNames();
+    syncPresence();
     if (state.myReads) {
       syncMessageWatchers();
       pruneLastRead();
@@ -372,6 +383,19 @@ export function syncNames() {
   watchNames(uids);
 }
 
+// Présence suivie : les autres membres de ses conversations et l'admin (l'admin : tous les membres).
+function syncPresence() {
+  const uids = new Set([ADMIN_UID]);
+  for (const c of state.conversations.values()) for (const uid of c.members || []) uids.add(uid);
+  uids.delete(state.user.uid);
+  watchPresence(uids);
+}
+
+function renderPresence() {
+  if (state.selectedId) renderOnline();
+  state.admin?.onPresenceChanged();
+}
+
 // Les noms arrivent après les messages : on réaffiche quand l'annuaire change
 // (une seule fois par image, même si plusieurs noms arrivent ensemble).
 let namesFrame = 0;
@@ -380,6 +404,7 @@ function scheduleNamesRender() {
   namesFrame = requestAnimationFrame(() => {
     namesFrame = 0;
     if (state.selectedId && state.msgDocs) renderMessages(state.msgDocs, false);
+    if (state.selectedId) renderOnline();
     const replied = state.replyTo && state.msgById.get(state.replyTo);
     if (replied) $("reply-author").textContent = displayText(replied.authorUid, replied.authorName);
     state.admin?.onNamesChanged();
@@ -463,7 +488,21 @@ function renderChatHeader() {
   $("chat-title").textContent = c.title || "(sans titre)";
   $("chat-desc").textContent = c.description || "";
   $("chat-desc").hidden = !c.description;
+  renderOnline();
   renderLinks();
+}
+
+// « En ligne : … » : les autres participants de la conversation ouverte qui ont l'application ouverte.
+function renderOnline() {
+  const c = state.conversations.get(state.selectedId);
+  const el = $("chat-online");
+  if (!c) return;
+  const names = [...new Set([...(c.members || []), ADMIN_UID])]
+    .filter((uid) => uid !== state.user.uid && isOnline(uid))
+    .map((uid) => displayText(uid))
+    .sort((a, b) => a.localeCompare(b, "fr"));
+  el.textContent = names.length ? "En ligne : " + names.join(", ") : "";
+  el.hidden = !names.length;
 }
 
 $("btn-back").addEventListener("click", () => $("screen-app").classList.remove("show-chat"));

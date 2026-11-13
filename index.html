@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://www.gstatic.com; frame-src https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://www.gstatic.com https://*.europe-west1.firebasedatabase.app wss://*.europe-west1.firebasedatabase.app; frame-src https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="no-referrer">
   <title>Canal Dev</title>
   <meta name="theme-color" content="#2f6fde">
@@ -95,6 +95,7 @@
             <p id="chat-project" class="chat-project muted small" hidden></p>
             <h2 id="chat-title"></h2>
             <p id="chat-desc" class="muted small"></p>
+            <p id="chat-online" class="chat-online small" hidden></p>
           </div>
           <div class="row chat-tools">
             <button id="btn-search" class="btn small" type="button" title="Rechercher dans la conversation"
@@ -303,6 +304,13 @@
         <label class="check"><input id="no-receipts" type="checkbox"> Ne pas envoyer d'accusés de lecture</label>
         <p class="muted small">Les autres membres ne verront plus « Vu par » pour toi, et tes accusés existants sont
           supprimés. Tes messages non lus ne seront alors plus synchronisés entre tes appareils.</p>
+      </section>
+
+      <section class="stack tight">
+        <h3>Présence</h3>
+        <label class="check"><input id="no-presence" type="checkbox"> Masquer ma présence « en ligne »</label>
+        <p class="muted small">Les autres membres ne verront plus quand tu as l'application ouverte.
+          Aucun historique n'est gardé : seule l'information « ouvert en ce moment » existe.</p>
       </section>
 
       <section id="account-delete" class="stack tight">

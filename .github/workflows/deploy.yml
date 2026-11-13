@@ -55,5 +55,5 @@ jobs:
           fi
           key="$RUNNER_TEMP/firebase-sa.json"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$key"
-          GOOGLE_APPLICATION_CREDENTIALS="$key" npx firebase deploy --only hosting,firestore --project canal-dev-c18d7 --non-interactive
+          GOOGLE_APPLICATION_CREDENTIALS="$key" npx firebase deploy --only hosting,firestore,database --project canal-dev-c18d7 --non-interactive
           rm -f "$key"

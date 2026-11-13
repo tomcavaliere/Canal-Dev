@@ -34,6 +34,7 @@ export const state = {
   editing: null, // { id, draft } : son message en cours de modification
   admin: null, // API renvoyée par admin.js
   noReceipts: false, // réglage du profil : ne pas envoyer d'accusés de lecture
+  noPresence: false, // réglage du profil : ne pas montrer sa présence « en ligne »
 };
 
 export function isViewing(convId) {
