@@ -4,7 +4,7 @@ import {
   GoogleAuthProvider, reauthenticateWithPopup, deleteUser,
 } from "./sdk/firebase-auth.js";
 import {
-  collection, collectionGroup, doc, getDoc, getDocs, deleteDoc, updateDoc, writeBatch,
+  collection, collectionGroup, deleteField, doc, getDoc, getDocs, deleteDoc, updateDoc, writeBatch,
   query, where, limit, arrayRemove, Timestamp,
 } from "./sdk/firebase-firestore.js";
 import { auth, db, ADMIN_UID } from "./firebase.js";
@@ -13,6 +13,12 @@ import { $ } from "./ui.js";
 import { state } from "./state.js";
 import { bumpRate, rateWait } from "./rate.js";
 import { purgePresence, setPresenceHidden, stopPresence } from "./presence.js";
+import { REACTIONS } from "./emoji.js";
+
+// Messages de la conversation `convId` portant une réaction de `uid`.
+function reactedQuery(convId, uid) {
+  return query(collection(db, "conversations", convId, "messages"), where(`reactions.${uid}`, "in", REACTIONS));
+}
 
 /* ---------- Suppression des données d'un utilisateur ---------- */
 
@@ -40,6 +46,15 @@ export async function purgeUserData(uid, email) {
   }
 
   const convs = await getDocs(query(collection(db, "conversations"), where("members", "array-contains", uid)));
+  // Réactions laissées sur les messages des autres (tant qu'on est encore membre pour les retirer).
+  for (const c of convs.docs) {
+    const reacted = await getDocs(reactedQuery(c.id, uid));
+    for (let i = 0; i < reacted.docs.length; i += 400) {
+      const batch = writeBatch(db);
+      reacted.docs.slice(i, i + 400).forEach((d) => batch.update(d.ref, { [`reactions.${uid}`]: deleteField() }));
+      await batch.commit();
+    }
+  }
   for (const c of convs.docs) {
     await updateDoc(c.ref, { members: arrayRemove(uid) });
   }
@@ -76,6 +91,7 @@ async function collectMyData(user) {
     getDocs(query(collectionGroup(db, "thumbs"), where("authorUid", "==", user.uid))),
     getDocs(query(collectionGroup(db, "reads"), where("uid", "==", user.uid))),
   ]);
+  const reacted = await Promise.all(convs.docs.map((c) => getDocs(reactedQuery(c.id, user.uid))));
   return {
     exportedAt: new Date().toISOString(),
     service: "Canal Dev",
@@ -119,6 +135,12 @@ async function collectMyData(user) {
       // Miniature affichée dans le fil (même photo, réduite), si elle existe.
       thumbnail: thumbs.docs.find((t) => t.ref.parent.parent.id === d.ref.parent.parent.id && t.id === d.id)?.data().data ?? null,
     })),
+    // Réactions (emoji) mises sur des messages des conversations dont on est membre.
+    reactions: reacted.flatMap((snap) => snap.docs.map((d) => ({
+      conversationId: d.ref.parent.parent.id,
+      messageId: d.id,
+      emoji: d.data().reactions[user.uid],
+    }))),
     // Date de dernière lecture de chaque conversation, visible par ses autres membres.
     readReceipts: reads.docs.map((d) => ({
       conversationId: d.ref.parent.parent.id,

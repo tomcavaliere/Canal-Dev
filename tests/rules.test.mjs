@@ -11,7 +11,7 @@ import {
   assertFails, assertSucceeds, initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
-  arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, increment,
+  arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs, increment,
   query, serverTimestamp, setDoc, setLogLevel, Timestamp, updateDoc, where, writeBatch,
 } from "firebase/firestore";
 import { ADMIN_UID } from "../js/firebase-config.js";
@@ -250,6 +250,58 @@ describe("Messages", () => {
   it("un membre lit les messages, un non-membre non", async () => {
     await assertSucceeds(getDocs(collection(alice(), "conversations/c1/messages")));
     await assertFails(getDocs(collection(bob(), "conversations/c1/messages")));
+  });
+});
+
+describe("Réactions", () => {
+  const m2 = "conversations/c1/messages/m2"; // message de carol
+  const react = (db, uid, emoji) => change(db, uid, m2, { [`reactions.${uid}`]: emoji });
+  const withReactions = (reactions) => env.withSecurityRulesDisabled((ctx) =>
+    updateDoc(doc(ctx.firestore(), m2), { reactions }));
+
+  it("un membre réagit au message d'un autre", () => assertSucceeds(react(alice(), "alice", "👍")));
+  it("l'auteur réagit à son propre message", () => assertSucceeds(react(as("carol"), "carol", "❤️")));
+  it("un emoji hors de la liste est refusé", () => assertFails(react(alice(), "alice", "🍕")));
+  it("une réaction qui n'est pas un emoji (texte) est refusée", () =>
+    assertFails(react(alice(), "alice", "x".repeat(500))));
+  it("réagir sans mettre à jour le compteur anti-abus est refusé", () =>
+    assertFails(updateDoc(doc(alice(), m2), { "reactions.alice": "👍" })));
+  it("réagir au nom d'un autre est refusé", () =>
+    assertFails(change(alice(), "alice", m2, { "reactions.carol": "👍" })));
+  it("un non-membre ne réagit pas", () => assertFails(react(bob(), "bob", "👍")));
+  it("un ancien membre ne réagit plus", () => assertFails(react(dave(), "dave", "👍")));
+  it("on ne modifie pas le texte en même temps qu'on réagit", () =>
+    assertFails(change(alice(), "alice", m2, { "reactions.alice": "👍", text: "piraté" })));
+  it("on ne réagit pas à une annonce « a rejoint »", async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "conversations/c1/messages/join"),
+      { event: "join", authorUid: "carol", createdAt: T0 }));
+    await assertFails(change(alice(), "alice", "conversations/c1/messages/join", { "reactions.alice": "👍" }));
+  });
+  it("un membre change puis retire sa réaction (retrait sans compteur)", async () => {
+    await withReactions({ alice: "👍", carol: "😂" });
+    await assertSucceeds(react(alice(), "alice", "❤️"));
+    await assertSucceeds(updateDoc(doc(alice(), m2), { "reactions.alice": deleteField() }));
+    const after = await getDoc(doc(alice(), m2));
+    assert.deepEqual(after.data().reactions, { carol: "😂" });
+  });
+  it("un membre ne retire pas la réaction d'un autre, l'admin oui", async () => {
+    await withReactions({ carol: "😂" });
+    await assertFails(updateDoc(doc(alice(), m2), { "reactions.carol": deleteField() }));
+    await assertSucceeds(updateDoc(doc(admin(), m2), { "reactions.carol": deleteField() }));
+  });
+  it("l'admin ne met pas de réaction au nom d'un autre", () =>
+    assertFails(change(admin(), ADMIN, m2, { "reactions.alice": "👍" })));
+  it("un membre retrouve les messages où il a réagi (suppression de compte, export)", async () => {
+    await withReactions({ alice: "👍" });
+    const q = query(collection(alice(), "conversations/c1/messages"), where("reactions.alice", "in", ["👍", "❤️"]));
+    const snap = await assertSucceeds(getDocs(q));
+    assert.equal(snap.size, 1);
+  });
+  it("l'auteur modifie toujours son texte quand il y a des réactions", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "conversations/c1/messages/m1"), { reactions: { carol: "👍" } }));
+    await assertSucceeds(change(alice(), "alice", "conversations/c1/messages/m1",
+      { text: "Bonjour modifié", editedAt: serverTimestamp() }));
   });
 });
 

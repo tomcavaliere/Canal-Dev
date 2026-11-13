@@ -1,7 +1,7 @@
 // Conversation ouverte : écoute paginée des messages, rendu, réponses, modification, photos.
 
 import {
-  arrayRemove, collection, doc, getCountFromServer, getDoc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch,
+  arrayRemove, collection, deleteField, doc, getCountFromServer, getDoc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch,
 } from "./sdk/firebase-firestore.js";
 import { confirmDialog, toast } from "./dialogs.js";
 import { ADMIN_UID, db } from "./firebase.js";
@@ -14,6 +14,7 @@ import { applySearch } from "./search.js";
 import { state } from "./state.js";
 import { bumpRate, rateWait } from "./rate.js";
 import { isPinned, renderPinned, togglePin } from "./pinned.js";
+import { REACTIONS, isJumbo, toggleEmojiMenu } from "./emoji.js";
 
 /* ---------- Annonce « X a rejoint la conversation » ---------- */
 
@@ -201,6 +202,7 @@ function messageSig(id, m) {
     displayText(m.authorUid, m.authorName),
     target ? [displayText(target.authorUid, target.authorName), excerpt(target)] : state.hasMore,
     state.pending.has(id), state.editing?.id === id, isPinned(id),
+    reactionGroups(m).map(([e, uids]) => [e, uids.map((u) => displayText(u))]),
   ]);
 }
 
@@ -337,6 +339,21 @@ function renderMessage(id, m) {
 
   const actions = document.createElement("div");
   actions.className = "msg-actions";
+  // Réagir : pas sur un message encore en attente d'envoi (il n'existe pas encore sur le serveur).
+  if (!state.pending.has(id)) {
+    const react = document.createElement("button");
+    react.type = "button";
+    react.className = "react";
+    react.textContent = "🙂+";
+    react.title = "Réagir avec un emoji";
+    react.setAttribute("aria-label", "Réagir avec un emoji");
+    react.setAttribute("aria-haspopup", "dialog");
+    react.setAttribute("aria-expanded", "false");
+    react.addEventListener("click", () => toggleEmojiMenu(react, {
+      emojis: REACTIONS, label: "Réactions", onPick: (e) => toggleReaction(id, e),
+    }));
+    actions.append(react);
+  }
   const reply = document.createElement("button");
   reply.type = "button";
   reply.textContent = "Répondre";
@@ -395,14 +412,87 @@ function renderMessage(id, m) {
     bubble.append(renderEditor(id, m));
   } else if (m.text) {
     const text = document.createElement("div");
-    text.className = "msg-text";
+    text.className = "msg-text" + (isJumbo(m.text) && !m.image ? " jumbo" : "");
     text.append(renderRichText(m.text));
     bubble.append(text);
   }
+  const reactions = renderReactions(id, m);
+  if (reactions) bubble.append(reactions);
   // Ses propres messages sont à droite, sans avatar.
   if (mine) li.append(bubble);
   else li.append(avatar, bubble);
   return li;
+}
+
+/* ---------- Réactions ---------- */
+
+// `reactions` : { uid: emoji }, une réaction par membre (les règles n'acceptent que REACTIONS).
+// Groupées par emoji, dans l'ordre de REACTIONS : [[emoji, [uid…]]…].
+function reactionGroups(m) {
+  const by = new Map();
+  for (const [uid, e] of Object.entries(m.reactions || {})) {
+    if (!REACTIONS.includes(e)) continue;
+    if (!by.has(e)) by.set(e, []);
+    by.get(e).push(uid);
+  }
+  return REACTIONS.filter((e) => by.has(e)).map((e) => [e, by.get(e).sort()]);
+}
+
+function reactorName(uid) {
+  if (uid === state.user.uid) return "toi";
+  const n = nameOf(uid);
+  return typeof n === "string" ? n : "un ancien membre";
+}
+
+function renderReactions(id, m) {
+  const groups = reactionGroups(m);
+  if (!groups.length) return null;
+  const box = document.createElement("div");
+  box.className = "reactions";
+  for (const [emoji, uids] of groups) {
+    const mine = uids.includes(state.user.uid);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "reaction" + (mine ? " mine" : "");
+    b.setAttribute("aria-pressed", String(mine));
+    const names = uids.map(reactorName).join(", ");
+    b.title = `${emoji} ${names}` + (mine ? " (cliquer pour retirer)" : "");
+    b.setAttribute("aria-label", `${emoji} ${uids.length} : ${names}`);
+    const e = document.createElement("span");
+    e.textContent = emoji;
+    const n = document.createElement("span");
+    n.className = "reaction-count";
+    n.textContent = String(uids.length);
+    b.append(e, n);
+    b.addEventListener("click", () => toggleReaction(id, emoji));
+    box.append(b);
+  }
+  return box;
+}
+
+// Choisir l'emoji déjà mis le retire ; un autre le remplace.
+function toggleReaction(id, emoji) {
+  const m = state.msgById.get(id);
+  if (!m || m.event || !state.selectedId) return;
+  const uid = state.user.uid;
+  const remove = m.reactions?.[uid] === emoji;
+  const batch = writeBatch(db);
+  const ref = doc(db, "conversations", state.selectedId, "messages", id);
+  if (remove) {
+    batch.update(ref, { [`reactions.${uid}`]: deleteField() });
+  } else {
+    const wait = rateWait();
+    if (wait) {
+      toast(`Tu as envoyé beaucoup de messages en une minute : réessaie dans ${wait} s.`, { error: true });
+      return;
+    }
+    batch.update(ref, { [`reactions.${uid}`]: emoji });
+    bumpRate(batch); // ajout ou changement : limitation anti-abus, exigée par les règles
+  }
+  batch.commit().catch((err) => {
+    console.error(err);
+    toast("Réaction impossible : " + err.message, { error: true });
+  });
 }
 
 /* ---------- Modification de ses messages ---------- */

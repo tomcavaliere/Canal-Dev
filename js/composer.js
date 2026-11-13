@@ -7,6 +7,7 @@ import { prepareImage } from "./images.js";
 import { bumpRate, rateReady, rateWait } from "./rate.js";
 import { $ } from "./ui.js";
 import { clearReply, images, startReply } from "./messages.js";
+import { toggleEmojiMenu } from "./emoji.js";
 import { state } from "./state.js";
 
 /* ---------- Photos : pièce jointe ---------- */
@@ -88,8 +89,17 @@ $("msg-input").addEventListener("paste", (e) => {
 // Le message s'affiche aussitôt (« Envoi… ») et la saisie est libérée sans attendre le serveur :
 // hors ligne, Firestore le garde et l'envoie au retour du réseau. En cas de refus, le texte,
 // la photo et la réponse sont rendus pour pouvoir réessayer.
-$("composer").addEventListener("submit", async (e) => {
+$("composer").addEventListener("submit", (e) => {
   e.preventDefault();
+  send(false);
+});
+
+// Pouce levé : envoyé tout seul, sans toucher au texte en cours ni à la photo jointe
+// (mais en réponse au message choisi, s'il y en a un).
+$("btn-thumb").addEventListener("click", () => send(true));
+
+/** @param {boolean} thumb */
+async function send(thumb) {
   await rateReady();
   const wait = rateWait();
   if (wait) {
@@ -97,8 +107,8 @@ $("composer").addEventListener("submit", async (e) => {
     return;
   }
   const input = $("msg-input");
-  const text = input.value.trim();
-  const image = attachment;
+  const text = thumb ? "👍" : input.value.trim();
+  const image = thumb ? null : attachment;
   const replyTo = state.replyTo;
   if ((!text && !image) || !state.selectedId) return;
 
@@ -132,7 +142,7 @@ $("composer").addEventListener("submit", async (e) => {
   // Date de la dernière activité, pour classer la conversation en tête de liste chez tous ses membres.
   batch.update(doc(db, "conversations", convId), { lastMessageAt: serverTimestamp() });
   bumpRate(batch); // limitation anti-abus, exigée par les règles
-  input.value = "";
+  if (!thumb) input.value = "";
   if (image) clearAttachment();
   if (replyTo) clearReply();
 
@@ -141,13 +151,31 @@ $("composer").addEventListener("submit", async (e) => {
     images.cache.delete(msgRef.id);
     images.cache.delete("t:" + msgRef.id);
     if (state.selectedId === convId) {
-      if (!input.value.trim()) input.value = text;
+      if (!thumb && !input.value.trim()) input.value = text;
       if (image && !attachment) setAttachment(image);
       if (replyTo && !state.replyTo) startReply(replyTo);
     }
     toast("Envoi impossible : " + err.message, { error: true });
   });
-});
+}
+
+/* ---------- Emojis dans le texte ---------- */
+
+// Insère l'emoji à la place du curseur (ou de la sélection) ; le menu reste ouvert pour en
+// ajouter plusieurs, et se ferme avec Échap ou un clic ailleurs.
+$("btn-emoji").addEventListener("click", () => toggleEmojiMenu($("btn-emoji"), {
+  label: "Emojis", keepOpen: true, onPick: insertEmoji,
+}));
+
+/** @param {string} emoji */
+function insertEmoji(emoji) {
+  const input = /** @type {HTMLTextAreaElement} */ ($("msg-input"));
+  if (input.value.length + emoji.length > input.maxLength) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  input.setRangeText(emoji, start, end, "end");
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 // Bandeau « hors ligne » : les messages restent en attente jusqu'au retour du réseau.
 function renderOnline() {

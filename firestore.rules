@@ -268,11 +268,43 @@ service cloud.firestore {
             && d.authorUid in getAfter(conv).data.members;
         }
 
+        // Réactions : `reactions` = { uid: emoji }, une par membre, parmi une liste fixe
+        // (identique à REACTIONS dans js/emoji.js). Aucun autre champ ne change.
+        function reactionsOf(data) {
+          return data.get('reactions', {});
+        }
+        function reactionDiff() {
+          return reactionsOf(request.resource.data).diff(reactionsOf(resource.data));
+        }
+        function onlyReactions() {
+          return !('event' in resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+            && reactionsOf(request.resource.data) is map;
+        }
+        // Mettre ou changer sa propre réaction (comptée par la limitation anti-abus).
+        function validReaction() {
+          let after = reactionsOf(request.resource.data);
+          return onlyReactions()
+            && reactionDiff().affectedKeys().hasOnly([request.auth.uid])
+            && request.auth.uid in after
+            && after[request.auth.uid] in ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+        }
+        // Retirer des réactions sans rien ajouter : la sienne (membre), ou celles de n'importe
+        // qui (admin, à la suppression d'un compte).
+        function validUnreact() {
+          return onlyReactions()
+            && reactionDiff().addedKeys().size() == 0
+            && reactionDiff().changedKeys().size() == 0
+            && (isAdmin() || reactionDiff().removedKeys().hasOnly([request.auth.uid]));
+        }
+
         allow read: if canAccess(convId);
         allow create: if canAccess(convId) && validMessage() && rateBumped();
         allow create: if signedIn() && validJoin();
         allow update: if canAccess(convId) && resource.data.authorUid == request.auth.uid
           && !('event' in resource.data) && validEdit() && rateBumped();
+        allow update: if canAccess(convId) && validReaction() && rateBumped();
+        allow update: if canAccess(convId) && validUnreact();
         allow delete: if isAdmin()
           || (canAccess(convId) && resource.data.authorUid == request.auth.uid);
       }

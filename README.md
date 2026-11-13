@@ -34,7 +34,8 @@ js/unread.js            non-lus, nouveaux messages, son et notifications
 js/messages.js          conversation ouverte : messages paginés, réponses, modification, photos
 js/receipts.js          accusés de lecture (« Vu par … »)
 js/search.js            recherche dans les messages chargés
-js/composer.js          saisie, photo jointe, envoi
+js/composer.js          saisie, photo jointe, emojis, pouce, envoi
+js/emoji.js             réactions (liste fixe), sélecteur d'emojis, emojis affichés en grand
 js/admin.js             création de conversations, gestion des membres (admin)
 js/account.js           « Mon compte » : export et suppression des données (RGPD)
 js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'admin seul)
