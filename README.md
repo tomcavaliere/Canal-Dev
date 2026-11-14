@@ -134,6 +134,9 @@ Sans ces index, « Télécharger mes données », la suppression de compte et la
    - [database.rules.json](database.rules.json) (UID dans la règle `.write` de `status/$uid`)
 4. Redéploie les règles, recharge la page : tu as le badge **Admin**.
 
+Tu es alors l'**administrateur principal**. Pour partager l'administration sans toucher au code :
+**Utilisateurs → ✎** à côté d'une personne **→ Donner les droits d'administration** (voir plus bas).
+
 ### 4. Publier sur Firebase Hosting
 À la main : `npx firebase login` (une fois), puis `npm run deploy` (site + règles + index).
 
@@ -176,6 +179,11 @@ puis retire `tomcavaliere.github.io` des domaines autorisés d'Authentication.
    le ✎ à côté d'elle dans « Utilisateurs » permet de le corriger. Il n'est jamais mis à jour automatiquement,
    puisque chacun peut changer son nom Google.
 4. Décoche pour retirer l'accès ; **Supprimer** efface la conversation et ses messages.
+5. **Droits d'administration** (administrateur principal seulement) : **Utilisateurs → ✎** à côté d'une personne
+   → **Donner les droits d'administration**. Elle a alors les mêmes pouvoirs que l'admin (toutes les conversations,
+   membres, projets, invitations, comptes), sauf donner ou retirer ces droits, et porte la mention « admin » dans
+   la liste. Le même bouton les retire ; sa page se recharge d'elle-même. Seul l'administrateur principal peut
+   supprimer le compte d'un autre admin. Le badge **Admin** sur les messages reste celui de l'administrateur principal.
 
 Les membres existants sont ajoutés à l'annuaire automatiquement dès que l'admin ouvre l'application.
 Un message dont l'auteur n'est pas dans l'annuaire (par exemple un ancien membre retiré avant sa mise en place)
@@ -229,6 +237,10 @@ Au quotidien :
   `projects/{projet}/members/{uid}` qui nomme une conversation du projet dont il est membre ; elle est revérifiée à chaque
   lecture ou écriture du calendrier. Retiré de cette conversation, on perd l'accès aussitôt (l'admin supprime ensuite la fiche).
 - Le nom affiché vient de l'annuaire `names/{uid}`, que seul l'admin peut écrire : le champ `authorName` d'un message est saisi par son auteur (il peut y mettre n'importe quoi depuis la console du navigateur) et n'est affiché qu'en dernier recours, marqué « non vérifié ». Le badge **Admin** dépend de l'UID, pas du nom.
+- Admins ajoutés : un document `admins/{uid}` par personne, que seul l'administrateur principal (`adminUid()`) crée ou
+  supprime ; `isAdmin()` vérifie son existence. Chacun ne lit que le sien, la liste est réservée aux admins. Un admin
+  ajouté peut renoncer à ses droits, et la suppression d'un compte retire son entrée. La présence « en ligne »
+  (`database.rules.json`) ne lit pas Firestore : seul l'administrateur principal efface celle d'un compte supprimé.
 - Limitation anti-abus (règles) : 30 messages par minute et par personne (compteur `rate/{uid}` mis à jour dans le batch
   de chaque envoi ou modification), profil réécrit au plus une fois par minute. Elle ralentit un abus sans l'empêcher
   totalement : sans serveur, un compte malveillant peut encore épuiser le quota gratuit. Retirer alors ses accès.
