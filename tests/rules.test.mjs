@@ -136,6 +136,52 @@ describe("Profils (users)", () => {
     assertSucceeds(deleteDoc(doc(alice(), "users/alice"))));
 });
 
+describe("Abonnements aux notifications push (users/{uid}/push)", () => {
+  const ID = "a".repeat(64);
+  const sub = (extra = {}) => ({
+    endpoint: "https://fcm.googleapis.com/fcm/send/abc:def",
+    p256dh: "B" + "x".repeat(86), auth: "y".repeat(22), updatedAt: serverTimestamp(), ...extra,
+  });
+
+  it("chacun enregistre et renouvelle l'abonnement de son appareil", async () => {
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/push/${ID}`), sub()));
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/push/${ID}`), sub()));
+  });
+  it("les services de push de Firefox, Safari et Edge sont acceptés", async () => {
+    for (const endpoint of [
+      "https://updates.push.services.mozilla.com/wpush/v2/abc",
+      "https://web.push.apple.com/QabcDEF",
+      "https://wns2-par02p.notify.windows.com/w/?token=abc",
+    ]) await assertSucceeds(setDoc(doc(alice(), `users/alice/push/${ID}`), sub({ endpoint })));
+  });
+  it("une adresse qui n'est pas un service de push est refusée", async () => {
+    for (const endpoint of [
+      "https://evil.example.com/x", "http://fcm.googleapis.com/fcm/send/x",
+      "https://fcm.googleapis.com.evil.example/x", "https://169.254.169.254/x",
+    ]) await assertFails(setDoc(doc(alice(), `users/alice/push/${ID}`), sub({ endpoint })));
+  });
+  it("un identifiant, une clé ou un champ invalide est refusé", async () => {
+    await assertFails(setDoc(doc(alice(), "users/alice/push/abc"), sub()));
+    await assertFails(setDoc(doc(alice(), `users/alice/push/${ID}`), sub({ p256dh: "court" })));
+    await assertFails(setDoc(doc(alice(), `users/alice/push/${ID}`), sub({ auth: "a b" })));
+    await assertFails(setDoc(doc(alice(), `users/alice/push/${ID}`), sub({ ua: "Firefox" })));
+    await assertFails(setDoc(doc(alice(), `users/alice/push/${ID}`), sub({ updatedAt: T0 })));
+  });
+  it("personne n'abonne, ne lit ni ne retire l'appareil d'un autre ; l'admin lit et retire", async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `users/alice/push/${ID}`), sub({ updatedAt: T0 })));
+    await assertFails(setDoc(doc(bob(), `users/alice/push/${"b".repeat(64)}`), sub()));
+    await assertFails(getDocs(collection(bob(), "users/alice/push")));
+    await assertFails(deleteDoc(doc(bob(), `users/alice/push/${ID}`)));
+    await assertSucceeds(getDocs(collection(alice(), "users/alice/push")));
+    await assertSucceeds(getDocs(collection(admin(), "users/alice/push")));
+    await assertSucceeds(deleteDoc(doc(admin(), `users/alice/push/${ID}`)));
+  });
+  it("chacun retire l'abonnement de son appareil", async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `users/alice/push/${ID}`), sub({ updatedAt: T0 })));
+    await assertSucceeds(deleteDoc(doc(alice(), `users/alice/push/${ID}`)));
+  });
+});
+
 describe("Conversations", () => {
   const conversation = (extra = {}) => ({
     title: "Nouvelle", description: "", members: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,

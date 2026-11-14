@@ -97,6 +97,28 @@ service cloud.firestore {
         && rateBumped();
       // Droit à l'effacement : l'utilisateur peut supprimer son propre profil.
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+
+      // ---------- Abonnements aux notifications push (un par appareil) ----------
+      // Identifiant : empreinte SHA-256 de `endpoint`. Lus par la Cloud Function (functions/index.js),
+      // qui contourne ces règles. L'adresse doit être celle d'un service de push de navigateur :
+      // la fonction n'envoie jamais de requête ailleurs (revérifié de son côté).
+      match /push/{subId} {
+        function validPush() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['endpoint', 'p256dh', 'auth', 'updatedAt'])
+            && d.endpoint is string && d.endpoint.size() <= 1000
+            && d.endpoint.matches('https://(fcm[.]googleapis[.]com|updates[.]push[.]services[.]mozilla[.]com|web[.]push[.]apple[.]com|[a-z0-9-]+[.]notify[.]windows[.]com)/.*')
+            && d.p256dh is string && d.p256dh.matches('[A-Za-z0-9_=-]{80,100}')
+            && d.auth is string && d.auth.matches('[A-Za-z0-9_=-]{16,32}')
+            && d.updatedAt == request.time;
+        }
+
+        allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && subId.matches('[a-f0-9]{64}') && validPush();
+        // Désactivation, déconnexion, suppression du compte (par la personne ou par l'admin).
+        allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      }
     }
 
     // ---------- Administrateurs ajoutés (un document par personne) ----------
