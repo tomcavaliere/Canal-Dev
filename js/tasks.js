@@ -6,6 +6,8 @@
 //   - L'auteur (et l'admin) modifie ou supprime une tâche encore à faire.
 //   - Une tâche peut avoir un responsable : nommé à la création (ou ensuite, par l'auteur et l'admin), ou pris par
 //     quiconque en cliquant « Je m'en occupe » sur une tâche libre (on peut s'en retirer).
+//   - Une tâche peut avoir une échéance : elle apparaît alors dans le calendrier du projet (calendar.js), où on
+//     peut aussi la cocher.
 // La liste s'ouvre dans un dialogue (bouton ✅ d'un projet, barre latérale).
 import {
   collection, deleteDoc, deleteField, doc, limit, onSnapshot, orderBy, query, serverTimestamp, writeBatch,
@@ -23,6 +25,23 @@ import { syncNames } from "./app.js";
 const MAX_TASKS = 500; // les règles ne bornent pas le nombre : c'est la taille de la liste écoutée
 
 const whenFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" });
+const dueFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+
+const pad = (n) => String(n).padStart(2, "0");
+/** @returns {string} aujourd'hui, « AAAA-MM-JJ » en heure locale */
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+/** @returns {string | null} échéance « AAAA-MM-JJ » d'une tâche (jamais supposée bien formée) */
+export function dueOf(t) {
+  return typeof t?.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(t.due) ? t.due : null;
+}
+/** @param {string} key « AAAA-MM-JJ » */
+export function formatDue(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return dueFmt.format(new Date(y, m - 1, d));
+}
 
 const me = () => state.user?.uid ?? "";
 const who = (uid) => (uid === me() ? "toi" : displayText(uid));
@@ -66,6 +85,7 @@ export async function openTasks(projectId) {
     members = new Set();
     showError("");
     $("task-new").value = "";
+    $("task-due").value = "";
     $("task-assignee").value = "";
   }
   render();
@@ -149,7 +169,9 @@ function render() {
   if ($("dlg-task").open && editingId) fillAssignees($("task-edit-assignee"), assigneeOf(tasks.get(editingId)));
 
   const all = [...tasks.entries()].filter(([, t]) => typeof t.title === "string" && t.title);
-  const open = all.filter(([, t]) => t.done !== true).sort((a, b) => millis(a[1].createdAt) - millis(b[1].createdAt));
+  // À faire : échéances les plus proches d'abord (sans échéance à la fin), puis par date d'ajout.
+  const open = all.filter(([, t]) => t.done !== true).sort((a, b) =>
+    (dueOf(a[1]) ?? "9999").localeCompare(dueOf(b[1]) ?? "9999") || millis(a[1].createdAt) - millis(b[1].createdAt));
   const done = all.filter(([, t]) => t.done === true).sort((a, b) => millis(b[1].doneAt) - millis(a[1].doneAt));
 
   $("tasks-open").replaceChildren(...(open.length ? open.map(([id, t]) => taskItem(id, t)) : [emptyItem("Rien à faire pour l'instant.")]));
@@ -214,6 +236,13 @@ function taskItem(id, t) {
   const finished = done ? `terminée${typeof t.doneBy === "string" ? " par " + who(t.doneBy) : ""}${stamp(t.doneAt)}` : "";
   const assignee = assigneeOf(t);
   const parts = [];
+  const due = dueOf(t);
+  if (due) {
+    const late = !done && due < todayKey();
+    parts.push(Object.assign(document.createElement("span"), {
+      className: late ? "task-late" : "", textContent: (late ? "en retard · " : "pour le ") + formatDue(due),
+    }));
+  }
   if (assignee) parts.push(Object.assign(document.createElement("span"), {
     className: "task-assignee", textContent: "responsable : " + who(assignee),
   }));
@@ -258,14 +287,15 @@ async function rateOk() {
   return !wait;
 }
 
-async function toggleTask(id, cb) {
-  const projectId = pid;
-  const on = cb.checked;
-  if (!projectId || !await rateOk()) {
-    cb.checked = !on;
-    return;
-  }
-  cb.disabled = true;
+/**
+ * Coche ou rouvre une tâche (aussi utilisé par le calendrier). Affiche l'erreur si l'écriture échoue.
+ * @param {string} projectId
+ * @param {string} id
+ * @param {boolean} on true : terminée
+ * @returns {Promise<boolean>} true si l'écriture a réussi
+ */
+export async function setTaskDone(projectId, id, on) {
+  if (!await rateOk()) return false;
   try {
     const batch = writeBatch(db);
     batch.update(doc(db, "projects", projectId, "tasks", id), on
@@ -274,13 +304,23 @@ async function toggleTask(id, cb) {
     bumpRate(batch);
     await batch.commit();
     announce(on ? "Tâche terminée." : "Tâche rouverte.");
+    return true;
   } catch (err) {
-    cb.checked = !on;
     console.error(err);
     toast("Modification impossible : " + err.message, { error: true });
-  } finally {
-    cb.disabled = false;
+    return false;
   }
+}
+
+async function toggleTask(id, cb) {
+  const on = cb.checked;
+  if (!pid) {
+    cb.checked = !on;
+    return;
+  }
+  cb.disabled = true;
+  if (!await setTaskDone(pid, id, on)) cb.checked = !on;
+  cb.disabled = false;
 }
 
 /**
@@ -323,13 +363,17 @@ $("form-task").addEventListener("submit", async (e) => {
   try {
     const batch = writeBatch(db);
     const assignee = $("task-assignee").value;
+    const due = $("task-due").value;
     batch.set(doc(collection(db, "projects", projectId, "tasks")), {
-      title, ...(assignee ? { assignee } : {}), done: false, createdBy: me(),
+      title, ...(assignee ? { assignee } : {}), ...(due ? { due } : {}), done: false, createdBy: me(),
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     });
     bumpRate(batch);
     await batch.commit();
-    if (pid === projectId && input.value.trim() === title) input.value = "";
+    if (pid === projectId && input.value.trim() === title) {
+      input.value = "";
+      $("task-due").value = "";
+    }
     showError("");
     input.focus();
   } catch (err) {
@@ -349,6 +393,7 @@ function openEdit(id) {
   $("task-title").value = t.title;
   fillAssignees($("task-edit-assignee"), assigneeOf(t));
   $("task-edit-assignee").value = assigneeOf(t) ?? "";
+  $("task-edit-due").value = dueOf(t) ?? "";
   $("task-error").hidden = true;
   $("dlg-task").showModal();
 }
@@ -367,8 +412,13 @@ $("form-task-edit").addEventListener("submit", async (e) => {
     const batch = writeBatch(db);
     const before = assigneeOf(tasks.get(editingId));
     const assignee = $("task-edit-assignee").value || null;
+    const dueBefore = dueOf(tasks.get(editingId));
+    const due = $("task-edit-due").value || null;
     batch.update(doc(db, "projects", projectId, "tasks", editingId), {
-      title, ...(assignee === before ? {} : { assignee: assignee ?? deleteField() }), updatedAt: serverTimestamp(),
+      title,
+      ...(assignee === before ? {} : { assignee: assignee ?? deleteField() }),
+      ...(due === dueBefore ? {} : { due: due ?? deleteField() }),
+      updatedAt: serverTimestamp(),
     });
     bumpRate(batch);
     await batch.commit();

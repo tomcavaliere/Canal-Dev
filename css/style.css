@@ -748,6 +748,7 @@ dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px
 #form-task { flex-wrap: wrap; }
 #form-task input { flex: 1 1 12rem; min-width: 0; }
 #form-task select { flex: 0 1 11rem; min-width: 0; }
+#form-task input[type="date"] { flex: 0 1 9.5rem; }
 .task-list { list-style: none; margin: 0; padding: 0; }
 .task { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 0 .4rem; padding: .3rem 0; }
 .task + .task { border-top: 1px solid var(--border); }
@@ -756,6 +757,7 @@ dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px
 .task-title { overflow-wrap: anywhere; }
 .task.done .task-title { text-decoration: line-through; color: var(--muted); }
 .task-meta { grid-column: 1; padding-left: 1.6rem; }
+.task-late { color: var(--danger); font-weight: 600; }
 .task-assignee { color: var(--accent); font-weight: 600; }
 .task-assignee.free { color: var(--muted); font-weight: 400; }
 .task-take {

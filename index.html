@@ -173,11 +173,12 @@
           <div class="chat-head-text">
             <p id="cal-project" class="chat-project small"></p>
             <h2 id="cal-heading">Calendrier</h2>
-            <p class="muted small">Réunions et objectifs, visibles par tous les membres du projet.</p>
+            <p class="muted small">Réunions, objectifs et tâches à échéance, visibles par tous les membres du projet.</p>
           </div>
           <div class="row chat-tools">
             <button id="btn-new-event" class="btn small primary" type="button">+ Réunion</button>
             <button id="btn-new-goal" class="btn small" type="button">+ Objectif</button>
+            <button id="btn-cal-tasks" class="btn small" type="button">✅ Tâches</button>
             <button id="btn-cal-close" class="btn small" type="button">Fermer</button>
           </div>
         </div>
@@ -420,11 +421,13 @@
     <div class="stack">
       <h2 id="tasks-title">Tâches</h2>
       <p class="muted small">Visibles par tous les membres du projet. Nomme un responsable, ou laisse la tâche libre : chacun peut
-        alors dire « Je m'en occupe ». Une tâche terminée reste dans l'historique.</p>
+        alors dire « Je m'en occupe ». Avec une échéance, la tâche apparaît aussi dans le calendrier du projet.
+        Une tâche terminée reste dans l'historique.</p>
       <p id="tasks-error" class="error small" role="alert" hidden></p>
       <form id="form-task" class="row">
         <input id="task-new" maxlength="200" autocomplete="off" placeholder="Nouvelle tâche…" aria-label="Nouvelle tâche">
         <select id="task-assignee" aria-label="Responsable de la nouvelle tâche"></select>
+        <input id="task-due" type="date" aria-label="Échéance de la nouvelle tâche (facultative)" title="Échéance (facultative)">
         <button id="task-add" class="btn primary" type="submit">Ajouter</button>
       </form>
       <section class="stack tight" aria-labelledby="tasks-open-label">
@@ -450,6 +453,9 @@
       </label>
       <label>Responsable
         <select id="task-edit-assignee"></select>
+      </label>
+      <label>Échéance <span class="muted small">(facultative)</span>
+        <input id="task-edit-due" type="date">
       </label>
       <p id="task-error" class="error small" role="alert" hidden></p>
       <div class="row end">

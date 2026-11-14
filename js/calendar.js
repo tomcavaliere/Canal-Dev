@@ -4,6 +4,7 @@
 //     (et l'admin) la modifie ou la supprime ; chaque invité répond « présent » ou « absent ».
 //   - Tout membre ajoute des objectifs et coche ceux qui sont atteints ; l'auteur (et l'admin)
 //     les modifie ou les supprime.
+//   - Les tâches du projet (tasks.js) qui ont une échéance y apparaissent aussi, cochables depuis le calendrier.
 // Le calendrier s'affiche à la place de la conversation (bouton 📅 d'un projet, barre latérale).
 import {
   collection, collectionGroup, deleteDoc, deleteField, doc, limit, onSnapshot, orderBy, query,
@@ -19,6 +20,7 @@ import { isLogo } from "./images.js";
 import { projectColor, renderConversationList } from "./sidebar.js";
 import { state } from "./state.js";
 import { ensureTicket } from "./tickets.js";
+import { openTasks, setTaskDone } from "./tasks.js";
 import { $, announce } from "./ui.js";
 import { openProjectCalendar, syncNames } from "./app.js";
 
@@ -98,9 +100,11 @@ function freshCalendar() {
     events: /** @type {Map<string, CalEvent>} */ (new Map()), // réunions des 6 semaines affichées
     upcoming: /** @type {Map<string, CalEvent>} */ (new Map()), // prochaines réunions
     goals: new Map(), // id -> data
+    tasks: /** @type {Map<string, any>} */ (new Map()), // tâches dont l'échéance tombe dans les 6 semaines affichées
     members: /** @type {Set<string>} */ (new Set()), // fiches des membres du projet
     unsubs: /** @type {(() => void)[]} */ ([]),
     unsubMonth: /** @type {null | (() => void)} */ (null),
+    unsubTasks: /** @type {null | (() => void)} */ (null),
   };
 }
 let cal = freshCalendar();
@@ -124,6 +128,9 @@ export function calendarUids() {
     if (typeof g.createdBy === "string") uids.add(g.createdBy);
     if (typeof g.doneBy === "string") uids.add(g.doneBy);
   }
+  for (const t of cal.tasks.values()) {
+    for (const f of [t.createdBy, t.doneBy, t.assignee]) if (typeof f === "string") uids.add(f);
+  }
   for (const inv of invites.values()) uids.add(inv.event.createdBy);
   uids.delete("");
   return uids;
@@ -138,6 +145,7 @@ export function isCalendarOpen() {
 function stopListeners() {
   cal.unsubs.forEach((u) => u());
   cal.unsubMonth?.();
+  cal.unsubTasks?.();
 }
 
 function showError(msg) {
@@ -207,9 +215,17 @@ function eventsOf(snap) {
 // Réunions des six semaines affichées (réécoutées à chaque changement de mois).
 function listenMonth() {
   cal.unsubMonth?.();
+  cal.unsubTasks?.();
   const pid = cal.pid;
   if (!pid) return;
   const { start, end } = gridRange(cal.month);
+  // Tâches dont l'échéance tombe dans ces six semaines (dates « AAAA-MM-JJ », comparées comme du texte).
+  cal.tasks = new Map();
+  cal.unsubTasks = onSnapshot(query(collection(db, "projects", pid, "tasks"),
+    where("due", ">=", dayKey(start)), where("due", "<", dayKey(end)), orderBy("due")), (snap) => {
+    cal.tasks = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+    changed();
+  }, listenError("tâches"));
   const q = query(collection(db, "projects", pid, "events"),
     where("start", ">=", Timestamp.fromDate(start)), where("start", "<", Timestamp.fromDate(end)), orderBy("start"));
   cal.ready = false;
@@ -293,6 +309,10 @@ function renderHead() {
 function eventsOn(key) {
   return [...cal.events.values()].filter((e) => dayKey(e.start) === key).sort((a, b) => a.start.getTime() - b.start.getTime());
 }
+function tasksDue(key) {
+  return [...cal.tasks.entries()].filter(([, t]) => t.due === key && typeof t.title === "string" && t.title)
+    .sort((a, b) => Number(a[1].done === true) - Number(b[1].done === true) || a[1].title.localeCompare(b[1].title, "fr"));
+}
 function goalsDue(key) {
   return [...cal.goals.entries()].filter(([, g]) => g.due === key && typeof g.title === "string");
 }
@@ -309,6 +329,7 @@ function renderGrid() {
       const key = dayKey(day);
       const events = eventsOn(key);
       const goals = goalsDue(key);
+      const tasksOn = tasksDue(key);
       const td = document.createElement("td");
       td.className = "cal-cell"
         + (day.getMonth() !== cal.month.getMonth() ? " other-month" : "")
@@ -317,18 +338,19 @@ function renderGrid() {
 
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "cal-daynum" + (events.length || goals.length ? " has-items" : "");
+      btn.className = "cal-daynum" + (events.length || goals.length || tasksOn.length ? " has-items" : "");
       btn.textContent = String(day.getDate());
       const parts = [dayFmt.format(day)];
       if (events.length) parts.push(`${events.length} réunion${events.length > 1 ? "s" : ""}`);
       if (goals.length) parts.push(`${goals.length} objectif${goals.length > 1 ? "s" : ""} à échéance`);
+      if (tasksOn.length) parts.push(`${tasksOn.length} tâche${tasksOn.length > 1 ? "s" : ""} à échéance`);
       btn.setAttribute("aria-label", parts.join(", "));
       btn.setAttribute("aria-pressed", String(key === cal.selected));
       if (key === today) btn.setAttribute("aria-current", "date");
       btn.addEventListener("click", () => selectDay(key));
       td.append(btn);
 
-      if (events.length || goals.length) {
+      if (events.length || goals.length || tasksOn.length) {
         const ul = document.createElement("ul");
         ul.className = "cal-chips";
         for (const e of events.slice(0, 3)) {
@@ -343,11 +365,11 @@ function renderGrid() {
           ul.append(li);
         }
         const more = events.length - 3;
-        if (more > 0 || goals.length) {
+        if (more > 0 || goals.length || tasksOn.length) {
           const li = document.createElement("li");
           li.className = "cal-more";
-          li.textContent = [more > 0 ? `+${more}` : "", goals.length ? "🎯".repeat(Math.min(goals.length, 3)) : ""]
-            .filter(Boolean).join(" ");
+          li.textContent = [more > 0 ? `+${more}` : "", goals.length ? "🎯".repeat(Math.min(goals.length, 3)) : "",
+            tasksOn.length ? "✅".repeat(Math.min(tasksOn.length, 3)) : ""].filter(Boolean).join(" ");
           li.setAttribute("aria-hidden", "true");
           ul.append(li);
         }
@@ -427,6 +449,7 @@ function renderDay() {
   $("cal-day-label").textContent = dayFmt.format(day);
   const items = eventsOn(cal.selected).map((e) => eventItem(e));
   for (const [id, g] of goalsDue(cal.selected)) items.push(goalItem(id, g));
+  for (const [id, t] of tasksDue(cal.selected)) items.push(taskDayItem(id, t));
   if (!items.length) items.push(emptyLi(cal.ready ? "Rien de prévu ce jour-là." : "Chargement…"));
   $("cal-day-list").replaceChildren(...items);
 }
@@ -436,6 +459,51 @@ function renderUpcoming() {
   const items = list.map((e) => eventItem(e, { withDate: true }));
   if (!items.length) items.push(emptyLi("Aucune réunion prévue."));
   $("cal-upcoming").replaceChildren(...items);
+}
+
+/* ---------- Tâches à échéance ---------- */
+
+// Une tâche du jour : case à cocher (comme dans la liste des tâches), responsable, et accès à la liste.
+function taskDayItem(id, t) {
+  const done = t.done === true;
+  const li = document.createElement("li");
+  li.className = "cal-goal" + (done ? " done" : "");
+  const label = document.createElement("label");
+  label.className = "check";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = done;
+  cb.addEventListener("change", async () => {
+    const pid = cal.pid;
+    cb.disabled = true;
+    if (!pid || !await setTaskDone(pid, id, cb.checked)) cb.checked = !cb.checked;
+    cb.disabled = false;
+  });
+  const text = document.createElement("span");
+  text.className = "cal-goal-title";
+  text.textContent = t.title;
+  label.append(cb, text);
+  li.append(label);
+
+  const meta = document.createElement("span");
+  meta.className = "cal-goal-meta muted small";
+  const parts = ["tâche"];
+  if (typeof t.assignee === "string" && t.assignee) parts.push("responsable : " + who(t.assignee));
+  else if (!done) parts.push("sans responsable");
+  if (done) parts.push(`terminée${typeof t.doneBy === "string" ? " par " + who(t.doneBy) : ""}`);
+  else if (typeof t.due === "string" && t.due < dayKey(new Date())) parts.push("en retard");
+  meta.textContent = parts.join(" · ");
+  li.append(meta);
+
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "cal-goal-edit";
+  open.textContent = "✅";
+  open.title = "Ouvrir la liste des tâches du projet";
+  open.setAttribute("aria-label", open.title);
+  open.addEventListener("click", () => cal.pid && openTasks(cal.pid));
+  li.append(open);
+  return li;
 }
 
 /* ---------- Objectifs ---------- */
@@ -844,6 +912,7 @@ $("btn-cal-today").addEventListener("click", () => selectDay(dayKey(new Date()))
 $("btn-new-event").addEventListener("click", () => openEventDialog());
 $("btn-day-event").addEventListener("click", () => openEventDialog({ day: cal.selected }));
 $("btn-new-goal").addEventListener("click", () => openGoalDialog());
+$("btn-cal-tasks").addEventListener("click", () => cal.pid && openTasks(cal.pid));
 $("btn-cal-close").addEventListener("click", () => {
   closeCalendar();
   $("screen-app").classList.remove("show-chat");
