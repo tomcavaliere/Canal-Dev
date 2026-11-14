@@ -666,7 +666,7 @@ fieldset.plain legend { padding: 0; margin-bottom: .2rem; }
 .cal-panel-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
 .cal-panel-head h3 { flex: 1; margin: 0; }
 .cal-panel-head h3::first-letter, #cal-month-label::first-letter { text-transform: uppercase; }
-.cal-nav { display: flex; align-items: center; gap: .4rem; margin-bottom: .5rem; }
+.cal-nav { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-bottom: .5rem; }
 .cal-nav h3 { min-width: 9.5rem; text-align: center; font-size: 1rem; }
 .cal-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .cal-grid th { font-size: .72rem; font-weight: 600; color: var(--muted); padding: .2rem 0; }
@@ -719,6 +719,18 @@ fieldset.plain legend { padding: 0; margin-bottom: .2rem; }
 }
 .cal-bar.late { --proj: var(--danger); }
 .cal-bar.done { --proj: var(--online); opacity: .65; }
+
+/* Choix de l'affichage (mois ou semaine) */
+.cal-views { display: inline-flex; }
+.cal-views .btn { border-radius: 0; }
+.cal-views .btn:first-child { border-radius: 999px 0 0 999px; }
+.cal-views .btn:last-child { border-radius: 0 999px 999px 0; margin-left: -1px; }
+.cal-views .btn[aria-pressed="true"] { background: var(--proj); border-color: var(--proj); color: var(--surface); }
+
+/* Vue semaine : une seule rangée de grandes cases (dans un tableau, la hauteur est un minimum :
+   les cases grandissent avec les tâches et réunions) */
+.cal-grid.week .cal-cell { height: 16rem; }
+.cal-grid.week .cal-bar, .cal-grid.week .cal-bar-gap { height: 1.1rem; line-height: calc(1.1rem - 4px); font-size: .7rem; }
 
 .cal-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; }
 .cal-empty { padding: .2rem 0; }
@@ -832,6 +844,7 @@ dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px
   .cal-daynum { margin: 0 auto; }
   /* Sur petit écran, les réunions d'un jour se lisent sous la grille : un point suffit dans la case. */
   .cal-chips { display: none; }
+  .cal-grid.week .cal-cell { height: 12rem; text-align: left; }
   .cal-daynum.has-items { position: relative; }
   .cal-daynum.has-items::after {
     content: ""; position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);

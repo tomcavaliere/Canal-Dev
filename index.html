@@ -191,9 +191,13 @@
                 <h3 id="cal-month-label"></h3>
                 <button id="btn-cal-next" class="btn small" type="button" aria-label="Mois suivant">›</button>
                 <span class="spacer"></span>
+                <div class="cal-views" role="group" aria-label="Affichage">
+                  <button id="btn-cal-month" class="btn small" type="button" aria-pressed="true">Mois</button>
+                  <button id="btn-cal-week" class="btn small" type="button" aria-pressed="false">Semaine</button>
+                </div>
                 <button id="btn-cal-today" class="btn small" type="button">Aujourd'hui</button>
               </div>
-              <table class="cal-grid">
+              <table id="cal-table" class="cal-grid">
                 <thead>
                   <tr><th scope="col"><abbr title="lundi">lun.</abbr></th><th scope="col"><abbr title="mardi">mar.</abbr></th>
                     <th scope="col"><abbr title="mercredi">mer.</abbr></th><th scope="col"><abbr title="jeudi">jeu.</abbr></th>

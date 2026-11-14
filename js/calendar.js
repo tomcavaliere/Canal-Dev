@@ -6,6 +6,8 @@
 //     les modifie ou les supprime.
 //   - Les tâches du projet (tasks.js) y apparaissent aussi : un trait va du jour de leur création jusqu'à aujourd'hui
 //     (ou jusqu'au jour où elles sont terminées), avec une pastille au bout ; on peut les cocher depuis la liste du jour.
+// Deux affichages : le mois (six semaines, trois traits de tâches par semaine) et la semaine du jour choisi, en
+// grandes cases, où presque toutes les tâches et toutes les réunions ont leur place.
 // Le calendrier s'affiche à la place de la conversation (bouton 📅 d'un projet, barre latérale).
 import {
   collection, collectionGroup, deleteDoc, deleteField, doc, limit, onSnapshot, orderBy, query,
@@ -28,7 +30,9 @@ import { openProjectCalendar, syncNames } from "./app.js";
 const MAX_ATTENDEES = 50; // mêmes limites que firestore.rules
 const MAX_GOALS = 300;
 const MAX_TASKS = 500;
-const MAX_BAR_LANES = 3; // traits de tâches visibles par semaine ; les autres sont comptés (« +n tâches »)
+const MAX_BAR_LANES = 3; // vue mois : traits de tâches visibles par semaine ; les autres sont comptés (« +n tâches »)
+const WEEK_BAR_LANES = 40; // vue semaine : de quoi montrer presque toutes les tâches
+const VIEW_KEY = "canal.calendarView"; // dernier affichage choisi (mois ou semaine), propre à cet appareil
 const UPCOMING = 10;
 
 const monthFmt = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
@@ -36,6 +40,7 @@ const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric
 const shortDayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
 const timeFmt = new Intl.DateTimeFormat("fr-FR", { timeStyle: "short" });
 const dueFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+const weekDayFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" });
 
 /* ---------- Dates ---------- */
 
@@ -66,6 +71,28 @@ function gridRange(month) {
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
   const start = addDays(first, -((first.getDay() + 6) % 7));
   return { start, end: addDays(start, 42) };
+}
+
+// Lundi de la semaine d'un jour.
+function weekStart(d) {
+  return addDays(d, -((d.getDay() + 6) % 7));
+}
+
+// « Semaine du 9 au 15 novembre 2026 » (mois et année répétés seulement s'ils changent).
+function weekLabel(start) {
+  const end = addDays(start, 6);
+  const from = start.getFullYear() !== end.getFullYear() ? dueFmt.format(start)
+    : start.getMonth() !== end.getMonth() ? weekDayFmt.format(start) : String(start.getDate());
+  return `semaine du ${from} au ${weekDayFmt.format(end)} ${end.getFullYear()}`;
+}
+
+/** @returns {"month" | "week"} */
+function savedView() {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "week" ? "week" : "month";
+  } catch {
+    return "month";
+  }
 }
 
 /* ---------- Données ---------- */
@@ -99,6 +126,7 @@ function freshCalendar() {
     pid: /** @type {string | null} */ (null),
     month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     selected: dayKey(new Date()),
+    view: savedView(), // « month » : six semaines ; « week » : la semaine du jour choisi, en grand
     ready: false,
     events: /** @type {Map<string, CalEvent>} */ (new Map()), // réunions des 6 semaines affichées
     upcoming: /** @type {Map<string, CalEvent>} */ (new Map()), // prochaines réunions
@@ -349,13 +377,14 @@ function tasksOnDay(key) {
 }
 
 /**
- * Traits des tâches pour les six semaines de la grille : par semaine, des couloirs (lanes) où chaque tâche
+ * Traits des tâches pour les semaines de la grille : par semaine, des couloirs (lanes) où chaque tâche
  * garde la même ligne sur tous ses jours, pour que le trait soit continu d'une case à l'autre.
- * @param {string[]} keys les 42 jours de la grille
+ * @param {string[]} keys les jours de la grille (7 par semaine)
+ * @param {number} maxLanes couloirs affichés ; les tâches au-delà sont comptées
  */
-function taskBars(keys) {
+function taskBars(keys, maxLanes) {
   const spans = [...cal.tasks.entries()].map(([id, t]) => ({ id, t, span: taskSpan(t) })).filter((x) => x.span);
-  return Array.from({ length: 6 }, (_, w) => {
+  return Array.from({ length: keys.length / 7 }, (_, w) => {
     const wk = keys.slice(w * 7, w * 7 + 7);
     const segs = spans.filter((x) => x.span.end >= wk[0] && x.span.start <= wk[6]).map((x) => ({
       ...x,
@@ -372,7 +401,7 @@ function taskBars(keys) {
       let lane = lastEnd.findIndex((end) => end < seg.a);
       if (lane < 0) lane = lastEnd.length;
       lastEnd[lane] = seg.b;
-      if (lane >= MAX_BAR_LANES) {
+      if (lane >= maxLanes) {
         for (let i = seg.a; i <= seg.b; i++) hidden[i]++;
         continue;
       }
@@ -405,13 +434,21 @@ function goalsDue(key) {
 }
 
 function renderGrid() {
-  $("cal-month-label").textContent = monthFmt.format(cal.month);
-  const { start } = gridRange(cal.month);
+  const isWeek = cal.view === "week";
+  const start = isWeek ? weekStart(fromKey(cal.selected)) : gridRange(cal.month).start;
+  const weeks = isWeek ? 1 : 6;
+  const maxChips = isWeek ? Infinity : 3;
+  $("cal-month-label").textContent = isWeek ? weekLabel(start) : monthFmt.format(cal.month);
+  $("cal-table").classList.toggle("week", isWeek);
+  $("btn-cal-month").setAttribute("aria-pressed", String(!isWeek));
+  $("btn-cal-week").setAttribute("aria-pressed", String(isWeek));
+  $("btn-cal-prev").setAttribute("aria-label", isWeek ? "Semaine précédente" : "Mois précédent");
+  $("btn-cal-next").setAttribute("aria-label", isWeek ? "Semaine suivante" : "Mois suivant");
   const today = dayKey(new Date());
   const rows = [];
-  const keys = Array.from({ length: 42 }, (_, i) => dayKey(addDays(start, i)));
-  const bars = taskBars(keys);
-  for (let week = 0; week < 6; week++) {
+  const keys = Array.from({ length: weeks * 7 }, (_, i) => dayKey(addDays(start, i)));
+  const bars = taskBars(keys, isWeek ? WEEK_BAR_LANES : MAX_BAR_LANES);
+  for (let week = 0; week < weeks; week++) {
     const tr = document.createElement("tr");
     for (let i = 0; i < 7; i++) {
       const day = addDays(start, week * 7 + i);
@@ -424,7 +461,7 @@ function renderGrid() {
       const { lanes, hidden } = bars[week];
       const td = document.createElement("td");
       td.className = "cal-cell"
-        + (day.getMonth() !== cal.month.getMonth() ? " other-month" : "")
+        + (!isWeek && day.getMonth() !== cal.month.getMonth() ? " other-month" : "")
         + (key === today ? " today" : "")
         + (key === cal.selected ? " selected" : "");
 
@@ -455,7 +492,7 @@ function renderGrid() {
       if (events.length || goals.length || dueOn || hidden[i]) {
         const ul = document.createElement("ul");
         ul.className = "cal-chips";
-        for (const e of events.slice(0, 3)) {
+        for (const e of events.slice(0, maxChips)) {
           const li = document.createElement("li");
           const chip = document.createElement("button");
           chip.type = "button";
@@ -466,7 +503,7 @@ function renderGrid() {
           li.append(chip);
           ul.append(li);
         }
-        const more = events.length - 3;
+        const more = events.length - maxChips;
         if (more > 0 || goals.length || dueOn || hidden[i]) {
           const li = document.createElement("li");
           li.className = "cal-more";
@@ -508,6 +545,30 @@ function moveMonth(delta) {
   listenMonth();
   render();
   announce(monthFmt.format(cal.month));
+}
+
+// Vue semaine : même jour de la semaine, sept jours plus tôt ou plus tard. Le mois suit le jour choisi,
+// si bien que la semaine affichée reste dans les six semaines dont les réunions sont écoutées.
+function moveWeek(delta) {
+  const d = addDays(fromKey(cal.selected), 7 * delta);
+  cal.selected = dayKey(d);
+  if (d.getMonth() !== cal.month.getMonth() || d.getFullYear() !== cal.month.getFullYear()) {
+    cal.month = new Date(d.getFullYear(), d.getMonth(), 1);
+    listenMonth();
+  }
+  render();
+  announce(weekLabel(weekStart(d)));
+}
+
+/** @param {"month" | "week"} view */
+function setView(view) {
+  if (cal.view === view) return;
+  cal.view = view;
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch { /* préférence non retenue : sans gravité */ }
+  render();
+  announce(view === "week" ? "Vue semaine." : "Vue mois.");
 }
 
 // Une réunion dans une liste : heure, titre, lieu, et ta réponse si tu es invité.
@@ -1016,8 +1077,10 @@ $("form-event").addEventListener("submit", async (ev) => {
 
 /* ---------- Boutons de la vue ---------- */
 
-$("btn-cal-prev").addEventListener("click", () => moveMonth(-1));
-$("btn-cal-next").addEventListener("click", () => moveMonth(1));
+$("btn-cal-prev").addEventListener("click", () => (cal.view === "week" ? moveWeek(-1) : moveMonth(-1)));
+$("btn-cal-next").addEventListener("click", () => (cal.view === "week" ? moveWeek(1) : moveMonth(1)));
+$("btn-cal-month").addEventListener("click", () => setView("month"));
+$("btn-cal-week").addEventListener("click", () => setView("week"));
 $("btn-cal-today").addEventListener("click", () => selectDay(dayKey(new Date())));
 $("btn-new-event").addEventListener("click", () => openEventDialog());
 $("btn-day-event").addEventListener("click", () => openEventDialog({ day: cal.selected }));
