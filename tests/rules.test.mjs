@@ -1099,3 +1099,53 @@ describe("Tout le reste est interdit", () => {
   it("une collection inconnue est refusée, même à l'admin", () =>
     assertFails(setDoc(doc(admin(), "divers/x"), { a: 1 })));
 });
+
+describe("Administrateurs ajoutés (admins)", () => {
+  const grant = (db, uid) => setDoc(doc(db, `admins/${uid}`), { grantedAt: serverTimestamp() });
+  const makeAdmin = (uid) =>
+    env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `admins/${uid}`), { grantedAt: T0 }));
+
+  it("l'administrateur principal donne les droits", () => assertSucceeds(grant(admin(), "bob")));
+  it("un utilisateur ne se donne pas les droits", () => assertFails(grant(bob(), "bob")));
+  it("un admin ajouté ne donne pas les droits à un autre", async () => {
+    await makeAdmin("bob");
+    await assertFails(grant(bob(), "alice"));
+  });
+  it("un champ en plus ou une date fausse est refusé", async () => {
+    await assertFails(setDoc(doc(admin(), "admins/bob"), { grantedAt: serverTimestamp(), role: "super" }));
+    await assertFails(setDoc(doc(admin(), "admins/bob"), { grantedAt: T0 }));
+  });
+  it("une modification est refusée", async () => {
+    await makeAdmin("bob");
+    await assertFails(setDoc(doc(admin(), "admins/bob"), { grantedAt: serverTimestamp() }));
+  });
+  it("un admin ajouté obtient les droits d'administration", async () => {
+    await assertFails(getDoc(doc(bob(), "conversations/c1")));
+    await makeAdmin("bob");
+    await assertSucceeds(getDoc(doc(bob(), "conversations/c1")));
+    await assertSucceeds(getDocs(collection(bob(), "users")));
+    await assertSucceeds(setDoc(doc(bob(), "names/carol"), { name: "Carol", updatedAt: serverTimestamp() }));
+  });
+  it("chacun lit sa propre entrée ; la liste est réservée aux admins", async () => {
+    await makeAdmin("bob");
+    await assertSucceeds(getDoc(doc(alice(), "admins/alice")));
+    await assertFails(getDoc(doc(alice(), "admins/bob")));
+    await assertFails(getDocs(collection(alice(), "admins")));
+    await assertSucceeds(getDocs(collection(bob(), "admins")));
+    await assertSucceeds(getDocs(collection(admin(), "admins")));
+  });
+  it("l'administrateur principal retire les droits, l'admin ajouté y renonce", async () => {
+    await makeAdmin("bob");
+    await makeAdmin("alice");
+    await assertSucceeds(deleteDoc(doc(admin(), "admins/bob")));
+    await assertFails(getDoc(doc(bob(), "conversations/c1")));
+    await assertSucceeds(deleteDoc(doc(alice(), "admins/alice")));
+  });
+  it("un admin ajouté ne retire pas les droits d'un autre, mais supprime une entrée absente", async () => {
+    await makeAdmin("bob");
+    await makeAdmin("alice");
+    await assertFails(deleteDoc(doc(bob(), "admins/alice")));
+    await assertSucceeds(deleteDoc(doc(bob(), "admins/carol")));
+    await assertFails(deleteDoc(doc(dave(), "admins/carol"))); // pas admin : refusé même si absente
+  });
+});

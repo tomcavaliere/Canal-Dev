@@ -15,8 +15,15 @@ service cloud.firestore {
         && request.auth.token.email.matches('.*@gmail[.]com$');
     }
 
-    function isAdmin() {
+    // Administrateur principal : le seul qui donne ou retire les droits d'administration.
+    function isOwner() {
       return signedIn() && request.auth.uid == adminUid();
+    }
+
+    // Administrateur : le principal, ou une personne à qui il a donné les droits (admins/{uid}).
+    function isAdmin() {
+      return isOwner()
+        || (signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
 
     function isMember(convId) {
@@ -90,6 +97,19 @@ service cloud.firestore {
         && rateBumped();
       // Droit à l'effacement : l'utilisateur peut supprimer son propre profil.
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    // ---------- Administrateurs ajoutés (un document par personne) ----------
+    // Créés et retirés par l'administrateur principal seul. Chacun lit le sien (pour savoir s'il est
+    // admin) ; la liste complète n'est visible que des admins. On peut renoncer à ses droits.
+    match /admins/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isOwner() && uid != adminUid()
+        && request.resource.data.keys().hasOnly(['grantedAt'])
+        && request.resource.data.grantedAt == request.time;
+      // Un admin peut aussi « supprimer » une entrée absente : la suppression d'un compte la retire toujours.
+      allow delete: if isOwner() || (signedIn() && request.auth.uid == uid) || (isAdmin() && resource == null);
     }
 
     // ---------- Annuaire des noms affichés (tenu par l'administrateur) ----------
