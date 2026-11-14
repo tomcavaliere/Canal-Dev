@@ -41,6 +41,11 @@ Canal de communication pour suivre le développement d'un outil.
   navigateur, mémorisé dans le stockage local) et se rouvre avec le bouton **?** de la barre du haut ou depuis « Mon compte ».
   L'administrateur voit en plus une étape sur l'administration.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
+- Un **journal d'activité** (bouton **Journal** dans « Utilisateurs », réservé aux admins) liste qui a fait quoi et quand :
+  projets et conversations créés, modifiés, déplacés ou supprimés, membres ajoutés ou retirés, invitations, noms affichés,
+  droits d'administration, comptes supprimés, liens et épingles, et dans les projets les tâches, objectifs et réunions
+  (créés, modifiés, cochés, rouverts, supprimés, responsable). Du plus récent au plus ancien, filtrable par projet.
+  Les entrées ne se modifient pas ; elles sont supprimées au bout de 12 mois.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
 Hébergement : Firebase Hosting (fichiers statiques, <https://canal-dev-c18d7.web.app>). Auth + données : Firebase (Authentication + Cloud Firestore, plan gratuit Spark). Présence « en ligne » : Firebase Realtime Database.
@@ -70,6 +75,7 @@ js/emoji.js             réactions (liste fixe), sélecteur d'emojis, emojis aff
 js/admin.js             création de conversations, gestion des membres (admin)
 js/calendar.js          calendrier d'un projet : réunions, invitations et réponses, objectifs, tâches à échéance
 js/tasks.js             liste de tâches d'un projet (todo list, historique des tâches terminées)
+js/log.js               journal d'activité : écriture des entrées, dialogue « Journal » (admins), purge à 12 mois
 js/org.js              organigramme d'un projet : rôles rangés par niveau (lecture)
 js/tickets.js           fiches de membre des projets (accès au calendrier), tenues à jour par l'admin
 js/tutorial.js          tutoriel : première arrivée, puis bouton « ? » et « Mon compte »
@@ -88,7 +94,7 @@ RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
 firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid, thumbs.authorUid, reads.uid, members.uid,
                         events.createdBy, events.attendees, goals.createdBy, goals.doneBy, tasks.createdBy, tasks.doneBy et tasks.assignee, requis pour l'export/la suppression
-                        et la pastille des invitations)
+                        et la pastille des invitations ; index composé logs (projectId, at) pour filtrer le journal par projet)
 firebase.json           hébergement (en-têtes HTTP, fichiers exclus), règles, index, émulateur des tests
 .firebaserc             projet Firebase par défaut
 package.json            outils de test, de qualité et de déploiement (le site ne charge aucune de ces dépendances)
@@ -185,6 +191,10 @@ puis retire `tomcavaliere.github.io` des domaines autorisés d'Authentication.
    la liste. Le même bouton les retire ; sa page se recharge d'elle-même. Seul l'administrateur principal peut
    supprimer le compte d'un autre admin. Le badge **Admin** sur les messages reste celui de l'administrateur principal.
 
+6. **Journal** (dans « Utilisateurs ») : toutes les actions, de la plus récente à la plus ancienne, filtrables par projet
+   (50 par 50, « Voir plus »). Chaque entrée est écrite dans le même lot que l'action : elle n'existe que si l'action a réussi.
+   Les entrées de plus de 12 mois sont supprimées automatiquement quand un admin ouvre l'application.
+
 Les membres existants sont ajoutés à l'annuaire automatiquement dès que l'admin ouvre l'application.
 Un message dont l'auteur n'est pas dans l'annuaire (par exemple un ancien membre retiré avant sa mise en place)
 affiche le nom saisi par l'auteur, marqué « non vérifié » : le ✎ permet de l'y ajouter.
@@ -233,6 +243,11 @@ Au quotidien :
 ## Sécurité
 - La clé `apiKey` Firebase est publique par conception ; elle n'ouvre aucun droit à elle seule.
 - Toutes les autorisations sont vérifiées par `firestore.rules` : un utilisateur ne peut ni lire une conversation dont il n'est pas membre, ni modifier la liste des membres, ni écrire un message sous l'identifiant (UID) d'un autre.
+- Journal d'activité (`logs/{id}`) : l'auteur et l'heure d'une entrée sont imposés par les règles, et une entrée ne se
+  modifie jamais. Un membre n'écrit que des entrées de tâches, d'objectifs et de réunions d'un projet dont il est membre,
+  comptées par le compteur anti-abus ; il en choisit le libellé (titre de la tâche), pas l'auteur. Sans serveur, une
+  action faite depuis la console du navigateur peut ne pas être journalisée : le journal trace l'usage normal de
+  l'application, ce n'est pas une preuve infalsifiable.
 - Calendrier : les règles ne peuvent pas parcourir les conversations d'un projet. Chaque membre enregistre donc une fiche
   `projects/{projet}/members/{uid}` qui nomme une conversation du projet dont il est membre ; elle est revérifiée à chaque
   lecture ou écriture du calendrier. Retiré de cette conversation, on perd l'accès aussitôt (l'admin supprime ensuite la fiche).
