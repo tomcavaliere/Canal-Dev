@@ -4,6 +4,8 @@
 //   - Une tâche cochée ne disparaît jamais : elle passe dans « Terminées », la plus récente en premier,
 //     ce qui forme l'historique du projet. On peut la rouvrir, mais son texte ne se modifie plus.
 //   - L'auteur (et l'admin) modifie ou supprime une tâche encore à faire.
+//   - Une tâche peut avoir un responsable : nommé à la création (ou ensuite, par l'auteur et l'admin), ou pris par
+//     quiconque en cliquant « Je m'en occupe » sur une tâche libre (on peut s'en retirer).
 // La liste s'ouvre dans un dialogue (bouton ✅ d'un projet, barre latérale).
 import {
   collection, deleteDoc, deleteField, doc, limit, onSnapshot, orderBy, query, serverTimestamp, writeBatch,
@@ -33,6 +35,9 @@ let pid = null;
 /** @type {Map<string, any>} id -> données */
 let tasks = new Map();
 let unsub = /** @type {null | (() => void)} */ (null);
+let unsubMembers = /** @type {null | (() => void)} */ (null);
+/** @type {Set<string>} personnes du projet (fiches de membre), proposées comme responsables */
+let members = new Set();
 let editingId = /** @type {string | null} */ (null);
 
 function showError(msg) {
@@ -43,6 +48,8 @@ function showError(msg) {
 function stop() {
   unsub?.();
   unsub = null;
+  unsubMembers?.();
+  unsubMembers = null;
 }
 
 /**
@@ -56,8 +63,10 @@ export async function openTasks(projectId) {
     stop();
     pid = projectId;
     tasks = new Map();
+    members = new Set();
     showError("");
     $("task-new").value = "";
+    $("task-assignee").value = "";
   }
   render();
   if (!dlg.open) dlg.showModal();
@@ -69,6 +78,11 @@ export async function openTasks(projectId) {
     showError("Accès aux tâches impossible pour le moment : réessaie dans un instant.");
     return;
   }
+  unsubMembers = onSnapshot(collection(db, "projects", projectId, "members"), (snap) => {
+    members = new Set(snap.docs.map((d) => d.id));
+    syncNames();
+    render();
+  }, (err) => console.error("Lecture des membres du projet impossible", err));
   unsub = onSnapshot(
     query(collection(db, "projects", projectId, "tasks"), orderBy("createdAt", "desc"), limit(MAX_TASKS)),
     (snap) => {
@@ -89,15 +103,17 @@ $("dlg-tasks").addEventListener("close", () => {
   stop();
   pid = null;
   tasks = new Map();
+  members = new Set();
   if ($("dlg-task").open) $("dlg-task").close();
 });
 
 // Personnes à suivre dans l'annuaire des noms (app.js, syncNames) : auteurs et personnes qui ont coché.
 export function taskUids() {
-  const uids = new Set();
+  const uids = new Set(members);
   for (const t of tasks.values()) {
     if (typeof t.createdBy === "string") uids.add(t.createdBy);
     if (typeof t.doneBy === "string") uids.add(t.doneBy);
+    if (typeof t.assignee === "string") uids.add(t.assignee);
   }
   return uids;
 }
@@ -119,6 +135,7 @@ export function teardownTasks() {
   pid = null;
   stop();
   tasks = new Map();
+  members = new Set();
 }
 
 /* ---------- Affichage ---------- */
@@ -128,6 +145,8 @@ function render() {
   const p = state.projects.get(pid);
   $("dlg-tasks").style.setProperty("--proj", projectColor(pid));
   $("tasks-title").textContent = `Tâches de « ${p?.title || "(sans titre)"} »`;
+  fillAssignees($("task-assignee"), null);
+  if ($("dlg-task").open && editingId) fillAssignees($("task-edit-assignee"), assigneeOf(tasks.get(editingId)));
 
   const all = [...tasks.entries()].filter(([, t]) => typeof t.title === "string" && t.title);
   const open = all.filter(([, t]) => t.done !== true).sort((a, b) => millis(a[1].createdAt) - millis(b[1].createdAt));
@@ -137,6 +156,28 @@ function render() {
   $("tasks-done").replaceChildren(...(done.length ? done.map(([id, t]) => taskItem(id, t)) : [emptyItem("Aucune tâche terminée.")]));
   $("tasks-open-count").textContent = open.length ? String(open.length) : "";
   $("tasks-done-count").textContent = done.length ? String(done.length) : "";
+}
+
+/** @returns {string | null} responsable d'une tâche (jamais supposé bien formé) */
+function assigneeOf(t) {
+  return typeof t?.assignee === "string" && t.assignee ? t.assignee : null;
+}
+
+// Liste des responsables possibles : personne, soi-même, puis les autres membres du projet (et le
+// responsable actuel d'une tâche, même s'il a quitté le projet). Les options ne sont refaites que si
+// elles changent, pour ne pas fermer une liste ouverte ni perdre le choix en cours.
+function fillAssignees(select, current) {
+  const others = new Set(members);
+  others.delete(me());
+  if (current && current !== me()) others.add(current);
+  const list = [...others].sort((a, b) => who(a).localeCompare(who(b), "fr"));
+  const sig = JSON.stringify([me(), list.map((u) => [u, who(u)])]);
+  if (select.dataset.sig === sig) return;
+  select.dataset.sig = sig;
+  const keep = select.value;
+  const option = (value, text) => Object.assign(document.createElement("option"), { value, textContent: text });
+  select.replaceChildren(option("", "Non assignée"), option(me(), "Moi"), ...list.map((u) => option(u, who(u))));
+  select.value = [...select.options].some((o) => o.value === keep) ? keep : (current ?? "");
 }
 
 function emptyItem(text) {
@@ -171,8 +212,28 @@ function taskItem(id, t) {
   meta.className = "task-meta muted small";
   const added = typeof t.createdBy === "string" ? `ajoutée par ${who(t.createdBy)}${stamp(t.createdAt)}` : "";
   const finished = done ? `terminée${typeof t.doneBy === "string" ? " par " + who(t.doneBy) : ""}${stamp(t.doneAt)}` : "";
-  meta.textContent = [finished, added].filter(Boolean).join(" · ");
-  if (meta.textContent) li.append(meta);
+  const assignee = assigneeOf(t);
+  const parts = [];
+  if (assignee) parts.push(Object.assign(document.createElement("span"), {
+    className: "task-assignee", textContent: "responsable : " + who(assignee),
+  }));
+  else if (!done) parts.push(Object.assign(document.createElement("span"), {
+    className: "task-assignee free", textContent: "sans responsable",
+  }));
+  parts.push(...[finished, added].filter(Boolean));
+  parts.forEach((p, i) => meta.append(i ? " · " : "", p));
+  if (parts.length) li.append(meta);
+
+  // Tâche libre : « Je m'en occupe ». Tâche qu'on a prise : on peut s'en retirer.
+  if (!done && (!assignee || assignee === me())) {
+    const take = document.createElement("button");
+    take.type = "button";
+    take.className = "task-take";
+    take.textContent = assignee ? "Me retirer" : "Je m'en occupe";
+    take.title = assignee ? `Ne plus être responsable de « ${t.title} »` : `Devenir responsable de « ${t.title} »`;
+    take.addEventListener("click", () => setAssignee(id, assignee ? null : me(), take));
+    li.append(take);
+  }
 
   // L'historique n'est pas modifiable : seules les tâches à faire ont un ✎.
   if (!done && canManage(t.createdBy)) {
@@ -222,6 +283,32 @@ async function toggleTask(id, cb) {
   }
 }
 
+/**
+ * Prend une tâche libre, ou s'en retire.
+ * @param {string} id
+ * @param {string | null} uid null : retire le responsable
+ * @param {HTMLButtonElement} btn
+ */
+async function setAssignee(id, uid, btn) {
+  const projectId = pid;
+  if (!projectId || !await rateOk()) return;
+  btn.disabled = true;
+  try {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "projects", projectId, "tasks", id), {
+      assignee: uid ?? deleteField(), updatedAt: serverTimestamp(),
+    });
+    bumpRate(batch);
+    await batch.commit();
+    announce(uid ? "Tu es responsable de la tâche." : "Tu n'es plus responsable de la tâche.");
+  } catch (err) {
+    console.error(err);
+    toast("Modification impossible : " + err.message, { error: true });
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 $("form-task").addEventListener("submit", async (e) => {
   e.preventDefault();
   const projectId = pid;
@@ -235,8 +322,10 @@ $("form-task").addEventListener("submit", async (e) => {
   btn.disabled = true;
   try {
     const batch = writeBatch(db);
+    const assignee = $("task-assignee").value;
     batch.set(doc(collection(db, "projects", projectId, "tasks")), {
-      title, done: false, createdBy: me(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      title, ...(assignee ? { assignee } : {}), done: false, createdBy: me(),
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     });
     bumpRate(batch);
     await batch.commit();
@@ -258,6 +347,8 @@ function openEdit(id) {
   if (!t || t.done === true || !canManage(t.createdBy)) return;
   editingId = id;
   $("task-title").value = t.title;
+  fillAssignees($("task-edit-assignee"), assigneeOf(t));
+  $("task-edit-assignee").value = assigneeOf(t) ?? "";
   $("task-error").hidden = true;
   $("dlg-task").showModal();
 }
@@ -274,7 +365,11 @@ $("form-task-edit").addEventListener("submit", async (e) => {
   btn.disabled = true;
   try {
     const batch = writeBatch(db);
-    batch.update(doc(db, "projects", projectId, "tasks", editingId), { title, updatedAt: serverTimestamp() });
+    const before = assigneeOf(tasks.get(editingId));
+    const assignee = $("task-edit-assignee").value || null;
+    batch.update(doc(db, "projects", projectId, "tasks", editingId), {
+      title, ...(assignee === before ? {} : { assignee: assignee ?? deleteField() }), updatedAt: serverTimestamp(),
+    });
     bumpRate(batch);
     await batch.commit();
     $("dlg-task").close();

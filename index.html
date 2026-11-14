@@ -417,10 +417,12 @@
   <dialog id="dlg-tasks" class="tasks-dialog" aria-labelledby="tasks-title">
     <div class="stack">
       <h2 id="tasks-title">Tâches</h2>
-      <p class="muted small">Visibles par tous les membres du projet. Une tâche terminée reste dans l'historique.</p>
+      <p class="muted small">Visibles par tous les membres du projet. Nomme un responsable, ou laisse la tâche libre : chacun peut
+        alors dire « Je m'en occupe ». Une tâche terminée reste dans l'historique.</p>
       <p id="tasks-error" class="error small" role="alert" hidden></p>
       <form id="form-task" class="row">
         <input id="task-new" maxlength="200" autocomplete="off" placeholder="Nouvelle tâche…" aria-label="Nouvelle tâche">
+        <select id="task-assignee" aria-label="Responsable de la nouvelle tâche"></select>
         <button id="task-add" class="btn primary" type="submit">Ajouter</button>
       </form>
       <section class="stack tight" aria-labelledby="tasks-open-label">
@@ -443,6 +445,9 @@
       <h2>Modifier la tâche</h2>
       <label>Tâche
         <input id="task-title" maxlength="200" required autocomplete="off">
+      </label>
+      <label>Responsable
+        <select id="task-edit-assignee"></select>
       </label>
       <p id="task-error" class="error small" role="alert" hidden></p>
       <div class="row end">

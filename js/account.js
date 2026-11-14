@@ -63,7 +63,7 @@ export async function purgeUserData(uid, email) {
   }
 
   // Calendriers des projets : réunions organisées, objectifs et tâches créés (supprimés), invitations
-  // (retirée de la liste, avec sa réponse), objectifs et tâches cochés (son nom est retiré), fiches de membre.
+  // (retirée de la liste, avec sa réponse), objectifs et tâches cochés ou dont on est responsable (son nom est retiré), fiches de membre.
   /** @type {[string, string][]} */
   const owned = [["events", "createdBy"], ["goals", "createdBy"], ["tasks", "createdBy"], ["members", "uid"]];
   for (const [group, field] of owned) {
@@ -77,9 +77,9 @@ export async function purgeUserData(uid, email) {
   for (const d of (await calendarDocs("events", "attendees", uid, "array-contains")).docs) {
     await updateDoc(d.ref, { attendees: arrayRemove(uid), [`responses.${uid}`]: deleteField() });
   }
-  for (const group of ["goals", "tasks"]) {
-    for (const d of (await calendarDocs(group, "doneBy", uid)).docs) {
-      await updateDoc(d.ref, { doneBy: deleteField() });
+  for (const [group, field] of [["goals", "doneBy"], ["tasks", "doneBy"], ["tasks", "assignee"]]) {
+    for (const d of (await calendarDocs(group, field, uid)).docs) {
+      await updateDoc(d.ref, { [field]: deleteField() });
     }
   }
 
@@ -131,7 +131,7 @@ async function collectMyData(user) {
     getDocs(query(collection(db, "projects"), where("roleUids", "array-contains", user.uid))),
   ]);
   const reacted = await Promise.all(convs.docs.map((c) => getDocs(reactedQuery(c.id, user.uid))));
-  const [tickets, organized, invited, goalsCreated, goalsDone, tasksCreated, tasksDone] = await Promise.all([
+  const [tickets, organized, invited, goalsCreated, goalsDone, tasksCreated, tasksDone, tasksAssigned] = await Promise.all([
     calendarDocs("members", "uid", user.uid),
     calendarDocs("events", "createdBy", user.uid),
     calendarDocs("events", "attendees", user.uid, "array-contains"),
@@ -139,6 +139,7 @@ async function collectMyData(user) {
     calendarDocs("goals", "doneBy", user.uid),
     calendarDocs("tasks", "createdBy", user.uid),
     calendarDocs("tasks", "doneBy", user.uid),
+    calendarDocs("tasks", "assignee", user.uid),
   ]);
   const projectOf = (d) => d.ref.parent.parent.id;
   return {
@@ -226,6 +227,10 @@ async function collectMyData(user) {
     tasksCreated: tasksCreated.docs.map((d) => ({ projectId: projectOf(d), id: d.id, ...plain(d.data()) })),
     tasksCompleted: tasksDone.docs.map((d) => ({
       projectId: projectOf(d), id: d.id, title: d.data().title, doneAt: plain(d.data().doneAt),
+    })),
+    // Tâches dont on est responsable.
+    tasksAssigned: tasksAssigned.docs.map((d) => ({
+      projectId: projectOf(d), id: d.id, title: d.data().title, done: d.data().done === true,
     })),
   };
 }

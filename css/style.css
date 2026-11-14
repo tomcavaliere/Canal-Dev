@@ -725,7 +725,9 @@ fieldset.plain legend { padding: 0; margin-bottom: .2rem; }
 /* Tâches d'un projet (dialogue ✅) */
 dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px)); }
 .tasks-dialog h2 { color: var(--proj); overflow-wrap: anywhere; }
-#form-task input { flex: 1; min-width: 0; }
+#form-task { flex-wrap: wrap; }
+#form-task input { flex: 1 1 12rem; min-width: 0; }
+#form-task select { flex: 0 1 11rem; min-width: 0; }
 .task-list { list-style: none; margin: 0; padding: 0; }
 .task { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 0 .4rem; padding: .3rem 0; }
 .task + .task { border-top: 1px solid var(--border); }
@@ -734,6 +736,15 @@ dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px
 .task-title { overflow-wrap: anywhere; }
 .task.done .task-title { text-decoration: line-through; color: var(--muted); }
 .task-meta { grid-column: 1; padding-left: 1.6rem; }
+.task-assignee { color: var(--accent); font-weight: 600; }
+.task-assignee.free { color: var(--muted); font-weight: 400; }
+.task-take {
+  grid-column: 1; justify-self: start; margin: .2rem 0 0 1.6rem; padding: 0 .5rem; min-height: 24px;
+  background: none; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); cursor: pointer;
+  font: inherit; font-size: .78rem;
+}
+.task-take:hover { color: var(--accent); border-color: var(--accent); }
+.task-take:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .task-edit {
   grid-column: 2; grid-row: 1; background: none; border: none; color: var(--muted); cursor: pointer;
   font: inherit; font-size: .85rem; min-width: 24px; min-height: 24px; border-radius: 6px;
