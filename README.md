@@ -24,6 +24,9 @@ Canal de communication pour suivre le développement d'un outil.
   qui sont faites. Une tâche terminée **ne disparaît pas** : elle passe dans « Terminées », la plus récente en premier, avec qui l'a
   terminée et quand, ce qui garde l'historique du projet (on peut la rouvrir, mais son texte ne se modifie plus). L'auteur d'une tâche
   (et l'admin) modifie ou supprime une tâche encore à faire.
+  Une tâche peut avoir un **responsable** : nommé à la création (parmi les membres du projet), ou pris plus tard par n'importe quel membre
+  avec « Je m'en occupe » sur une tâche sans responsable (« Me retirer » pour s'en défaire). L'auteur et l'admin peuvent aussi le changer
+  tant que la tâche n'est pas terminée.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
@@ -70,7 +73,7 @@ confidentialite.html    politique de confidentialité
 RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
 firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid, thumbs.authorUid, reads.uid, members.uid,
-                        events.createdBy, events.attendees, goals.createdBy, goals.doneBy, tasks.createdBy et tasks.doneBy, requis pour l'export/la suppression
+                        events.createdBy, events.attendees, goals.createdBy, goals.doneBy, tasks.createdBy, tasks.doneBy et tasks.assignee, requis pour l'export/la suppression
                         et la pastille des invitations)
 firebase.json           hébergement (en-têtes HTTP, fichiers exclus), règles, index, émulateur des tests
 .firebaserc             projet Firebase par défaut
@@ -105,7 +108,7 @@ Et [database.rules.json](database.rules.json) : **Realtime Database → Règles 
 La CLI déploie aussi [firestore.indexes.json](firestore.indexes.json). Si tu passes par la console, crée l'exemption d'index à la main :
 **Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour les collections `images` et `thumbs`, et pour la collection `reads` avec le champ `uid`.
 Idem pour le calendrier : `members` (champ `uid`), `events` (champ `createdBy`, et champ `attendees` avec « contient un tableau »),
-`goals` et `tasks` (champs `createdBy` et `doneBy`).
+`goals` (champs `createdBy` et `doneBy`) et `tasks` (champs `createdBy`, `doneBy` et `assignee`).
 Sans ces index, « Télécharger mes données », la suppression de compte et la pastille des invitations aux réunions échouent.
 
 ### 3. Devenir administrateur
