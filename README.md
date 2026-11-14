@@ -30,6 +30,9 @@ Canal de communication pour suivre le développement d'un outil.
   Toutes les tâches apparaissent dans le 📅 du projet : un **trait** va du jour de leur création jusqu'à aujourd'hui (et s'allonge d'un jour
   chaque jour tant qu'elles sont ouvertes), avec une **pastille** au bout ; une tâche terminée s'arrête au jour où elle l'a été (en vert).
   La liste du jour dit depuis combien de temps elle est ouverte et permet de la cocher.
+  Le calendrier s'affiche au **mois** (trois traits de tâches par semaine, les autres sont comptés) ou à la **semaine** (bouton
+  « Semaine ») : la semaine du jour choisi, en grandes cases où toutes les tâches et réunions ont leur place. Le choix est retenu
+  sur l'appareil.
   Une tâche peut aussi avoir une **échéance** (facultative, ⏰ sur le jour concerné) ; en retard, son trait passe au rouge.
   Dans la liste, les échéances les plus proches passent en premier.
   Le nombre de **tâches ouvertes** s'affiche en pastille sur le ✅ de chaque projet dans la barre latérale (en couleur quand certaines
