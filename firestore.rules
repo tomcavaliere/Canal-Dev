@@ -354,6 +354,8 @@ service cloud.firestore {
       // Responsable (`assignee`, facultatif) : une personne du projet (ou soi-même), nommée à la création ou ensuite par
       // l'auteur et l'admin. Tout membre peut aussi prendre une tâche sans responsable (« je m'en occupe ») et se retirer
       // de celle qu'il a prise. Le responsable d'une tâche terminée ne change plus (historique).
+      // Échéance (`due`, facultative, « AAAA-MM-JJ ») : fixée à la création, puis par l'auteur et l'admin tant que la tâche
+      // n'est pas terminée ; les tâches avec échéance s'affichent dans le calendrier du projet.
       match /tasks/{taskId} {
         function validAssignee(a) {
           return a is string && a.matches('[A-Za-z0-9]{1,128}')
@@ -362,9 +364,10 @@ service cloud.firestore {
         }
         function validTask() {
           let d = request.resource.data;
-          return d.keys().hasOnly(['title', 'done', 'doneBy', 'doneAt', 'assignee', 'createdBy', 'createdAt', 'updatedAt'])
+          return d.keys().hasOnly(['title', 'done', 'doneBy', 'doneAt', 'assignee', 'due', 'createdBy', 'createdAt', 'updatedAt'])
             && d.title is string && d.title.size() > 0 && d.title.size() <= 200
             && (!('assignee' in d) || d.assignee is string)
+            && (!('due' in d) || (d.due is string && d.due.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')))
             && d.done is bool
             && (d.done || (!('doneBy' in d) && !('doneAt' in d)))
             && d.createdBy is string
@@ -392,7 +395,8 @@ service cloud.firestore {
           && (isAdmin() || resource.data.createdBy == request.auth.uid)
           && validTask() && validTaskDoneChange()
           && (!resource.data.done || (request.resource.data.title == resource.data.title
-            && request.resource.data.get('assignee', null) == resource.data.get('assignee', null)))
+            && request.resource.data.get('assignee', null) == resource.data.get('assignee', null)
+            && request.resource.data.get('due', null) == resource.data.get('due', null)))
           && (request.resource.data.get('assignee', null) == resource.data.get('assignee', null)
             || !('assignee' in request.resource.data) || validAssignee(request.resource.data.assignee))
           && request.resource.data.createdBy == resource.data.createdBy

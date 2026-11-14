@@ -12,7 +12,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs, increment,
-  query, serverTimestamp, setDoc, setLogLevel, Timestamp, updateDoc, where, writeBatch,
+  orderBy, query, serverTimestamp, setDoc, setLogLevel, Timestamp, updateDoc, where, writeBatch,
 } from "firebase/firestore";
 import { ADMIN_UID } from "../js/firebase-config.js";
 
@@ -1010,6 +1010,32 @@ describe("Projet : tâches (todo list)", () => {
   });
   it("on peut cocher une tâche en la prenant dans le même geste", () =>
     assertSucceeds(change(carol(), "carol", "projects/p1/tasks/t1", { assignee: "carol", ...finish("carol") })));
+  it("une tâche a une échéance facultative au format AAAA-MM-JJ", async () => {
+    const db = carol();
+    await assertSucceeds(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { due: "2026-12-01" }))));
+    await clearRate("carol");
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { due: "demain" }))));
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { due: 20261201 }))));
+  });
+  it("l'auteur et l'admin changent l'échéance d'une tâche à faire, pas un autre membre", async () => {
+    await assertFails(change(carol(), "carol", "projects/p1/tasks/t1", { due: "2026-12-01", ...now() }));
+    await assertSucceeds(change(alice(), "alice", "projects/p1/tasks/t1", { due: "2026-12-01", ...now() }));
+    await clearRate("alice");
+    await assertSucceeds(change(alice(), "alice", "projects/p1/tasks/t1", { due: deleteField(), ...now() }));
+    await assertSucceeds(change(admin(), ADMIN, "projects/p1/tasks/t1", { due: "2027-01-15", ...now() }));
+  });
+  it("l'échéance d'une tâche terminée ne change plus", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), "projects/p1/tasks/t5"),
+        { title: "Fait", done: true, doneBy: "carol", doneAt: T0, due: "2026-11-01", createdBy: "alice", createdAt: T0, updatedAt: T0 }));
+    await assertFails(change(alice(), "alice", "projects/p1/tasks/t5", { due: "2026-12-01", ...now() }));
+    await assertFails(change(admin(), ADMIN, "projects/p1/tasks/t5", { due: deleteField(), ...now() }));
+  });
+  it("on lit les tâches d'un projet par échéance (calendrier)", async () => {
+    const q = (db) => getDocs(query(collection(db, "projects/p1/tasks"), where("due", ">=", "2026-11-01"), where("due", "<", "2026-12-13"), orderBy("due")));
+    await assertSucceeds(q(carol()));
+    await assertFails(q(dave()));
+  });
   it("on retrouve ses tâches en tant que responsable et on retire son nom (effacement)", async () => {
     await env.withSecurityRulesDisabled((ctx) =>
       updateDoc(doc(ctx.firestore(), "projects/p1/tasks/t1"), { assignee: "dave" }));
