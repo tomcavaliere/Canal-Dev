@@ -27,6 +27,9 @@ Canal de communication pour suivre le développement d'un outil.
   Une tâche peut avoir un **responsable** : nommé à la création (parmi les membres du projet), ou pris plus tard par n'importe quel membre
   avec « Je m'en occupe » sur une tâche sans responsable (« Me retirer » pour s'en défaire). L'auteur et l'admin peuvent aussi le changer
   tant que la tâche n'est pas terminée.
+- Un **tutoriel** en quelques étapes présente l'application : il s'ouvre seul à la première arrivée (une fois par compte et par
+  navigateur, mémorisé dans le stockage local) et se rouvre avec le bouton **?** de la barre du haut ou depuis « Mon compte ».
+  L'administrateur voit en plus une étape sur l'administration.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
@@ -59,6 +62,7 @@ js/calendar.js          calendrier d'un projet : réunions, invitations et répo
 js/tasks.js             liste de tâches d'un projet (todo list, historique des tâches terminées)
 js/org.js              organigramme d'un projet : rôles rangés par niveau (lecture)
 js/tickets.js           fiches de membre des projets (accès au calendrier), tenues à jour par l'admin
+js/tutorial.js          tutoriel : première arrivée, puis bouton « ? » et « Mon compte »
 js/account.js           « Mon compte » : export et suppression des données (RGPD)
 js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'admin seul)
 js/ui.js                helpers d'affichage (avatar à initiales)
