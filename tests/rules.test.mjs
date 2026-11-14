@@ -1149,3 +1149,89 @@ describe("Administrateurs ajoutés (admins)", () => {
     await assertFails(deleteDoc(doc(dave(), "admins/carol"))); // pas admin : refusé même si absente
   });
 });
+
+describe("Journal d'activité (logs)", () => {
+  const carol = () => as("carol");
+  const entry = (uid, extra = {}) => ({ action: "task.create", uid, at: serverTimestamp(), projectId: "p1", label: "Tâche", ...extra });
+  const newLog = (db) => doc(collection(db, "logs"));
+  const seedLog = (id, data) => env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), `logs/${id}`), { action: "member.add", uid: ADMIN, at: T0, ...data }));
+
+  it("l'admin journalise ses actions, sans compteur", () =>
+    assertSucceeds(setDoc(newLog(admin()), entry(ADMIN, { action: "project.create" }))));
+  it("un membre journalise une action du calendrier ou des tâches de son projet, avec le compteur", async () => {
+    const db = carol();
+    await assertSucceeds(rated(db, "carol", (b) => b.set(newLog(db), entry("carol"))));
+    await clearRate("carol");
+    await assertSucceeds(rated(db, "carol", (b) => b.set(newLog(db), entry("carol", { action: "event.delete" }))));
+  });
+  it("l'entrée part dans le même batch que l'action (création, suppression d'une tâche)", async () => {
+    const db = carol();
+    await assertSucceeds(rated(db, "carol", (b) => {
+      b.set(doc(collection(db, "projects/p1/tasks")),
+        { title: "Nouvelle", done: false, createdBy: "carol", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      b.set(newLog(db), entry("carol"));
+    }));
+    await clearRate("carol");
+    const own = alice();
+    await assertSucceeds(rated(own, "alice", (b) => {
+      b.delete(doc(own, "projects/p1/tasks/t1"));
+      b.set(newLog(own), entry("alice", { action: "task.delete" }));
+    }));
+  });
+  it("sans le compteur anti-abus, l'entrée d'un membre est refusée", () =>
+    assertFails(setDoc(newLog(carol()), entry("carol"))));
+  it("un membre ne journalise pas une action d'admin, ni hors de son projet", async () => {
+    const db = carol();
+    await assertFails(rated(db, "carol", (b) => b.set(newLog(db), entry("carol", { action: "project.create" }))));
+    await assertFails(rated(db, "carol", (b) => b.set(newLog(db), entry("carol", { convId: "c1" }))));
+    const noProject = entry("carol");
+    delete noProject.projectId;
+    await assertFails(rated(db, "carol", (b) => b.set(newLog(db), noProject)));
+    const other = bob();
+    await assertFails(rated(other, "bob", (b) => b.set(newLog(other), entry("bob"))));
+    const old = dave();
+    await assertFails(rated(old, "dave", (b) => b.set(newLog(old), entry("dave"))));
+  });
+  it("auteur et heure imposés, champs contrôlés", async () => {
+    const db = admin();
+    await assertFails(setDoc(newLog(db), entry("alice")));
+    await assertFails(setDoc(newLog(db), entry(ADMIN, { at: T0 })));
+    await assertFails(setDoc(newLog(db), entry(ADMIN, { action: "Project Create" })));
+    await assertFails(setDoc(newLog(db), entry(ADMIN, { label: "x".repeat(201) })));
+    await assertFails(setDoc(newLog(db), entry(ADMIN, { about: "pas/un-uid" })));
+    await assertFails(setDoc(newLog(db), entry(ADMIN, { extra: 1 })));
+  });
+  it("une entrée ne se modifie jamais, même par l'admin", async () => {
+    await seedLog("l1", {});
+    await assertFails(updateDoc(doc(admin(), "logs/l1"), { label: "autre" }));
+  });
+  it("seuls les admins lisent le journal, par date ou par projet", async () => {
+    await seedLog("l1", { projectId: "p1" });
+    await assertSucceeds(getDocs(query(collection(admin(), "logs"), orderBy("at", "desc"), limit(50))));
+    await assertSucceeds(getDocs(query(collection(admin(), "logs"), where("projectId", "==", "p1"), orderBy("at", "desc"))));
+    await assertFails(getDocs(query(collection(alice(), "logs"), orderBy("at", "desc"))));
+    await assertFails(getDoc(doc(alice(), "logs/l1")));
+  });
+  it("un admin ajouté lit aussi le journal", async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "admins/bob"), { grantedAt: T0 }));
+    await assertSucceeds(getDocs(query(collection(bob(), "logs"), orderBy("at", "desc"))));
+  });
+  it("chacun retrouve et efface ses entrées et celles qui le concernent (RGPD), pas celles des autres", async () => {
+    await seedLog("l1", { uid: "carol", action: "task.create", projectId: "p1" });
+    await seedLog("l2", { about: "carol" });
+    await seedLog("l3", { about: "alice" });
+    const db = carol();
+    await assertSucceeds(getDocs(query(collection(db, "logs"), where("uid", "==", "carol"))));
+    await assertSucceeds(getDocs(query(collection(db, "logs"), where("about", "==", "carol"))));
+    await assertFails(getDocs(query(collection(db, "logs"), where("about", "==", "alice"))));
+    await assertSucceeds(deleteDoc(doc(db, "logs/l1")));
+    await assertSucceeds(deleteDoc(doc(db, "logs/l2")));
+    await assertFails(deleteDoc(doc(db, "logs/l3")));
+  });
+  it("l'admin supprime les entrées anciennes (conservation 12 mois)", async () => {
+    await seedLog("l1", {});
+    await assertSucceeds(getDocs(query(collection(admin(), "logs"), where("at", "<", Timestamp.now()))));
+    await assertSucceeds(deleteDoc(doc(admin(), "logs/l1")));
+  });
+});

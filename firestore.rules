@@ -190,6 +190,41 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ---------- Journal d'activité (une entrée par action) ----------
+    // Écrit dans le même batch que l'action. Ni modifiable ni falsifiable : l'auteur (`uid`) et l'heure
+    // (`at`) sont ceux du serveur. Champs : `action` (« objet.verbe »), `projectId`, `convId` (facultatifs),
+    // `about` (UID de la personne concernée : membre ajouté, nom changé…), `label` (titre au moment de l'action).
+    // Les admins écrivent toutes les actions ; un membre, seulement celles du calendrier et des tâches d'un
+    // projet dont il est membre, comptées par le compteur anti-abus (30 écritures par minute).
+    // Lu par les admins seuls ; chacun lit et efface les entrées qu'il a écrites ou qui le concernent
+    // (export, effacement RGPD). Les admins suppriment les entrées de plus de 12 mois.
+    match /logs/{logId} {
+      function validLog() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['action', 'uid', 'at', 'projectId', 'convId', 'about', 'label'])
+          && d.action is string && d.action.matches('[a-z]{1,20}[.][a-z]{1,20}')
+          && d.uid == request.auth.uid
+          && d.at == request.time
+          && (!('projectId' in d) || (d.projectId is string && d.projectId.size() > 0 && d.projectId.size() <= 128))
+          && (!('convId' in d) || (d.convId is string && d.convId.size() > 0 && d.convId.size() <= 128))
+          && (!('about' in d) || (d.about is string && d.about.matches('[A-Za-z0-9]{1,128}')))
+          && (!('label' in d) || (d.label is string && d.label.size() <= 200));
+      }
+      function memberLog() {
+        let d = request.resource.data;
+        return d.action.matches('(task|goal|event)[.](create|update|done|reopen|assign|delete)')
+          && 'projectId' in d && !('convId' in d)
+          && isProjectMember(d.projectId) && rateBumped();
+      }
+      function mine() {
+        return signedIn() && (resource.data.uid == request.auth.uid
+          || resource.data.get('about', '') == request.auth.uid);
+      }
+
+      allow create: if signedIn() && validLog() && (isAdmin() || memberLog());
+      allow read, delete: if isAdmin() || mine();
+    }
+
     // ---------- Projets (regroupent des conversations) ----------
     match /projects/{projectId} {
       // Rôles (facultatifs, écrits par l'admin seul, filtrés à l'affichage) :
