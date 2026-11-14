@@ -92,7 +92,7 @@ const STEPS = [
     icon: "🔔",
     title: "Notifications et compte",
     items: [
-      "🔊 coupe ou remet le son des nouveaux messages ; 🔕 active les notifications, affichées tant que l'application est ouverte.",
+      "🔊 coupe ou remet le son des nouveaux messages ; 🔕 active les notifications, même application fermée (sur iPhone : après l'ajout à l'écran d'accueil).",
       "Canal Dev s'installe comme une application depuis le menu de ton navigateur.",
       "« Mon compte » règle le thème clair ou sombre, les accusés de lecture et la présence « en ligne », et permet de télécharger ou supprimer tes données.",
     ],

@@ -1,8 +1,15 @@
-// Notifications système (bannière du système d'exploitation) pour les nouveaux messages,
-// tant que l'onglet est ouvert. Rien n'est envoyé à un serveur : tout reste dans le navigateur.
+// Notifications système (bannière du système d'exploitation) pour les nouveaux messages.
 // Désactivées par défaut ; le navigateur demande l'autorisation au premier clic sur le bouton.
+// Deux sources :
+//  - l'application ouverte (onglet ou application installée) les affiche elle-même ;
+//  - si le navigateur le permet, l'appareil s'abonne aussi aux notifications push (push.js) :
+//    la Cloud Function les envoie même application fermée, et le service worker les affiche.
+
+import { pushSupported, subscribePush, unsubscribePush } from "./push.js";
 
 const KEY = "canal-dev.notifications";
+/** @type {Promise<ServiceWorkerRegistration | null>} service worker (voir registerServiceWorker) */
+let registration = Promise.resolve(null);
 const supported = "Notification" in window;
 let wanted = (() => {
   try { return localStorage.getItem(KEY) === "on"; } catch { return false; }
@@ -28,17 +35,73 @@ export async function toggleNotifications() {
   if (!supported) return;
   if (enabled()) {
     wanted = false;
+    save();
+    await stopPush();
   } else {
     let perm = Notification.permission;
     if (perm === "default") perm = await Notification.requestPermission();
     wanted = perm === "granted";
+    save();
+    await syncPush();
   }
-  save();
+}
+
+/* ---------- Notifications push (application fermée) ---------- */
+
+let pushUid = null; // compte connecté
+let pushOn = false; // cet appareil est abonné pour ce compte
+
+// Notifications push actives sur cet appareil : le service worker affiche alors les nouveaux
+// messages quand l'application n'est pas au premier plan.
+export function pushActive() {
+  return pushOn && enabled();
+}
+
+// (Ré)abonne cet appareil si les notifications sont activées : à la connexion (l'abonnement peut
+// avoir été renouvelé par le navigateur) et à l'activation. Sans push : notifications locales seules.
+async function syncPush() {
+  if (!pushSupported || !pushUid || !enabled()) return;
+  const uid = pushUid;
+  try {
+    if (!(await registration)) return;
+    // S'abonner exige un service worker actif (à la toute première visite, il s'installe encore).
+    await subscribePush(await navigator.serviceWorker.ready, uid);
+    pushOn = uid === pushUid;
+  } catch (err) {
+    console.warn("Notifications push indisponibles", err);
+    pushOn = false;
+  }
+}
+
+// Retire l'abonnement de cet appareil (désactivation, déconnexion) : sans quoi le compte suivant
+// connecté sur ce navigateur recevrait les messages du précédent.
+async function stopPush() {
+  const uid = pushUid;
+  pushOn = false;
+  if (!pushSupported || !uid) return;
+  try {
+    const reg = await registration;
+    if (reg) await unsubscribePush(reg, uid);
+  } catch (err) {
+    console.warn("Désabonnement des notifications push impossible", err);
+  }
+}
+
+/** @param {string} uid compte connecté */
+export function startPush(uid) {
+  pushUid = uid;
+  pushOn = false;
+  return syncPush();
+}
+
+// À appeler avant la déconnexion (ensuite, les règles refuseraient l'effacement).
+export async function endPush() {
+  await stopPush();
+  pushUid = null;
 }
 
 // Service worker (sw.js) : installation de l'application et notifications sur Android.
 // Pas sur l'ancienne adresse GitHub Pages, qui redirige aussitôt.
-let registration = Promise.resolve(null);
 /** @param {(convId: string) => void} onOpenConversation */
 export function registerServiceWorker(onOpenConversation) {
   if (!("serviceWorker" in navigator) || location.hostname.endsWith("github.io")) return;

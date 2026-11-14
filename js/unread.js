@@ -6,7 +6,7 @@ import {
 } from "./sdk/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { displayText } from "./names.js";
-import { showNotification } from "./notify.js";
+import { pushActive, showNotification } from "./notify.js";
 import { playMessageSound } from "./sound.js";
 import { $, announce } from "./ui.js";
 import { selectConversation } from "./app.js";
@@ -70,6 +70,9 @@ function onIncomingMessage(convId, m) {
     return;
   }
   announce(`Nouveau message de ${who} dans « ${c?.title || "une conversation"} »`);
+  // Application en arrière-plan avec les notifications push : le service worker affiche déjà
+  // celle-ci (envoyée par le serveur), on n'en montre pas une deuxième.
+  if (pushActive() && !document.hasFocus()) return;
   showNotification({
     title: `${who} · ${c?.title || "Canal Dev"}`,
     body: excerpt(m),

@@ -116,6 +116,8 @@ export async function purgeUserData(uid, email) {
   // zéro) ; après une suppression par la personne elle-même, l'admin le retire à sa prochaine visite.
   if (state.isAdmin) await deleteDoc(doc(db, "rate", uid));
   await deleteDoc(doc(db, "names", uid));
+  // Abonnements aux notifications push (un par appareil) : plus aucune notification n'est envoyée.
+  for (const d of (await getDocs(collection(db, "users", uid, "push"))).docs) await deleteDoc(d.ref);
   await deleteDoc(doc(db, "users", uid));
   // Droits d'administration éventuels : en dernier, pour garder jusque-là ceux qu'ils donnent.
   await deleteDoc(doc(db, "admins", uid));
@@ -133,7 +135,7 @@ function plain(value) {
 }
 
 async function collectMyData(user) {
-  const [profile, name, invite, convs, msgs, imgs, thumbs, reads, projects] = await Promise.all([
+  const [profile, name, invite, convs, msgs, imgs, thumbs, reads, projects, push] = await Promise.all([
     getDoc(doc(db, "users", user.uid)),
     getDoc(doc(db, "names", user.uid)),
     getDoc(doc(db, "invites", user.email.toLowerCase())),
@@ -143,6 +145,7 @@ async function collectMyData(user) {
     getDocs(query(collectionGroup(db, "thumbs"), where("authorUid", "==", user.uid))),
     getDocs(query(collectionGroup(db, "reads"), where("uid", "==", user.uid))),
     getDocs(query(collection(db, "projects"), where("roleUids", "array-contains", user.uid))),
+    getDocs(collection(db, "users", user.uid, "push")),
   ]);
   const reacted = await Promise.all(convs.docs.map((c) => getDocs(reactedQuery(c.id, user.uid))));
   const [tickets, organized, invited, goalsCreated, goalsDone, tasksCreated, tasksDone, tasksAssigned] = await Promise.all([
@@ -182,6 +185,9 @@ async function collectMyData(user) {
       lastSignInAt: user.metadata.lastSignInTime,
     },
     profile: profile.exists() ? plain(profile.data()) : null,
+    // Abonnements aux notifications push (un par appareil où elles sont activées) : adresse du
+    // service de push du navigateur et clés de chiffrement des notifications.
+    pushSubscriptions: push.docs.map((d) => plain(d.data())),
     // Nom affiché aux autres membres, fixé par l'administrateur (annuaire).
     displayedName: name.exists() ? plain(name.data()) : null,
     // Invitation pas encore utilisée (elle est supprimée dès qu'elle a servi).

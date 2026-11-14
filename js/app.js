@@ -10,7 +10,7 @@ import { initAccount } from "./account.js";
 import { initTutorial, maybeShowTutorial } from "./tutorial.js";
 import { ADMIN_UID, auth, db, GMAIL_RE, isConfigured } from "./firebase.js";
 import { displayText, startNames, stopNames, watchNames } from "./names.js";
-import { notificationState, registerServiceWorker, toggleNotifications } from "./notify.js";
+import { endPush, notificationState, pushActive, registerServiceWorker, startPush, toggleNotifications } from "./notify.js";
 import { isOnline, startPresence, stopPresence, watchPresence } from "./presence.js";
 import { isSoundEnabled, setSoundEnabled } from "./sound.js";
 import { $, initials } from "./ui.js";
@@ -78,9 +78,10 @@ document.querySelectorAll("dialog [data-close]").forEach((b) => {
   b.addEventListener("click", () => b.closest("dialog").close());
 });
 
-// La présence est retirée avant la déconnexion : ensuite, les règles refuseraient l'effacement.
+// La présence et l'abonnement push de cet appareil sont retirés avant la déconnexion :
+// ensuite, les règles refuseraient l'effacement.
 async function logout() {
-  await stopPresence();
+  await Promise.all([stopPresence(), endPush()]);
   await signOut(auth);
 }
 
@@ -145,6 +146,7 @@ async function startSession(user, id) {
   current();
   fillUserHeader(user);
   startPresence(user.uid, { hide: state.noPresence, onChange: renderPresence });
+  startPush(user.uid).then(renderNotifButton);
 
   if (state.isAdmin) {
     const { setupAdmin } = await import("./admin.js");
@@ -630,7 +632,8 @@ $("btn-sound").addEventListener("click", () => {
 renderSoundButton();
 
 const NOTIF_TITLES = {
-  on: "Notifications activées (cliquer pour les couper)",
+  push: "Notifications activées, même application fermée (cliquer pour les couper)",
+  on: "Notifications activées tant que l'application est ouverte (cliquer pour les couper)",
   off: "Notifications coupées (cliquer pour les activer)",
   denied: "Notifications bloquées : autorise-les dans les réglages du site de ton navigateur",
 };
@@ -640,7 +643,7 @@ function renderNotifButton() {
   b.hidden = st === "unsupported";
   b.textContent = st === "on" ? "🔔" : "🔕";
   b.setAttribute("aria-pressed", String(st === "on"));
-  b.title = NOTIF_TITLES[st] || "";
+  b.title = NOTIF_TITLES[st === "on" && pushActive() ? "push" : st] || "";
   b.setAttribute("aria-label", b.title);
 }
 $("btn-notif").addEventListener("click", async () => {
