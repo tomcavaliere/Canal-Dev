@@ -7,6 +7,7 @@ import { $ } from "./ui.js";
 import { openProjectCalendar, selectConversation } from "./app.js";
 import { pendingInvitations } from "./calendar.js";
 import { openOrgChart } from "./org.js";
+import { openTasks } from "./tasks.js";
 import { state } from "./state.js";
 import { unreadBadge, unreadLabel, unreadMessages } from "./unread.js";
 
@@ -285,6 +286,8 @@ function projectGroup(projectId, title, convs) {
       cal.append(badge);
     }
     head.append(cal);
+    // Tâches du projet (todo list, historique des tâches terminées conservé).
+    head.append(smallButton("✅", `Tâches de « ${title} »`, () => openTasks(projectId), "tasks:" + projectId));
     // Organigramme, s'il a au moins un niveau.
     if (projectOrgLevels(state.projects.get(projectId)).length) {
       const org = smallButton("🏢", `Organigramme de « ${title} »`, () => openOrgChart(projectId), "org:" + projectId);

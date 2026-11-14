@@ -141,11 +141,11 @@ async function writeAllTickets(expected) {
 }
 
 /**
- * Admin : supprime les fiches, réunions et objectifs d'un projet (avant de supprimer le projet).
+ * Admin : supprime les fiches, réunions, objectifs et tâches d'un projet (avant de supprimer le projet).
  * @param {string} projectId
  */
 export async function deleteProjectCalendar(projectId) {
-  for (const sub of ["events", "goals", "members"]) {
+  for (const sub of ["events", "goals", "tasks", "members"]) {
     const snap = await getDocs(collection(db, "projects", projectId, sub));
     for (let i = 0; i < snap.docs.length; i += 400) {
       const batch = writeBatch(db);

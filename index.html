@@ -413,6 +413,47 @@
     </div>
   </dialog>
 
+  <!-- Dialogue : tâches d'un projet (todo list) -->
+  <dialog id="dlg-tasks" class="tasks-dialog" aria-labelledby="tasks-title">
+    <div class="stack">
+      <h2 id="tasks-title">Tâches</h2>
+      <p class="muted small">Visibles par tous les membres du projet. Une tâche terminée reste dans l'historique.</p>
+      <p id="tasks-error" class="error small" role="alert" hidden></p>
+      <form id="form-task" class="row">
+        <input id="task-new" maxlength="200" autocomplete="off" placeholder="Nouvelle tâche…" aria-label="Nouvelle tâche">
+        <button id="task-add" class="btn primary" type="submit">Ajouter</button>
+      </form>
+      <section class="stack tight" aria-labelledby="tasks-open-label">
+        <h3 id="tasks-open-label">À faire <span id="tasks-open-count" class="muted small"></span></h3>
+        <ul id="tasks-open" class="task-list"></ul>
+      </section>
+      <section class="stack tight" aria-labelledby="tasks-done-label">
+        <h3 id="tasks-done-label">Terminées <span id="tasks-done-count" class="muted small"></span></h3>
+        <ul id="tasks-done" class="task-list"></ul>
+      </section>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialogue : modifier une tâche à faire -->
+  <dialog id="dlg-task">
+    <form id="form-task-edit" class="stack">
+      <h2>Modifier la tâche</h2>
+      <label>Tâche
+        <input id="task-title" maxlength="200" required autocomplete="off">
+      </label>
+      <p id="task-error" class="error small" role="alert" hidden></p>
+      <div class="row end">
+        <button id="btn-delete-task" type="button" class="btn danger">Supprimer</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Annuler</button>
+        <button id="task-edit-submit" type="submit" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Dialogue : nouvelle réunion / modifier une réunion -->
   <dialog id="dlg-event">
     <form id="form-event" class="stack">
@@ -531,7 +572,7 @@
       <section class="stack tight">
         <h3>Mes données</h3>
         <p class="muted small">Télécharge une copie de toutes les données te concernant
-          (compte, profil, conversations accessibles, messages et photos, réunions et objectifs) au format JSON.</p>
+          (compte, profil, conversations accessibles, messages et photos, réunions, objectifs et tâches) au format JSON.</p>
         <div><button id="btn-export" class="btn">Télécharger mes données</button></div>
       </section>
 
@@ -551,7 +592,7 @@
 
       <section id="account-delete" class="stack tight">
         <h3>Supprimer mon compte</h3>
-        <p class="muted small">Supprime définitivement ton profil, tous tes messages et photos, tes réunions et objectifs, tes accès
+        <p class="muted small">Supprime définitivement ton profil, tous tes messages et photos, tes réunions, objectifs et tâches, tes accès
           aux conversations et ton compte de connexion. Cette action est irréversible.
           Une confirmation avec ton compte Google sera demandée.</p>
         <label>Tape <strong>SUPPRIMER</strong> pour confirmer

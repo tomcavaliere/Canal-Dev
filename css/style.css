@@ -722,6 +722,25 @@ fieldset.plain legend { padding: 0; margin-bottom: .2rem; }
 .cal-goal-edit:hover { color: var(--accent); }
 .cal-late { color: var(--danger); font-weight: 600; }
 
+/* Tâches d'un projet (dialogue ✅) */
+dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px)); }
+.tasks-dialog h2 { color: var(--proj); overflow-wrap: anywhere; }
+#form-task input { flex: 1; min-width: 0; }
+.task-list { list-style: none; margin: 0; padding: 0; }
+.task { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 0 .4rem; padding: .3rem 0; }
+.task + .task { border-top: 1px solid var(--border); }
+.task label.check { align-items: flex-start; font-size: .9rem; cursor: pointer; }
+.task label.check input { margin-top: .3rem; }
+.task-title { overflow-wrap: anywhere; }
+.task.done .task-title { text-decoration: line-through; color: var(--muted); }
+.task-meta { grid-column: 1; padding-left: 1.6rem; }
+.task-edit {
+  grid-column: 2; grid-row: 1; background: none; border: none; color: var(--muted); cursor: pointer;
+  font: inherit; font-size: .85rem; min-width: 24px; min-height: 24px; border-radius: 6px;
+}
+.task-edit:hover { color: var(--accent); }
+.task-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 #dlg-event, #dlg-event-view { width: min(520px, calc(100vw - 32px)); }
 .event-when { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: .5rem; }
 .event-invites { border: 0; padding: 0; margin: 0; min-width: 0; }

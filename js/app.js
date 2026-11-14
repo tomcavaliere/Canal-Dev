@@ -22,6 +22,7 @@ import { closeSearch } from "./search.js";
 import { projectColor, projectOf, renderConversationList, roleUids, sortedConversations } from "./sidebar.js";
 import { isLogo } from "./images.js";
 import { renderOrgChart } from "./org.js";
+import { renderTasks, taskUids, teardownTasks } from "./tasks.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
@@ -247,6 +248,7 @@ function teardown() {
   state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
   teardownCalendar();
+  teardownTasks();
   resetTickets();
   stopNames();
   stopPresence();
@@ -337,6 +339,7 @@ function listenConversations() {
     syncMyTickets();
     adminSyncTickets();
     onCalendarContextChanged();
+    renderTasks();
     syncNames();
     syncPresence();
     if (state.myReads) {
@@ -365,6 +368,7 @@ function listenAllProjects() {
     onCalendarContextChanged();
     renderConversationList();
     renderOrgChart();
+    renderTasks();
     if (state.selectedId) renderChatHeader();
     state.admin?.onProjectsChanged();
   }, (err) => console.error("Lecture des projets impossible", err));
@@ -389,6 +393,7 @@ function syncProjectListeners() {
       onCalendarContextChanged();
       renderConversationList();
       renderOrgChart();
+      renderTasks();
       if (state.selectedId) renderChatHeader();
     }, (err) => console.error("Lecture du projet impossible", err)));
   }
@@ -398,11 +403,11 @@ function syncProjectListeners() {
 
 // Noms à suivre : membres de ses conversations, l'admin, les personnes qui tiennent un rôle
 // dans ses projets, les auteurs des messages affichés (y compris d'anciens membres) et les
-// personnes du calendrier ouvert (membres du projet, organisateurs, invités).
+// personnes du calendrier ouvert (membres du projet, organisateurs, invités) et des tâches ouvertes.
 // L'admin, lui, écoute tout l'annuaire.
 export function syncNames() {
   if (state.isAdmin || !state.user) return;
-  const uids = new Set([ADMIN_UID, ...roleUids(), ...calendarUids()]);
+  const uids = new Set([ADMIN_UID, ...roleUids(), ...calendarUids(), ...taskUids()]);
   for (const c of state.conversations.values()) for (const uid of c.members || []) uids.add(uid);
   for (const m of state.msgById.values()) uids.add(m.authorUid);
   watchNames(uids);
@@ -435,6 +440,7 @@ function scheduleNamesRender() {
     renderConversationList(); // noms des rôles
     renderCalendarNames();
     renderOrgChart();
+    renderTasks();
     const replied = state.replyTo && state.msgById.get(state.replyTo);
     if (replied) $("reply-author").textContent = displayText(replied.authorUid, replied.authorName);
     state.admin?.onNamesChanged();

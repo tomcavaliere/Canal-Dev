@@ -62,10 +62,10 @@ export async function purgeUserData(uid, email) {
     await updateDoc(p.ref, { [`roleMembers.${uid}`]: deleteField(), roleUids: arrayRemove(uid) });
   }
 
-  // Calendriers des projets : réunions organisées et objectifs créés (supprimés), invitations
-  // (retirée de la liste, avec sa réponse), objectifs cochés (son nom est retiré), fiches de membre.
+  // Calendriers des projets : réunions organisées, objectifs et tâches créés (supprimés), invitations
+  // (retirée de la liste, avec sa réponse), objectifs et tâches cochés (son nom est retiré), fiches de membre.
   /** @type {[string, string][]} */
-  const owned = [["events", "createdBy"], ["goals", "createdBy"], ["members", "uid"]];
+  const owned = [["events", "createdBy"], ["goals", "createdBy"], ["tasks", "createdBy"], ["members", "uid"]];
   for (const [group, field] of owned) {
     const snap = await calendarDocs(group, field, uid);
     for (let i = 0; i < snap.docs.length; i += 400) {
@@ -77,8 +77,10 @@ export async function purgeUserData(uid, email) {
   for (const d of (await calendarDocs("events", "attendees", uid, "array-contains")).docs) {
     await updateDoc(d.ref, { attendees: arrayRemove(uid), [`responses.${uid}`]: deleteField() });
   }
-  for (const d of (await calendarDocs("goals", "doneBy", uid)).docs) {
-    await updateDoc(d.ref, { doneBy: deleteField() });
+  for (const group of ["goals", "tasks"]) {
+    for (const d of (await calendarDocs(group, "doneBy", uid)).docs) {
+      await updateDoc(d.ref, { doneBy: deleteField() });
+    }
   }
 
   const convs = await getDocs(query(collection(db, "conversations"), where("members", "array-contains", uid)));
@@ -129,12 +131,14 @@ async function collectMyData(user) {
     getDocs(query(collection(db, "projects"), where("roleUids", "array-contains", user.uid))),
   ]);
   const reacted = await Promise.all(convs.docs.map((c) => getDocs(reactedQuery(c.id, user.uid))));
-  const [tickets, organized, invited, goalsCreated, goalsDone] = await Promise.all([
+  const [tickets, organized, invited, goalsCreated, goalsDone, tasksCreated, tasksDone] = await Promise.all([
     calendarDocs("members", "uid", user.uid),
     calendarDocs("events", "createdBy", user.uid),
     calendarDocs("events", "attendees", user.uid, "array-contains"),
     calendarDocs("goals", "createdBy", user.uid),
     calendarDocs("goals", "doneBy", user.uid),
+    calendarDocs("tasks", "createdBy", user.uid),
+    calendarDocs("tasks", "doneBy", user.uid),
   ]);
   const projectOf = (d) => d.ref.parent.parent.id;
   return {
@@ -216,6 +220,11 @@ async function collectMyData(user) {
     goalsCreated: goalsCreated.docs.map((d) => ({ projectId: projectOf(d), id: d.id, ...plain(d.data()) })),
     // Objectifs que l'on a cochés comme atteints.
     goalsCompleted: goalsDone.docs.map((d) => ({
+      projectId: projectOf(d), id: d.id, title: d.data().title, doneAt: plain(d.data().doneAt),
+    })),
+    // Tâches de la todo list d'un projet : celles que l'on a ajoutées, et celles que l'on a cochées.
+    tasksCreated: tasksCreated.docs.map((d) => ({ projectId: projectOf(d), id: d.id, ...plain(d.data()) })),
+    tasksCompleted: tasksDone.docs.map((d) => ({
       projectId: projectOf(d), id: d.id, title: d.data().title, doneAt: plain(d.data().doneAt),
     })),
   };
