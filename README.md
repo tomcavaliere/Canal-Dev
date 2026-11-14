@@ -7,7 +7,10 @@ Canal de communication pour suivre le développement d'un outil.
 - Seul l'administrateur crée/supprime les conversations et ajoute/retire des membres.
 - Liste triée par dernière activité, non-lus synchronisés entre appareils, messages paginés par 100,
   recherche dans les messages chargés, modification de ses messages, liens et `code` mis en forme.
-- Installable comme application (PWA) ; notifications tant que l'application est ouverte (pas de push : plan Spark).
+- Installable comme application (PWA). **Notifications** des nouveaux messages (🔔 dans la barre du haut), **même application
+  fermée** : une Cloud Function envoie une notification push aux appareils des autres membres (et des admins). Sur iPhone et iPad,
+  il faut d'abord ajouter Canal Dev à l'écran d'accueil (iOS 16.4 ou plus). Sans push (navigateur trop ancien), les notifications
+  s'affichent tant que l'application est ouverte.
 - L'administrateur peut ranger les conversations dans des **projets** (ou les laisser « Sans projet ») et les déplacer de l'un à l'autre. Les membres voient le nom du projet de leurs conversations, jamais la liste des autres projets.
 - Chaque projet peut avoir un **logo** (choisi par l'administrateur, réduit à 256 px et enregistré dans le document du projet), affiché dans la barre latérale et au-dessus du titre de ses conversations.
 - Chaque projet peut avoir des **rôles** (Développeur, Design…) modifiables par l'administrateur. Les rôles et les personnes qui les tiennent s'affichent dans la barre latérale, juste sous le nom du projet.
@@ -48,7 +51,7 @@ Canal de communication pour suivre le développement d'un outil.
   Les entrées ne se modifient pas ; elles sont supprimées au bout de 12 mois.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
-Hébergement : Firebase Hosting (fichiers statiques, <https://canal-dev-c18d7.web.app>). Auth + données : Firebase (Authentication + Cloud Firestore, plan gratuit Spark). Présence « en ligne » : Firebase Realtime Database.
+Hébergement : Firebase Hosting (fichiers statiques, <https://canal-dev-c18d7.web.app>). Auth + données : Firebase (Authentication + Cloud Firestore, plan Blaze, dans les quotas gratuits). Notifications push : Cloud Functions. Présence « en ligne » : Firebase Realtime Database.
 L'ancienne adresse GitHub Pages redirige vers la nouvelle ([js/redirect.js](js/redirect.js)).
 Le contrôle d'accès est appliqué côté serveur par [firestore.rules](firestore.rules) et [database.rules.json](database.rules.json).
 
@@ -57,7 +60,7 @@ Le contrôle d'accès est appliqué côté serveur par [firestore.rules](firesto
 ```
 index.html              page unique
 manifest.webmanifest    installation comme application (PWA)
-sw.js                   service worker : installation et notifications (aucun cache, aucune donnée)
+sw.js                   service worker : installation, notifications et notifications push (aucun cache, aucune donnée)
 icons/                  icônes de l'application (icon.svg est la source des PNG)
 css/style.css           styles (clair/sombre, responsive)
 js/firebase-config.js   config Firebase + ADMIN_UID  ← à remplir
@@ -86,7 +89,8 @@ js/dialogs.js           dialogue de confirmation et messages brefs (remplacent a
 js/richtext.js          liens cliquables et code dans les messages
 js/links.js             liens attachés à une conversation (barre au-dessus de la saisie) ; validation des liens de projet
 js/pinned.js            messages épinglés par l'admin (barre sous l'en-tête de la conversation)
-js/notify.js            notifications et enregistrement du service worker
+js/notify.js            notifications (bouton 🔔), enregistrement du service worker, abonnement push à la connexion
+js/push.js              abonnement Web Push de l'appareil (users/{uid}/push/{id})
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting
 confidentialite.html    politique de confidentialité
@@ -103,6 +107,10 @@ jsconfig.json           vérification des types par tsc (JSDoc)
 .github/workflows/      tests à chaque push, déploiement automatique depuis main
 scripts/test-rules.sh   lance l'émulateur Firestore et les tests
 tests/rules.test.mjs    tests des règles de sécurité
+tests/functions.test.mjs tests de la Cloud Function (fonctions pures, configuration identique au site)
+functions/              Cloud Functions (Node 24, europe-west1) : notification push de chaque nouveau message
+  index.js              déclencheur Firestore et envoi Web Push (clés VAPID)
+  push-utils.js         destinataires, texte, adresses autorisées des services de push
 ```
 
 ## Mise en place
@@ -153,8 +161,8 @@ Les en-têtes de sécurité (interdiction d'afficher le site dans un cadre, `nos
 
 ### 5. Déploiement automatique (GitHub Actions)
 [.github/workflows/deploy.yml](.github/workflows/deploy.yml) lance la vérification de syntaxe et les tests
-des règles à chaque push et pull request, puis, sur `main` uniquement et si tout passe, déploie site, règles
-et index. Le code et les règles partent donc toujours ensemble. Mise en place, une fois :
+des règles à chaque push et pull request, puis, sur `main` uniquement et si tout passe, déploie site, règles,
+index et Cloud Functions. Le code et les règles partent donc toujours ensemble. Mise en place, une fois :
 1. Google Cloud Console → projet `canal-dev-c18d7` → **IAM → Comptes de service → Créer** (par ex. `github-deploy`),
    avec les rôles : *Administrateur Firebase Hosting*, *Administrateur des règles Firebase*,
    *Administrateur des index Cloud Datastore*, *Administrateur Firebase Realtime Database*, *Consommateur Service Usage*.
@@ -165,7 +173,29 @@ et index. Le code et les règles partent donc toujours ensemble. Mise en place, 
 Si un déploiement échoue pour une permission manquante, le journal de l'action nomme la permission :
 ajoute le rôle correspondant au compte de service.
 
-### 6. Quitter GitHub Pages
+### 6. Notifications push (Cloud Functions, plan Blaze)
+La fonction [functions/index.js](functions/index.js) envoie une notification à chaque nouveau message (protocole Web Push
+standard, clés VAPID). La clé **publique** est dans [js/firebase-config.js](js/firebase-config.js) et dans
+[functions/index.js](functions/index.js) (les tests vérifient qu'elles sont identiques). La clé **privée** est un secret
+Cloud Secret Manager, jamais dans le dépôt. Mise en place, une fois :
+1. Le projet doit être au **plan Blaze**. Crée une **alerte de budget** (Google Cloud Console → Facturation → Budgets et
+   alertes, par ex. 1 €) : à cette échelle, le coût attendu est de 0 € (quotas gratuits), l'alerte prévient en cas d'anomalie.
+2. Enregistre la clé privée VAPID : `npx firebase functions:secrets:set VAPID_PRIVATE_KEY --project canal-dev-c18d7`
+   (colle la clé quand elle est demandée).
+3. Premier déploiement depuis ton poste (il active les API nécessaires : Cloud Functions, Cloud Build, Artifact Registry,
+   Eventarc, Secret Manager) : `npm ci --prefix functions && npm run deploy`.
+4. Pour le déploiement automatique, ajoute au compte de service `github-deploy` les rôles *Administrateur Cloud Functions*,
+   *Utilisateur du compte de service* et *Lecteur de secrets Secret Manager*.
+
+Changer de clés : `npx web-push generate-vapid-keys` (dans `functions/`), mets la clé publique aux deux endroits et la
+clé privée dans le secret, puis déploie. Chaque appareil se réabonne avec la nouvelle clé à sa prochaine ouverture.
+
+Côté appareil : 🔔 active les notifications ; l'appareil s'abonne et enregistre son abonnement (adresse du service de push
+du navigateur et clés de chiffrement) dans `users/{uid}/push/{id}`. Il est retiré quand on coupe les notifications, à la
+déconnexion, à la suppression du compte, ou par la fonction quand le navigateur le déclare expiré. Quand l'application est au
+premier plan, elle prévient elle-même et le service worker n'affiche rien (sauf Safari, qui l'exige).
+
+### 7. Quitter GitHub Pages
 Une fois le site en ligne sur web.app, laisse GitHub Pages actif quelque temps : [js/redirect.js](js/redirect.js)
 renvoie les anciens liens vers la nouvelle adresse. Désactive-le ensuite (GitHub → **Settings → Pages**),
 puis retire `tomcavaliere.github.io` des domaines autorisés d'Authentication.
@@ -258,7 +288,8 @@ Au quotidien :
   (`database.rules.json`) ne lit pas Firestore : seul l'administrateur principal efface celle d'un compte supprimé.
 - Limitation anti-abus (règles) : 30 messages par minute et par personne (compteur `rate/{uid}` mis à jour dans le batch
   de chaque envoi ou modification), profil réécrit au plus une fois par minute. Elle ralentit un abus sans l'empêcher
-  totalement : sans serveur, un compte malveillant peut encore épuiser le quota gratuit. Retirer alors ses accès.
+  totalement : un compte malveillant peut encore consommer des ressources, facturées au-delà des quotas gratuits
+  (plan Blaze : l'alerte de budget prévient). Retirer alors ses accès.
 - Restreindre la clé API (à faire une fois) : Google Cloud Console → projet `canal-dev-c18d7` → **API et services →
   Identifiants** → la clé « Browser key (auto created by Firebase) » :
   - **Restrictions relatives aux applications → Sites web** : `https://canal-dev-c18d7.web.app/*`,

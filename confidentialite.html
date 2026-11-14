@@ -15,7 +15,7 @@
   <main class="doc">
     <p class="small"><a href="./">← Retour à Canal Dev</a></p>
     <h1>Politique de confidentialité</h1>
-    <p class="muted small">Dernière mise à jour : 13 novembre 2026</p>
+    <p class="muted small">Dernière mise à jour : 14 novembre 2026</p>
 
     <p>Canal Dev est un canal de communication privé servant à suivre le développement d'un outil.
       Cette page explique quelles données personnelles sont traitées, pourquoi, combien de temps,
@@ -110,8 +110,14 @@
             <em>EU-US Data Privacy Framework</em> (Google LLC y est certifiée) et par les clauses
             contractuelles types de la Commission européenne intégrées aux conditions de traitement des données de Google.</li>
           <li>Le code de Firebase est chargé depuis les serveurs de Google (gstatic.com), qui reçoivent ton adresse IP.</li>
+          <li>Les notifications push sont envoyées par une fonction Google Cloud Functions <strong>dans l'Union européenne</strong>,
+            qui ne conserve rien.</li>
         </ul>
       </li>
+      <li><strong>Le service de notifications de ton navigateur</strong>, si tu actives les notifications : Google (Chrome,
+        Edge sur Android), Mozilla (Firefox), Apple (Safari) ou Microsoft (Edge sur Windows), selon ton navigateur, éventuellement
+        aux États-Unis. Il achemine la notification jusqu'à ton appareil sans pouvoir la lire : son contenu est
+        <strong>chiffré pour ton appareil seul</strong>. Il connaît l'adresse de ton abonnement et l'heure d'envoi.</li>
       <li><strong>GitHub Pages</strong> (GitHub Inc., États-Unis) — uniquement si tu utilises l'ancienne adresse
         du site (tomcavaliere.github.io), qui te redirige vers la nouvelle. GitHub reçoit alors ton adresse IP.
         Transfert encadré par le <em>EU-US Data Privacy Framework</em> (GitHub Inc. y est certifiée) et les
@@ -125,6 +131,9 @@
       <li><strong>Invitation</strong> : supprimée dès ta première connexion (elle a servi), sinon annulée par
         l'administrateur au plus tard 3 mois après sa création.</li>
       <li><strong>Compteur de messages</strong> : supprimé avec ton compte.</li>
+      <li><strong>Abonnement aux notifications</strong> (un par appareil) : jusqu'à ce que tu coupes les notifications (🔔),
+        que tu te déconnectes de cet appareil, que ton navigateur l'annule, ou que tu supprimes ton compte. Une notification
+        que ton appareil n'a pas pu recevoir (éteint) est abandonnée au bout de 24 heures.</li>
       <li><strong>Connexion refusée</strong> (adresse qui n'est pas une adresse Gmail) : le compte de connexion
         créé automatiquement par Firebase est supprimé immédiatement.</li>
       <li><strong>Messages et photos</strong> : tant que la conversation existe. Ils sont supprimés si tu
@@ -152,8 +161,11 @@
       service demandé : il est exempté de consentement (article 82 de la loi Informatique et Libertés).
       La session disparaît à la déconnexion. Le site enregistre aussi un petit script, le « service worker »,
       qui permet d'installer Canal Dev comme une application sur ton téléphone ou ton ordinateur et d'afficher
-      les notifications ; il ne conserve aucune donnée. Les notifications sont affichées directement par ton
-      navigateur, uniquement quand l'application est ouverte : aucune donnée n'est transmise à un service de notification.
+      les notifications ; il ne conserve aucune donnée. Les notifications sont <strong>désactivées par défaut</strong>.
+      Si tu les actives (🔔), ton navigateur crée un abonnement pour cet appareil, enregistré avec ton compte :
+      l'adresse fournie par le service de notifications de ton navigateur (§ 5) et des clés de chiffrement. À chaque nouveau
+      message dans tes conversations, une notification (nom de l'auteur, titre de la conversation, début du message)
+      t'est alors envoyée, même application fermée. Tu peux les couper à tout moment avec le même bouton : l'abonnement est supprimé.
       Aucun cookie publicitaire ou de mesure d'audience n'est utilisé. La suppression de ton compte efface
       aussi ces données du navigateur utilisé pour la suppression.</p>
 
