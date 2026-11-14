@@ -64,6 +64,7 @@ async function seed(ctx) {
       attendees: ["carol"], createdAt: T0, updatedAt: T0,
     }),
     set("projects/p1/goals/g1", { title: "Version 1", done: false, createdBy: "alice", createdAt: T0, updatedAt: T0 }),
+    set("projects/p1/tasks/t1", { title: "Écrire la doc", done: false, createdBy: "alice", createdAt: T0, updatedAt: T0 }),
   ]);
 }
 
@@ -877,6 +878,105 @@ describe("Calendrier : objectifs", () => {
     await assertSucceeds(getDocs(query(collectionGroup(db, "members"), where("uid", "==", "dave"))));
     await assertSucceeds(deleteDoc(doc(db, "projects/p1/members/dave")));
     await assertFails(getDocs(query(collectionGroup(db, "members"), where("uid", "==", "alice"))));
+  });
+});
+
+describe("Projet : tâches (todo list)", () => {
+  const carol = () => as("carol");
+  const task = (uid, extra = {}) => ({
+    title: "Écrire la doc", done: false, createdBy: uid,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  });
+  const newTask = (db) => doc(collection(db, "projects/p1/tasks"));
+  const now = () => ({ updatedAt: serverTimestamp() });
+  const finish = (uid) => ({ done: true, doneBy: uid, doneAt: serverTimestamp(), ...now() });
+  // Tâche déjà terminée (historique), écrite hors règles.
+  const seedDone = (id = "t2", by = "carol") => env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), `projects/p1/tasks/${id}`),
+      { title: "Fait", done: true, doneBy: by, doneAt: T0, createdBy: "alice", createdAt: T0, updatedAt: T0 }));
+
+  it("un membre ajoute une tâche, pas un non-membre", async () => {
+    const db = carol();
+    await assertSucceeds(rated(db, "carol", (b) => b.set(newTask(db), task("carol"))));
+    const other = bob();
+    await assertFails(rated(other, "bob", (b) => b.set(newTask(other), task("bob"))));
+  });
+  it("la tâche est créée à faire, à son nom, avec un texte non vide", async () => {
+    const db = carol();
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { done: true }))));
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { createdBy: "alice" }))));
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { title: "" }))));
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { title: "x".repeat(201) }))));
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { extra: 1 }))));
+  });
+  it("une écriture sans le compteur anti-abus est refusée", () => {
+    const db = carol();
+    return assertFails(setDoc(newTask(db), task("carol")));
+  });
+  it("les membres lisent la liste, pas un ancien membre", async () => {
+    await assertSucceeds(getDocs(collection(carol(), "projects/p1/tasks")));
+    await assertSucceeds(getDocs(collection(admin(), "projects/p1/tasks")));
+    await assertFails(getDocs(collection(dave(), "projects/p1/tasks")));
+    await assertFails(getDocs(collection(bob(), "projects/p1/tasks")));
+  });
+  it("tout membre coche une tâche, en son nom et à l'heure du serveur", async () => {
+    const db = carol();
+    await assertFails(change(db, "carol", "projects/p1/tasks/t1", { ...finish("alice") }));
+    await assertFails(change(db, "carol", "projects/p1/tasks/t1", { done: true, doneBy: "carol", doneAt: T0, ...now() }));
+    await assertSucceeds(change(db, "carol", "projects/p1/tasks/t1", finish("carol")));
+  });
+  it("une tâche à faire ne porte ni auteur ni date de réalisation", () =>
+    assertFails(change(carol(), "carol", "projects/p1/tasks/t1",
+      { done: false, doneBy: "carol", doneAt: serverTimestamp(), ...now() })));
+  it("une tâche terminée peut être rouverte", async () => {
+    await seedDone();
+    await assertSucceeds(change(carol(), "carol", "projects/p1/tasks/t2",
+      { done: false, doneBy: deleteField(), doneAt: deleteField(), ...now() }));
+  });
+  it("une tâche terminée garde son historique : ni auteur ni date réécrits", async () => {
+    await seedDone();
+    await assertFails(change(carol(), "carol", "projects/p1/tasks/t2", { doneBy: "alice", ...now() }));
+    await assertFails(change(carol(), "carol", "projects/p1/tasks/t2", { doneAt: serverTimestamp(), ...now() }));
+  });
+  it("l'auteur et l'admin modifient le texte d'une tâche à faire, pas un autre membre", async () => {
+    await assertFails(change(carol(), "carol", "projects/p1/tasks/t1", { title: "Autre", ...now() }));
+    await assertSucceeds(change(alice(), "alice", "projects/p1/tasks/t1", { title: "Écrire la doc v2", ...now() }));
+    await assertSucceeds(change(admin(), ADMIN, "projects/p1/tasks/t1", { title: "Écrire la doc v3", ...now() }));
+  });
+  it("le texte d'une tâche terminée ne se modifie plus, même par son auteur ou l'admin", async () => {
+    await seedDone();
+    await assertFails(change(alice(), "alice", "projects/p1/tasks/t2", { title: "Réécrit", ...now() }));
+    await assertFails(change(admin(), ADMIN, "projects/p1/tasks/t2", { title: "Réécrit", ...now() }));
+  });
+  it("l'auteur ne peut pas changer l'auteur ni la date de création", async () => {
+    await assertFails(change(alice(), "alice", "projects/p1/tasks/t1", { createdBy: "carol", ...now() }));
+    await assertFails(change(alice(), "alice", "projects/p1/tasks/t1", { createdAt: serverTimestamp(), ...now() }));
+  });
+  it("seuls l'auteur et l'admin suppriment", async () => {
+    await assertFails(deleteDoc(doc(carol(), "projects/p1/tasks/t1")));
+    await assertSucceeds(deleteDoc(doc(alice(), "projects/p1/tasks/t1")));
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "projects/p1/tasks/t3"), task("alice", { createdAt: T0, updatedAt: T0 })));
+    await assertSucceeds(deleteDoc(doc(admin(), "projects/p1/tasks/t3")));
+  });
+  it("on retire son nom d'une tâche cochée (effacement), sans la rouvrir", async () => {
+    await seedDone("t2", "dave");
+    const db = dave();
+    await assertSucceeds(getDocs(query(collectionGroup(db, "tasks"), where("doneBy", "==", "dave"))));
+    await assertFails(updateDoc(doc(db, "projects/p1/tasks/t2"), { doneBy: deleteField(), done: false }));
+    await assertSucceeds(updateDoc(doc(db, "projects/p1/tasks/t2"), { doneBy: deleteField() }));
+  });
+  it("l'admin retire le nom de quelqu'un d'une tâche cochée, un membre non", async () => {
+    await seedDone("t2", "dave");
+    await assertFails(updateDoc(doc(alice(), "projects/p1/tasks/t2"), { doneBy: deleteField() }));
+    await assertSucceeds(updateDoc(doc(admin(), "projects/p1/tasks/t2"), { doneBy: deleteField() }));
+  });
+  it("on retrouve et supprime ses tâches, même hors du projet", async () => {
+    const db = dave();
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "projects/p1/tasks/t4"),
+      { title: "Ancienne", done: false, createdBy: "dave", createdAt: T0, updatedAt: T0 }));
+    await assertSucceeds(getDocs(query(collectionGroup(db, "tasks"), where("createdBy", "==", "dave"))));
+    await assertSucceeds(deleteDoc(doc(db, "projects/p1/tasks/t4")));
+    await assertFails(getDocs(query(collectionGroup(db, "tasks"), where("createdBy", "==", "alice"))));
   });
 });
 

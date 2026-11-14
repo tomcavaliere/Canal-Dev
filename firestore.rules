@@ -346,6 +346,57 @@ service cloud.firestore {
           && !('doneBy' in request.resource.data);
         allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
       }
+
+      // ---------- Tâches du projet (todo list) ----------
+      // Tout membre en ajoute et coche celles qui sont faites (`doneBy` = qui a coché, `doneAt` = quand). Une tâche
+      // cochée reste dans la liste : c'est l'historique du projet (le texte d'une tâche terminée ne se modifie plus).
+      // Seuls l'auteur et l'admin modifient le texte d'une tâche à faire ou la suppriment.
+      match /tasks/{taskId} {
+        function validTask() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['title', 'done', 'doneBy', 'doneAt', 'createdBy', 'createdAt', 'updatedAt'])
+            && d.title is string && d.title.size() > 0 && d.title.size() <= 200
+            && d.done is bool
+            && (d.done || (!('doneBy' in d) && !('doneAt' in d)))
+            && d.createdBy is string
+            && d.updatedAt == request.time;
+        }
+        // Cocher : signé et daté par la personne qui coche. Décocher : efface. Sinon : inchangé.
+        function validTaskDoneChange() {
+          let n = request.resource.data;
+          let o = resource.data;
+          return (n.done == o.done && n.get('doneBy', null) == o.get('doneBy', null)
+              && n.get('doneAt', null) == o.get('doneAt', null))
+            || (n.done && !o.done && n.get('doneBy', null) == request.auth.uid && n.get('doneAt', null) == request.time)
+            || (!n.done && o.done);
+        }
+
+        allow read: if canSeeProject(projectId);
+        allow create: if canSeeProject(projectId) && validTask()
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.done == false
+          && rateBumped();
+        // Auteur ou admin : modifier le texte d'une tâche encore à faire.
+        allow update: if canSeeProject(projectId)
+          && (isAdmin() || resource.data.createdBy == request.auth.uid)
+          && validTask() && validTaskDoneChange()
+          && (!resource.data.done || request.resource.data.title == resource.data.title)
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && rateBumped();
+        // Tout membre : cocher ou décocher.
+        allow update: if canSeeProject(projectId) && validTask() && validTaskDoneChange()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneBy', 'doneAt', 'updatedAt'])
+          && rateBumped();
+        // Droit à l'effacement : retirer son nom d'une tâche qu'on a cochée (l'admin : celui de n'importe qui).
+        allow update: if signedIn()
+          && (isAdmin() || resource.data.get('doneBy', '') == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['doneBy'])
+          && !('doneBy' in request.resource.data);
+        // Droit à l'effacement : l'auteur supprime ses tâches (l'interface ne le propose que pour celles à faire).
+        allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+      }
     }
 
     // ---------- Conversations ----------
@@ -572,7 +623,7 @@ service cloud.firestore {
         || (signedIn() && resource.data.uid == request.auth.uid);
     }
     // Calendrier : ses fiches de membre, les réunions qu'on organise ou où l'on est invité
-    // (aussi pour la pastille des invitations), les objectifs qu'on a créés ou cochés.
+    // (aussi pour la pastille des invitations), les objectifs et les tâches qu'on a créés ou cochés.
     match /{path=**}/members/{uid} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
     }
@@ -581,6 +632,10 @@ service cloud.firestore {
         || request.auth.uid in resource.data.attendees));
     }
     match /{path=**}/goals/{goalId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.createdBy == request.auth.uid
+        || resource.data.get('doneBy', '') == request.auth.uid));
+    }
+    match /{path=**}/tasks/{taskId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.createdBy == request.auth.uid
         || resource.data.get('doneBy', '') == request.auth.uid));
     }
