@@ -102,9 +102,11 @@ export async function purgeUserData(uid, email) {
   await purgePresence(uid).catch((err) => console.warn("Effacement de la présence impossible", err));
   // Compteur anti-abus : seul l'admin peut le supprimer (sinon, le supprimer le remettrait à
   // zéro) ; après une suppression par la personne elle-même, l'admin le retire à sa prochaine visite.
-  if (auth.currentUser?.uid === ADMIN_UID) await deleteDoc(doc(db, "rate", uid));
+  if (state.isAdmin) await deleteDoc(doc(db, "rate", uid));
   await deleteDoc(doc(db, "names", uid));
   await deleteDoc(doc(db, "users", uid));
+  // Droits d'administration éventuels : en dernier, pour garder jusque-là ceux qu'ils donnent.
+  await deleteDoc(doc(db, "admins", uid));
 }
 
 /* ---------- Export des données ---------- */

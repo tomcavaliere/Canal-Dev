@@ -1,5 +1,6 @@
-// Fonctions réservées à l'administrateur. Chargé uniquement si l'UID connecté
-// correspond à ADMIN_UID — mais la vraie protection est dans firestore.rules.
+// Fonctions réservées à l'administrateur. Chargé uniquement pour l'administrateur principal
+// (ADMIN_UID) ou une personne à qui il a donné les droits (admins/{uid}) — mais la vraie
+// protection est dans firestore.rules.
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, limit,
   onSnapshot, arrayUnion, arrayRemove, serverTimestamp, deleteField,
@@ -17,6 +18,7 @@ import { projectOrgLevels, projectRoles, roleUids } from "./sidebar.js";
 import { isLogo, prepareLogo } from "./images.js";
 import { deleteProjectCalendar } from "./tickets.js";
 import { linksOf, MAX_LABEL, MAX_PROJECT_LINKS, normalizeUrl } from "./links.js";
+import { state } from "./state.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -60,6 +62,16 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     ensureNames();
   }, (err) => console.error("Lecture des utilisateurs impossible", err));
   cleanups.push(unsubUsers);
+
+  /* --- Administrateurs ajoutés (admins/{uid}) --- */
+  let admins = new Set(); // UID des personnes à qui l'administrateur principal a donné les droits
+  const unsubAdmins = onSnapshot(collection(db, "admins"), (snap) => {
+    admins = new Set(snap.docs.map((d) => d.id));
+    renderUsers();
+    if (dlgUser.open) renderUserAdmin();
+    ensureNames();
+  }, (err) => console.error("Lecture des administrateurs impossible", err));
+  cleanups.push(unsubAdmins);
 
   /* --- Compteurs anti-abus orphelins --- */
   // Une personne qui supprime elle-même son compte ne peut pas supprimer son compteur rate/{uid}
@@ -298,7 +310,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
 
   function ensureNames() {
     if (!usersLoaded || !namesLoaded()) return;
-    const needed = new Set([ADMIN_UID]);
+    const needed = new Set([ADMIN_UID, ...admins]);
     for (const c of getConversations().values()) for (const uid of c.members || []) needed.add(uid);
     for (const uid of roleUids()) needed.add(uid); // personnes qui tiennent un rôle
     const reserved = new Set(); // noms attribués dans ce passage, pas encore revenus de l'annuaire
@@ -326,8 +338,44 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     $("btn-user-google").disabled = !googleName(u);
     $("user-dlg-name").value = nameOf(uid) || googleName(u);
     $("user-dlg-error").hidden = true;
+    renderUserAdmin();
     dlgUser.showModal();
   }
+
+  // Droits d'administration : donnés ou retirés par l'administrateur principal seul.
+  function renderUserAdmin() {
+    const isAdm = admins.has(editingUid);
+    $("user-dlg-admin").hidden = !state.isOwner && !isAdm;
+    $("user-dlg-admin-status").textContent = isAdm
+      ? "Cette personne a les droits d'administration."
+      : "Cette personne n'a pas les droits d'administration.";
+    $("btn-user-admin").hidden = !state.isOwner;
+    $("btn-user-admin").textContent = isAdm ? "Retirer les droits d'administration" : "Donner les droits d'administration";
+    $("btn-user-admin").classList.toggle("danger", isAdm);
+  }
+  on($("btn-user-admin"), "click", async () => {
+    const uid = editingUid;
+    const u = users.get(uid);
+    if (!state.isOwner || !uid || !u) return;
+    const grant = !admins.has(uid);
+    const msg = grant
+      ? `Donner les droits d'administration à ${u.email} ? Cette personne pourra lire toutes les conversations, gérer les membres, `
+        + "les projets et les comptes. Toi seul pourras retirer ces droits."
+      : `Retirer les droits d'administration de ${u.email} ?`;
+    if (!await confirmDialog(msg, { ok: grant ? "Donner les droits" : "Retirer les droits", danger: true })) return;
+    const btn = $("btn-user-admin");
+    btn.disabled = true;
+    try {
+      const ref = doc(db, "admins", uid);
+      await (grant ? setDoc(ref, { grantedAt: serverTimestamp() }) : deleteDoc(ref));
+      toast(grant ? "Droits d'administration donnés." : "Droits d'administration retirés.");
+    } catch (err) {
+      console.error(err);
+      toast("Modification impossible : " + err.message, { error: true });
+    } finally {
+      btn.disabled = false;
+    }
+  });
   on($("btn-user-google"), "click", () => {
     $("user-dlg-name").value = googleName(users.get(editingUid));
   });
@@ -361,7 +409,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
 
   function sortedUsers() {
     return [...users.entries()]
-      .filter(([uid]) => uid !== ADMIN_UID)
+      .filter(([uid]) => uid !== ADMIN_UID && uid !== state.user?.uid)
       .sort((a, b) => (a[1].email || "").localeCompare(b[1].email || ""));
   }
 
@@ -421,8 +469,11 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         old.title = "Durée de conservation dépassée : supprimer ce compte.";
         extras.unshift(old);
       }
+      if (admins.has(entry[0])) extras.unshift(tagEl("tag-invite", "admin", "Droits d'administration"));
       if (n > 0 && !isOnline(entry[0])) extras.push(alertMailButton(entry));
-      extras.push(editUserButton(entry), deleteUserButton(entry));
+      extras.push(editUserButton(entry));
+      // Seul l'administrateur principal supprime le compte d'un autre administrateur.
+      if (state.isOwner || !admins.has(entry[0])) extras.push(deleteUserButton(entry));
       li.append(userRow(entry, extras));
       return li;
     });
@@ -458,7 +509,8 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   }
 
   function inactiveUsers() {
-    return sortedUsers().filter(([, u]) => {
+    return sortedUsers().filter(([uid, u]) => {
+      if (!state.isOwner && admins.has(uid)) return false; // compte d'un admin : l'administrateur principal seul
       const last = u.lastLogin?.toMillis?.();
       return last && Date.now() - last > INACTIVE_MS;
     });

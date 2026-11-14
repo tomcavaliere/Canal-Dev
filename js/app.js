@@ -132,7 +132,10 @@ async function startSession(user, id) {
   }
 
   state.user = user;
-  state.isAdmin = user.uid === ADMIN_UID;
+  state.isOwner = user.uid === ADMIN_UID;
+  state.isAdmin = state.isOwner || await isGrantedAdmin(user.uid);
+  current();
+  if (!state.isOwner) watchAdminFlag(user.uid);
   loadLastRead(user.uid);
   startNames({ isAdmin: state.isAdmin, onChange: scheduleNamesRender });
   listenRate(user.uid);
@@ -159,6 +162,25 @@ async function startSession(user, id) {
   listenMyReads();
   listenConversations();
   listenInvitations();
+}
+
+/* ---------- Droits d'administration donnés par l'administrateur principal ---------- */
+
+// Droits donnés (admins/{uid}). En cas d'erreur de lecture : pas admin (les règles décident de toute façon).
+async function isGrantedAdmin(uid) {
+  try {
+    return (await getDoc(doc(db, "admins", uid))).exists();
+  } catch (err) {
+    console.warn("Lecture des droits d'administration impossible", err);
+    return false;
+  }
+}
+
+// Droits donnés ou retirés pendant la session : la page se recharge pour tout rebrancher.
+function watchAdminFlag(uid) {
+  state.unsubAdminFlag = onSnapshot(doc(db, "admins", uid), (snap) => {
+    if (snap.exists() !== state.isAdmin) location.reload();
+  }, (err) => console.warn("Écoute des droits d'administration impossible", err));
 }
 
 /* ---------- Invitation ---------- */
@@ -240,6 +262,7 @@ async function refuseAccount(user) {
 }
 
 function teardown() {
+  state.unsubAdminFlag?.();
   state.unsubConvs?.();
   state.unsubProjects?.();
   state.projectSubs.forEach((unsub) => unsub());
@@ -259,7 +282,7 @@ function teardown() {
   clearAttachment();
   clearReply();
   Object.assign(state, {
-    user: null, isAdmin: false, conversations: new Map(), convsLoaded: false, projects: new Map(), projectsLoaded: false,
+    user: null, isAdmin: false, isOwner: false, unsubAdminFlag: null, conversations: new Map(), convsLoaded: false, projects: new Map(), projectsLoaded: false,
     selectedId: null, calendarProjectId: null,
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
     unsubReads: null, reads: null, readWrite: 0, myReads: null, unsubMyReads: null, unsubInvite: null,

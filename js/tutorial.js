@@ -85,6 +85,7 @@ const STEPS = [
       "« + Conversation » et « + Projet » en haut de la barre latérale ; le ✎ d'un projet règle son logo, ses rôles, son organigramme et ses liens.",
       "En haut d'une conversation : « Membres », « Renommer », « Déplacer » et « Supprimer ». « Épingler » apparaît sous chaque message.",
       "La liste « Utilisateurs » montre les comptes en attente d'accès et fixe le nom affiché de chacun ; « + Inviter » prépare l'accès d'une adresse Gmail avant sa première connexion.",
+      "L'administrateur principal donne ou retire les droits d'administration depuis le ✎ d'un utilisateur.",
     ],
   },
   {

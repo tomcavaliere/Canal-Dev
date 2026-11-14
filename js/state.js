@@ -5,7 +5,9 @@ import { $ } from "./ui.js";
 
 export const state = {
   user: null,
-  isAdmin: false,
+  isAdmin: false, // administrateur principal (ADMIN_UID) ou droits donnés par lui (admins/{uid})
+  isOwner: false, // administrateur principal : le seul qui donne ou retire les droits d'administration
+  unsubAdminFlag: null, // écoute de admins/{uid} : la page se recharge si les droits changent
   conversations: new Map(), // id -> data
   convsLoaded: false,
   projects: new Map(), // id -> data (null si le projet n'existe plus)
