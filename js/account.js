@@ -97,6 +97,18 @@ export async function purgeUserData(uid, email) {
     await updateDoc(c.ref, { members: arrayRemove(uid) });
   }
 
+  // Journal d'activité : entrées écrites par la personne ou qui la concernent.
+  for (const field of ["uid", "about"]) {
+    const q = query(collection(db, "logs"), where(field, "==", uid), limit(400));
+    for (;;) {
+      const snap = await getDocs(q);
+      if (snap.empty) break;
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }
+
   if (email) await deleteDoc(doc(db, "invites", email.toLowerCase()));
   // Présence « en ligne » (Realtime Database) : sans conséquence si elle échoue (rien de durable).
   await purgePresence(uid).catch((err) => console.warn("Effacement de la présence impossible", err));
@@ -143,6 +155,9 @@ async function collectMyData(user) {
     calendarDocs("tasks", "doneBy", user.uid),
     calendarDocs("tasks", "assignee", user.uid),
   ]);
+  const [logsBy, logsAbout] = await Promise.all(["uid", "about"].map((field) =>
+    getDocs(query(collection(db, "logs"), where(field, "==", user.uid)))));
+  const logs = new Map([...logsBy.docs, ...logsAbout.docs].map((d) => [d.id, plain(d.data())]));
   const projectOf = (d) => d.ref.parent.parent.id;
   return {
     exportedAt: new Date().toISOString(),
@@ -230,6 +245,8 @@ async function collectMyData(user) {
     tasksCompleted: tasksDone.docs.map((d) => ({
       projectId: projectOf(d), id: d.id, title: d.data().title, doneAt: plain(d.data().doneAt),
     })),
+    // Journal d'activité : actions que l'on a faites, ou qui nous concernent (conservées 12 mois).
+    activityLog: [...logs.values()].sort((a, b) => String(a.at).localeCompare(String(b.at))),
     // Tâches dont on est responsable.
     tasksAssigned: tasksAssigned.docs.map((d) => ({
       projectId: projectOf(d), id: d.id, title: d.data().title, done: d.data().done === true,

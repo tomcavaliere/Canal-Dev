@@ -6,6 +6,7 @@ import { confirmDialog, toast } from "./dialogs.js";
 import { db } from "./firebase.js";
 import { state } from "./state.js";
 import { $ } from "./ui.js";
+import { log } from "./log.js";
 
 export const MAX_LINKS = 30; // même limite que firestore.rules
 export const MAX_LABEL = 60;
@@ -88,7 +89,10 @@ async function removeLink(link) {
   try {
     // Le lien tel qu'il est enregistré (arrayRemove compare le contenu exact).
     const stored = state.conversations.get(id)?.links?.find((l) => l.label === link.label && l.url === link.url);
-    if (stored) await updateDoc(doc(db, "conversations", id), { links: arrayRemove(stored) });
+    if (stored) {
+      await updateDoc(doc(db, "conversations", id), { links: arrayRemove(stored) });
+      log("link.delete", { convId: id, label: stored.label });
+    }
   } catch (err) {
     console.error(err);
     toast("Suppression du lien impossible : " + err.message, { error: true });
@@ -125,6 +129,7 @@ $("form-link").addEventListener("submit", async (e) => {
   btn.disabled = true;
   try {
     await updateDoc(doc(db, "conversations", id), { links: arrayUnion({ label, url }) });
+    log("link.create", { convId: id, label });
     $("dlg-link").close();
   } catch (err) {
     console.error(err);

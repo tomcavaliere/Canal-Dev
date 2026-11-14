@@ -11,7 +11,7 @@
 //   - Le nombre de tâches ouvertes de chaque projet est suivi en permanence et affiché sur le bouton ✅ (sidebar.js).
 // La liste s'ouvre dans un dialogue (bouton ✅ d'un projet, barre latérale).
 import {
-  collection, deleteDoc, deleteField, doc, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch,
+  collection, deleteField, doc, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch,
 } from "./sdk/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { confirmDialog, toast } from "./dialogs.js";
@@ -20,6 +20,7 @@ import { bumpRate, rateReady, rateWait } from "./rate.js";
 import { projectColor, renderConversationList } from "./sidebar.js";
 import { state } from "./state.js";
 import { ensureTicket } from "./tickets.js";
+import { addLog } from "./log.js";
 import { $, announce } from "./ui.js";
 import { syncNames } from "./app.js";
 
@@ -365,15 +366,17 @@ async function rateOk() {
  * @param {string} projectId
  * @param {string} id
  * @param {boolean} on true : terminée
+ * @param {string} [title] texte de la tâche, pour le journal (sinon lu dans la liste ouverte)
  * @returns {Promise<boolean>} true si l'écriture a réussi
  */
-export async function setTaskDone(projectId, id, on) {
+export async function setTaskDone(projectId, id, on, title = tasks.get(id)?.title) {
   if (!await rateOk()) return false;
   try {
     const batch = writeBatch(db);
     batch.update(doc(db, "projects", projectId, "tasks", id), on
       ? { done: true, doneBy: me(), doneAt: serverTimestamp(), updatedAt: serverTimestamp() }
       : { done: false, doneBy: deleteField(), doneAt: deleteField(), updatedAt: serverTimestamp() });
+    addLog(batch, on ? "task.done" : "task.reopen", { projectId, label: title });
     bumpRate(batch);
     await batch.commit();
     announce(on ? "Tâche terminée." : "Tâche rouverte.");
@@ -411,6 +414,7 @@ async function setAssignee(id, uid, btn) {
     batch.update(doc(db, "projects", projectId, "tasks", id), {
       assignee: uid ?? deleteField(), updatedAt: serverTimestamp(),
     });
+    addLog(batch, "task.assign", { projectId, about: uid ?? undefined, label: tasks.get(id)?.title });
     bumpRate(batch);
     await batch.commit();
     announce(uid ? "Tu es responsable de la tâche." : "Tu n'es plus responsable de la tâche.");
@@ -441,6 +445,7 @@ $("form-task").addEventListener("submit", async (e) => {
       title, ...(assignee ? { assignee } : {}), ...(due ? { due } : {}), done: false, createdBy: me(),
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     });
+    addLog(batch, "task.create", { projectId, about: assignee || undefined, label: title });
     bumpRate(batch);
     await batch.commit();
     if (pid === projectId && input.value.trim() === title) {
@@ -493,6 +498,8 @@ $("form-task-edit").addEventListener("submit", async (e) => {
       ...(due === dueBefore ? {} : { due: due ?? deleteField() }),
       updatedAt: serverTimestamp(),
     });
+    addLog(batch, "task.update", { projectId, label: title });
+    if (assignee !== before) addLog(batch, "task.assign", { projectId, about: assignee ?? undefined, label: title });
     bumpRate(batch);
     await batch.commit();
     $("dlg-task").close();
@@ -509,8 +516,13 @@ $("btn-delete-task").addEventListener("click", async () => {
   const t = editingId && tasks.get(editingId);
   if (!projectId || !t) return;
   if (!await confirmDialog(`Supprimer la tâche « ${t.title} » ?`, { ok: "Supprimer", danger: true })) return;
+  if (!await rateOk()) return;
   try {
-    await deleteDoc(doc(db, "projects", projectId, "tasks", editingId));
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "projects", projectId, "tasks", editingId));
+    addLog(batch, "task.delete", { projectId, label: t.title });
+    bumpRate(batch);
+    await batch.commit();
     $("dlg-task").close();
   } catch (err) {
     console.error(err);

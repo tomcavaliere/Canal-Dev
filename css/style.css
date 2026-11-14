@@ -887,3 +887,11 @@ dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Journal d'activité (admin) */
+dialog.logs-dialog { width: min(640px, calc(100vw - 32px)); }
+.log-list { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow-y: auto; }
+.log-row { display: grid; grid-template-columns: 7.5rem 1fr; gap: .5rem; padding: .35rem 0; font-size: .9rem; }
+.log-row + .log-row { border-top: 1px solid var(--border); }
+.log-row span { overflow-wrap: anywhere; }
+@media (max-width: 480px) { .log-row { grid-template-columns: 1fr; gap: .1rem; } }

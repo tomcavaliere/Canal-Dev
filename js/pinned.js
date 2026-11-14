@@ -9,6 +9,7 @@ import { displayText } from "./names.js";
 import { excerpt, renderMessages, revealMessage } from "./messages.js";
 import { state } from "./state.js";
 import { $ } from "./ui.js";
+import { log } from "./log.js";
 
 export const MAX_PINNED = 10; // même limite que firestore.rules
 
@@ -148,6 +149,7 @@ export async function togglePin(id) {
   }
   try {
     await updateDoc(doc(db, "conversations", convId), { pinned: pinned ? arrayRemove(id) : arrayUnion(id) });
+    log(pinned ? "pin.delete" : "pin.create", { convId, label: state.conversations.get(convId)?.title });
   } catch (err) {
     console.error(err);
     toast((pinned ? "Impossible de retirer l'épingle : " : "Épinglage impossible : ") + err.message, { error: true });

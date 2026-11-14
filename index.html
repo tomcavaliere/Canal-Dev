@@ -84,6 +84,8 @@
           <h2>Utilisateurs</h2>
           <span id="users-pending" class="tag-pending" hidden></span>
           <span class="spacer"></span>
+          <button id="btn-logs" class="btn small" type="button"
+            title="Journal d'activité : qui a fait quoi, et quand">Journal</button>
           <button id="btn-invite-user" class="btn small" type="button"
             title="Inviter une adresse Gmail qui ne s'est jamais connectée">+ Inviter</button>
         </div>
@@ -420,6 +422,24 @@
       <h2 id="org-title">Organigramme</h2>
       <ol id="org-levels" class="org-levels"></ol>
       <div class="row end">
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialogue : journal d'activité (admin) -->
+  <dialog id="dlg-logs" class="logs-dialog" aria-labelledby="logs-title">
+    <div class="stack">
+      <h2 id="logs-title">Journal d'activité</h2>
+      <p class="muted small">Créations, modifications et suppressions (projets, conversations, membres, invitations,
+        calendrier, tâches), de la plus récente à la plus ancienne. Les entrées sont conservées 12 mois.</p>
+      <label>Projet <select id="logs-project"></select></label>
+      <p id="logs-error" class="error small" role="alert" hidden></p>
+      <ul id="logs-list" class="log-list"></ul>
+      <p id="logs-empty" class="muted small" hidden>Aucune action enregistrée.</p>
+      <div class="row end">
+        <button id="btn-logs-more" type="button" class="btn" hidden>Voir plus</button>
+        <span class="spacer"></span>
         <button type="button" class="btn" data-close>Fermer</button>
       </div>
     </div>

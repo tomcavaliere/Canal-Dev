@@ -19,6 +19,7 @@ import { isLogo, prepareLogo } from "./images.js";
 import { deleteProjectCalendar } from "./tickets.js";
 import { linksOf, MAX_LABEL, MAX_PROJECT_LINKS, normalizeUrl } from "./links.js";
 import { state } from "./state.js";
+import { addLog, log, purgeOldLogs, setupLogView } from "./log.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
 const INACTIVE_MS = 365 * 24 * 3600 * 1000;
@@ -35,6 +36,10 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     el.addEventListener(type, fn);
     cleanups.push(() => el.removeEventListener(type, fn));
   };
+
+  /* --- Journal d'activité : dialogue « Journal » et conservation (12 mois) --- */
+  cleanups.push(setupLogView({ getProjects }));
+  purgeOldLogs();
 
   /* --- Utilisateurs inscrits --- */
   let usersLoaded = false;
@@ -120,10 +125,13 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   }
 
   // Crée l'invitation, ou remplace le nom et les conversations d'une invitation existante.
-  function saveInvite(email, name, convIds) {
+  // Le journal ne garde que le nom de la personne invitée, pas son adresse.
+  async function saveInvite(email, name, convIds) {
     const ref = doc(db, "invites", email);
-    if (invites.has(email)) return updateDoc(ref, { name, convIds, updatedAt: serverTimestamp() });
-    return setDoc(ref, { email, name, convIds, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    const existed = invites.has(email);
+    if (existed) await updateDoc(ref, { name, convIds, updatedAt: serverTimestamp() });
+    else await setDoc(ref, { email, name, convIds, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    log(existed ? "invite.update" : "invite.create", { label: name });
   }
 
   on($("form-invite"), "submit", async (e) => {
@@ -243,11 +251,13 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   });
 
   // Retire une conversation d'une invitation (supprimée si c'était la dernière).
-  function uninvite(email, convId) {
+  async function uninvite(email, convId) {
     const inv = invites.get(email);
     const ref = doc(db, "invites", email);
-    if (!inv || inv.convIds.every((id) => id === convId)) return deleteDoc(ref);
-    return updateDoc(ref, { convIds: arrayRemove(convId), updatedAt: serverTimestamp() });
+    const last = !inv || inv.convIds.every((id) => id === convId);
+    if (last) await deleteDoc(ref);
+    else await updateDoc(ref, { convIds: arrayRemove(convId), updatedAt: serverTimestamp() });
+    if (inv) log(last ? "invite.delete" : "invite.update", { label: inv.name });
   }
 
   function renderInvites() {
@@ -368,6 +378,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     try {
       const ref = doc(db, "admins", uid);
       await (grant ? setDoc(ref, { grantedAt: serverTimestamp() }) : deleteDoc(ref));
+      log(grant ? "admin.grant" : "admin.revoke", { about: uid });
       toast(grant ? "Droits d'administration donnés." : "Droits d'administration retirés.");
     } catch (err) {
       console.error(err);
@@ -388,8 +399,10 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       $("user-dlg-error").hidden = false;
       return;
     }
+    const uid = editingUid;
     try {
-      await setDoc(doc(db, "names", editingUid), nameEntry(name));
+      await setDoc(doc(db, "names", uid), nameEntry(name));
+      log("name.update", { about: uid, label: name });
       dlgUser.close();
     } catch (err) {
       console.error(err);
@@ -528,6 +541,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     try {
       for (const [uid, u] of list) {
         await purgeUserData(uid, u.email);
+        log("user.delete");
         done.push(uid);
       }
     } catch (err) {
@@ -554,6 +568,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         { ok: "Annuler l'invitation", danger: true })) return;
       try {
         await deleteDoc(doc(db, "invites", i.email));
+        log("invite.delete", { label: i.name });
       } catch (err) {
         console.error(err);
         toast("Annulation impossible : " + err.message, { error: true });
@@ -630,6 +645,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       btn.disabled = true;
       try {
         await purgeUserData(uid, u.email);
+        log("user.delete");
         await confirmDialog(`Données de ${u.email} supprimées.\n\nÀ faire aussi : Firebase Console → Authentication → Users → supprimer le compte ${uid}.`,
           { ok: "Compris", cancel: false });
       } catch (err) {
@@ -683,6 +699,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     if (editingConvId) {
       try {
         await updateDoc(doc(db, "conversations", editingConvId), { title, description, updatedAt: serverTimestamp() });
+        log("conv.update", { convId: editingConvId, label: title });
         dlgNew.close();
       } catch (err) {
         console.error(err);
@@ -699,6 +716,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      log("conv.create", { convId: ref.id, projectId, label: title });
       dlgNew.close();
       // la conversation arrive via onSnapshot ; on la sélectionne dès qu'elle est là
       setTimeout(() => selectConversation(ref.id), 0);
@@ -1073,11 +1091,13 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         await updateDoc(doc(db, "projects", editingProjectId), {
           title, description, ...rolesFields(), ...levelsFields(), links: linked.links, logo: draftLogo ?? deleteField(), updatedAt: serverTimestamp(),
         });
+        log("project.update", { projectId: editingProjectId, label: title });
       } else {
-        await addDoc(collection(db, "projects"), {
+        const ref = await addDoc(collection(db, "projects"), {
           title, description, ...rolesFields(), ...levelsFields(), links: linked.links, ...(draftLogo ? { logo: draftLogo } : {}),
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
+        log("project.create", { projectId: ref.id, label: title });
       }
       dlgProject.close();
       ensureNames(); // personnes qui tiennent un rôle : entrée dans l'annuaire
@@ -1104,6 +1124,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
       }
       await deleteProjectCalendar(id);
       await deleteDoc(doc(db, "projects", id));
+      log("project.delete", { projectId: id, label: p.title });
       dlgProject.close();
     } catch (err) {
       console.error(err);
@@ -1131,6 +1152,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
           projectId: projectId || deleteField(),
           updatedAt: serverTimestamp(),
         });
+        log("conv.move", { convId: conv.id, projectId, label: conv.title });
       }
       dlgMove.close();
     } catch (err) {
@@ -1174,6 +1196,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
             updatedAt: serverTimestamp(),
           });
           addMemberEvent(batch, conv.id, uid, cb.checked ? "join" : "leave");
+          addLog(batch, cb.checked ? "member.add" : "member.remove", { convId: conv.id, about: uid, label: conv.title });
           if (addName) {
             batch.set(doc(db, "names", uid), nameEntry(uniqueName(googleName(u) || "Membre sans nom", uid)));
           }
@@ -1231,6 +1254,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         await uninvite(i.email, conv.id);
       }
       await deleteDoc(doc(db, "conversations", conv.id));
+      log("conv.delete", { convId: conv.id, label: conv.title });
     } catch (err) {
       console.error(err);
       toast("Suppression impossible : " + err.message, { error: true });

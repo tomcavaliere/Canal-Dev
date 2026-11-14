@@ -10,7 +10,7 @@
 // grandes cases, où presque toutes les tâches et toutes les réunions ont leur place.
 // Le calendrier s'affiche à la place de la conversation (bouton 📅 d'un projet, barre latérale).
 import {
-  collection, collectionGroup, deleteDoc, deleteField, doc, limit, onSnapshot, orderBy, query,
+  collection, collectionGroup, deleteField, doc, limit, onSnapshot, orderBy, query,
   serverTimestamp, Timestamp, where, writeBatch,
 } from "./sdk/firebase-firestore.js";
 import { ADMIN_UID, db } from "./firebase.js";
@@ -18,6 +18,7 @@ import { confirmDialog, toast } from "./dialogs.js";
 import { displayText } from "./names.js";
 import { showNotification } from "./notify.js";
 import { bumpRate, rateReady, rateWait } from "./rate.js";
+import { addLog } from "./log.js";
 import { renderRichText } from "./richtext.js";
 import { isLogo } from "./images.js";
 import { projectColor, renderConversationList } from "./sidebar.js";
@@ -640,7 +641,7 @@ function taskDayItem(id, t) {
   cb.addEventListener("change", async () => {
     const pid = cal.pid;
     cb.disabled = true;
-    if (!pid || !await setTaskDone(pid, id, cb.checked)) cb.checked = !cb.checked;
+    if (!pid || !await setTaskDone(pid, id, cb.checked, t.title)) cb.checked = !cb.checked;
     cb.disabled = false;
   });
   const text = document.createElement("span");
@@ -764,6 +765,7 @@ async function toggleGoal(id, cb) {
     batch.update(doc(db, "projects", pid, "goals", id), on
       ? { done: true, doneBy: me(), doneAt: serverTimestamp(), updatedAt: serverTimestamp() }
       : { done: false, doneBy: deleteField(), doneAt: deleteField(), updatedAt: serverTimestamp() });
+    addLog(batch, on ? "goal.done" : "goal.reopen", { projectId: pid, label: cal.goals.get(id)?.title });
     bumpRate(batch);
     await batch.commit();
     announce(on ? "Objectif atteint." : "Objectif rouvert.");
@@ -818,6 +820,7 @@ $("form-goal").addEventListener("submit", async (e) => {
         createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
       });
     }
+    addLog(batch, editingGoal ? "goal.update" : "goal.create", { projectId: pid, label: title });
     bumpRate(batch);
     await batch.commit();
     $("dlg-goal").close();
@@ -834,8 +837,13 @@ $("btn-delete-goal").addEventListener("click", async () => {
   const g = editingGoal && cal.goals.get(editingGoal);
   if (!pid || !g) return;
   if (!await confirmDialog(`Supprimer l'objectif « ${g.title} » ?`, { ok: "Supprimer", danger: true })) return;
+  if (!await rateOk()) return;
   try {
-    await deleteDoc(doc(db, "projects", pid, "goals", editingGoal));
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "projects", pid, "goals", editingGoal));
+    addLog(batch, "goal.delete", { projectId: pid, label: g.title });
+    bumpRate(batch);
+    await batch.commit();
     $("dlg-goal").close();
   } catch (err) {
     console.error(err);
@@ -925,8 +933,13 @@ $("btn-ev-delete").addEventListener("click", async () => {
   if (!pid || !e) return;
   if (!await confirmDialog(`Supprimer la réunion « ${e.title} » ? Les invités ne la verront plus.`,
     { ok: "Supprimer", danger: true })) return;
+  if (!await rateOk()) return;
   try {
-    await deleteDoc(doc(db, "projects", pid, "events", e.id));
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "projects", pid, "events", e.id));
+    addLog(batch, "event.delete", { projectId: pid, label: e.title });
+    bumpRate(batch);
+    await batch.commit();
     $("dlg-event-view").close();
   } catch (err) {
     console.error(err);
@@ -1058,6 +1071,7 @@ $("form-event").addEventListener("submit", async (ev) => {
         ...fields, createdBy: me(), createdAt: serverTimestamp(),
       });
     }
+    addLog(batch, old ? "event.update" : "event.create", { projectId: pid, label: title });
     bumpRate(batch);
     await batch.commit();
     $("dlg-event").close();
