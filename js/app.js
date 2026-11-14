@@ -23,7 +23,7 @@ import { closeSearch } from "./search.js";
 import { projectColor, projectOf, renderConversationList, roleUids, sortedConversations } from "./sidebar.js";
 import { isLogo } from "./images.js";
 import { renderOrgChart } from "./org.js";
-import { renderTasks, taskUids, teardownTasks } from "./tasks.js";
+import { renderTasks, syncTaskCounts, taskUids, teardownTasks } from "./tasks.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
@@ -341,6 +341,7 @@ function listenConversations() {
     if (!state.isAdmin) syncProjectListeners();
     syncMyTickets();
     adminSyncTickets();
+    syncTaskCounts();
     onCalendarContextChanged();
     renderTasks();
     syncNames();
@@ -368,6 +369,7 @@ function listenAllProjects() {
     state.projects = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
     state.projectsLoaded = true;
     adminSyncTickets();
+    syncTaskCounts();
     onCalendarContextChanged();
     renderConversationList();
     renderOrgChart();
@@ -393,6 +395,7 @@ function syncProjectListeners() {
     state.projectSubs.set(id, onSnapshot(doc(db, "projects", id), (snap) => {
       state.projects.set(id, snap.exists() ? snap.data({ serverTimestamps: "estimate" }) : null);
       syncNames(); // personnes qui tiennent un rôle
+      syncTaskCounts();
       onCalendarContextChanged();
       renderConversationList();
       renderOrgChart();

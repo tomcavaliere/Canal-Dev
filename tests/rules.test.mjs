@@ -11,7 +11,7 @@ import {
   assertFails, assertSucceeds, initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
-  arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs, increment,
+  arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs, increment, limit,
   orderBy, query, serverTimestamp, setDoc, setLogLevel, Timestamp, updateDoc, where, writeBatch,
 } from "firebase/firestore";
 import { ADMIN_UID } from "../js/firebase-config.js";
@@ -1030,6 +1030,13 @@ describe("Projet : tâches (todo list)", () => {
         { title: "Fait", done: true, doneBy: "carol", doneAt: T0, due: "2026-11-01", createdBy: "alice", createdAt: T0, updatedAt: T0 }));
     await assertFails(change(alice(), "alice", "projects/p1/tasks/t5", { due: "2026-12-01", ...now() }));
     await assertFails(change(admin(), ADMIN, "projects/p1/tasks/t5", { due: deleteField(), ...now() }));
+  });
+  it("on lit les seules tâches ouvertes d'un projet (compteur de la barre latérale)", async () => {
+    const q = (db) => getDocs(query(collection(db, "projects/p1/tasks"), where("done", "==", false), limit(100)));
+    await assertSucceeds(q(carol()));
+    await assertSucceeds(q(admin()));
+    await assertFails(q(dave()));
+    await assertFails(q(bob()));
   });
   it("on lit les tâches d'un projet par échéance (calendrier)", async () => {
     const q = (db) => getDocs(query(collection(db, "projects/p1/tasks"), where("due", ">=", "2026-11-01"), where("due", "<", "2026-12-13"), orderBy("due")));

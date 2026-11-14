@@ -29,6 +29,8 @@ Canal de communication pour suivre le développement d'un outil.
   tant que la tâche n'est pas terminée.
   Une tâche peut aussi avoir une **échéance** (facultative) : elle apparaît alors dans le 📅 du projet, dans la grille du mois (✅) et dans la
   liste du jour, où on peut la cocher ; en retard, elle est signalée en rouge. Dans la liste, les échéances les plus proches passent en premier.
+  Le nombre de **tâches ouvertes** s'affiche en pastille sur le ✅ de chaque projet dans la barre latérale (en couleur quand certaines
+  te sont assignées, « 100+ » au-delà de 100).
 - Un **tutoriel** en quelques étapes présente l'application : il s'ouvre seul à la première arrivée (une fois par compte et par
   navigateur, mémorisé dans le stockage local) et se rouvre avec le bouton **?** de la barre du haut ou depuis « Mon compte ».
   L'administrateur voit en plus une étape sur l'administration.

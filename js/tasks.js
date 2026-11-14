@@ -8,15 +8,16 @@
 //     quiconque en cliquant « Je m'en occupe » sur une tâche libre (on peut s'en retirer).
 //   - Une tâche peut avoir une échéance : elle apparaît alors dans le calendrier du projet (calendar.js), où on
 //     peut aussi la cocher.
+//   - Le nombre de tâches ouvertes de chaque projet est suivi en permanence et affiché sur le bouton ✅ (sidebar.js).
 // La liste s'ouvre dans un dialogue (bouton ✅ d'un projet, barre latérale).
 import {
-  collection, deleteDoc, deleteField, doc, limit, onSnapshot, orderBy, query, serverTimestamp, writeBatch,
+  collection, deleteDoc, deleteField, doc, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch,
 } from "./sdk/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { confirmDialog, toast } from "./dialogs.js";
 import { displayText } from "./names.js";
 import { bumpRate, rateReady, rateWait } from "./rate.js";
-import { projectColor } from "./sidebar.js";
+import { projectColor, renderConversationList } from "./sidebar.js";
 import { state } from "./state.js";
 import { ensureTicket } from "./tickets.js";
 import { $, announce } from "./ui.js";
@@ -149,8 +150,80 @@ export function renderTasks() {
   render();
 }
 
+/* ---------- Compteur de tâches ouvertes (barre latérale) ---------- */
+
+export const COUNT_LIMIT = 100; // au-delà, le compteur affiche « 100+ »
+/** @type {Map<string, { open: number, mine: number }>} projet -> tâches ouvertes (dont celles dont on est responsable) */
+const counts = new Map();
+const watchers = new Map(); // projet -> unsubscribe
+const starting = new Set(); // projets en cours de démarrage
+const failedAt = new Map(); // projet -> date du dernier échec (nouvel essai au bout d'une minute)
+
+/**
+ * @param {string} projectId
+ * @returns {{ open: number, mine: number } | null} null tant que le compteur n'est pas connu
+ */
+export function openTaskCount(projectId) {
+  return counts.get(projectId) ?? null;
+}
+
+// Un écouteur par projet visible (l'admin : tous), sur les seules tâches ouvertes. Appelé quand les
+// conversations ou les projets changent : ne fait rien si tout est déjà suivi.
+export function syncTaskCounts() {
+  const session = state.user;
+  if (!session) return;
+  const wanted = new Set();
+  if (state.isAdmin) {
+    if (state.projectsLoaded) for (const id of state.projects.keys()) wanted.add(id);
+  } else {
+    for (const [id, p] of state.projects) if (p) wanted.add(id);
+  }
+  for (const [id, unsub] of watchers) {
+    if (wanted.has(id)) continue;
+    unsub();
+    watchers.delete(id);
+    if (counts.delete(id)) renderConversationList();
+  }
+  for (const id of wanted) {
+    if (watchers.has(id) || starting.has(id) || Date.now() - (failedAt.get(id) ?? 0) < 60_000) continue;
+    starting.add(id);
+    ensureTicket(id).then((ok) => {
+      starting.delete(id);
+      if (state.user !== session || watchers.has(id) || !state.projects.get(id)) return;
+      if (!ok) {
+        failedAt.set(id, Date.now());
+        return;
+      }
+      watchers.set(id, onSnapshot(
+        query(collection(db, "projects", id, "tasks"), where("done", "==", false), limit(COUNT_LIMIT)),
+        (snap) => {
+          const mine = snap.docs.filter((d) => d.data().assignee === me()).length;
+          const prev = counts.get(id);
+          if (prev?.open === snap.size && prev.mine === mine) return;
+          counts.set(id, { open: snap.size, mine });
+          renderConversationList();
+        },
+        (err) => {
+          console.warn("Compteur de tâches impossible", id, err);
+          watchers.delete(id);
+          if (counts.delete(id)) renderConversationList();
+          failedAt.set(id, Date.now());
+        },
+      ));
+    }).catch(() => {
+      starting.delete(id);
+      failedAt.set(id, Date.now());
+    });
+  }
+}
+
 // Fermeture à la déconnexion.
 export function teardownTasks() {
+  watchers.forEach((unsub) => unsub());
+  watchers.clear();
+  starting.clear();
+  failedAt.clear();
+  counts.clear();
   if ($("dlg-tasks").open) $("dlg-tasks").close();
   pid = null;
   stop();

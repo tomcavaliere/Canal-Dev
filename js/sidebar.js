@@ -7,7 +7,7 @@ import { $ } from "./ui.js";
 import { openProjectCalendar, selectConversation } from "./app.js";
 import { pendingInvitations } from "./calendar.js";
 import { openOrgChart } from "./org.js";
-import { openTasks } from "./tasks.js";
+import { COUNT_LIMIT, openTaskCount, openTasks } from "./tasks.js";
 import { state } from "./state.js";
 import { unreadBadge, unreadLabel, unreadMessages } from "./unread.js";
 
@@ -286,8 +286,21 @@ function projectGroup(projectId, title, convs) {
       cal.append(badge);
     }
     head.append(cal);
-    // Tâches du projet (todo list, historique des tâches terminées conservé).
-    head.append(smallButton("✅", `Tâches de « ${title} »`, () => openTasks(projectId), "tasks:" + projectId));
+    // Tâches du projet (todo list, historique des tâches terminées conservé), avec le nombre de tâches ouvertes.
+    const tc = openTaskCount(projectId);
+    const more = tc && tc.open >= COUNT_LIMIT ? " ou plus" : "";
+    const tasksLabel = `Tâches de « ${title} »` + (tc?.open
+      ? ` : ${tc.open}${more} ouverte${tc.open > 1 ? "s" : ""}${tc.mine ? `, dont ${tc.mine} pour toi` : ""}` : "");
+    const tasksBtn = smallButton("✅", tasksLabel, () => openTasks(projectId), "tasks:" + projectId);
+    tasksBtn.classList.add("group-tasks");
+    if (tc?.open) {
+      const badge = document.createElement("span");
+      badge.className = "task-count" + (tc.mine ? " mine" : "");
+      badge.setAttribute("aria-hidden", "true");
+      badge.textContent = tc.open >= COUNT_LIMIT ? `${COUNT_LIMIT}+` : String(tc.open);
+      tasksBtn.append(badge);
+    }
+    head.append(tasksBtn);
     // Organigramme, s'il a au moins un niveau.
     if (projectOrgLevels(state.projects.get(projectId)).length) {
       const org = smallButton("🏢", `Organigramme de « ${title} »`, () => openOrgChart(projectId), "org:" + projectId);
