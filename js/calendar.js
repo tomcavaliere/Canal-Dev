@@ -4,7 +4,8 @@
 //     (et l'admin) la modifie ou la supprime ; chaque invité répond « présent » ou « absent ».
 //   - Tout membre ajoute des objectifs et coche ceux qui sont atteints ; l'auteur (et l'admin)
 //     les modifie ou les supprime.
-//   - Les tâches du projet (tasks.js) qui ont une échéance y apparaissent aussi, cochables depuis le calendrier.
+//   - Les tâches du projet (tasks.js) y apparaissent aussi : un trait va du jour de leur création jusqu'à aujourd'hui
+//     (ou jusqu'au jour où elles sont terminées), avec une pastille au bout ; on peut les cocher depuis la liste du jour.
 // Le calendrier s'affiche à la place de la conversation (bouton 📅 d'un projet, barre latérale).
 import {
   collection, collectionGroup, deleteDoc, deleteField, doc, limit, onSnapshot, orderBy, query,
@@ -26,6 +27,8 @@ import { openProjectCalendar, syncNames } from "./app.js";
 
 const MAX_ATTENDEES = 50; // mêmes limites que firestore.rules
 const MAX_GOALS = 300;
+const MAX_TASKS = 500;
+const MAX_BAR_LANES = 3; // traits de tâches visibles par semaine ; les autres sont comptés (« +n tâches »)
 const UPCOMING = 10;
 
 const monthFmt = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
@@ -100,11 +103,11 @@ function freshCalendar() {
     events: /** @type {Map<string, CalEvent>} */ (new Map()), // réunions des 6 semaines affichées
     upcoming: /** @type {Map<string, CalEvent>} */ (new Map()), // prochaines réunions
     goals: new Map(), // id -> data
-    tasks: /** @type {Map<string, any>} */ (new Map()), // tâches dont l'échéance tombe dans les 6 semaines affichées
+    tasks: /** @type {Map<string, any>} */ (new Map()), // tâches du projet : id -> data
+    midnight: /** @type {ReturnType<typeof setTimeout> | null} */ (null), // réaffichage au changement de jour
     members: /** @type {Set<string>} */ (new Set()), // fiches des membres du projet
     unsubs: /** @type {(() => void)[]} */ ([]),
     unsubMonth: /** @type {null | (() => void)} */ (null),
-    unsubTasks: /** @type {null | (() => void)} */ (null),
   };
 }
 let cal = freshCalendar();
@@ -145,7 +148,8 @@ export function isCalendarOpen() {
 function stopListeners() {
   cal.unsubs.forEach((u) => u());
   cal.unsubMonth?.();
-  cal.unsubTasks?.();
+  if (cal.midnight) clearTimeout(cal.midnight);
+  cal.midnight = null;
 }
 
 function showError(msg) {
@@ -194,6 +198,11 @@ export async function openCalendar(projectId) {
       cal.goals = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
       changed();
     }, listenError("objectifs")),
+    // Tâches du projet : toutes (ouvertes, et terminées pour l'historique), dessinées en traits dans la grille.
+    onSnapshot(query(base("tasks"), orderBy("createdAt", "desc"), limit(MAX_TASKS)), (snap) => {
+      cal.tasks = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+      changed();
+    }, listenError("tâches")),
     // Réunions pas encore terminées (une réunion en cours reste affichée).
     onSnapshot(query(base("events"), where("end", ">=", Timestamp.now()), orderBy("end"), limit(UPCOMING * 3)), (snap) => {
       cal.upcoming = eventsOf(snap);
@@ -201,6 +210,19 @@ export async function openCalendar(projectId) {
     }, listenError("prochaines réunions")),
   );
   listenMonth();
+  scheduleMidnight();
+}
+
+// Les traits des tâches ouvertes s'allongent chaque jour : réaffiche au changement de jour.
+function scheduleMidnight() {
+  if (cal.midnight) clearTimeout(cal.midnight);
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+  cal.midnight = setTimeout(() => {
+    if (!cal.pid) return;
+    render();
+    scheduleMidnight();
+  }, next.getTime() - now.getTime());
 }
 
 function eventsOf(snap) {
@@ -215,17 +237,9 @@ function eventsOf(snap) {
 // Réunions des six semaines affichées (réécoutées à chaque changement de mois).
 function listenMonth() {
   cal.unsubMonth?.();
-  cal.unsubTasks?.();
   const pid = cal.pid;
   if (!pid) return;
   const { start, end } = gridRange(cal.month);
-  // Tâches dont l'échéance tombe dans ces six semaines (dates « AAAA-MM-JJ », comparées comme du texte).
-  cal.tasks = new Map();
-  cal.unsubTasks = onSnapshot(query(collection(db, "projects", pid, "tasks"),
-    where("due", ">=", dayKey(start)), where("due", "<", dayKey(end)), orderBy("due")), (snap) => {
-    cal.tasks = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
-    changed();
-  }, listenError("tâches"));
   const q = query(collection(db, "projects", pid, "events"),
     where("start", ">=", Timestamp.fromDate(start)), where("start", "<", Timestamp.fromDate(end)), orderBy("start"));
   cal.ready = false;
@@ -309,9 +323,82 @@ function renderHead() {
 function eventsOn(key) {
   return [...cal.events.values()].filter((e) => dayKey(e.start) === key).sort((a, b) => a.start.getTime() - b.start.getTime());
 }
-function tasksDue(key) {
-  return [...cal.tasks.entries()].filter(([, t]) => t.due === key && typeof t.title === "string" && t.title)
-    .sort((a, b) => Number(a[1].done === true) - Number(b[1].done === true) || a[1].title.localeCompare(b[1].title, "fr"));
+/**
+ * Jours pendant lesquels une tâche a été ouverte : de celui de sa création jusqu'à aujourd'hui, ou jusqu'au
+ * jour où elle a été terminée. Dates « AAAA-MM-JJ » (heure locale), comparables comme du texte.
+ * @returns {{ start: string, end: string } | null}
+ */
+function taskSpan(t) {
+  const created = toDate(t.createdAt);
+  if (!created || typeof t.title !== "string" || !t.title) return null;
+  const start = dayKey(created);
+  const closed = t.done === true ? toDate(t.doneAt) : null;
+  const end = t.done === true ? (closed ? dayKey(closed) : start) : dayKey(new Date());
+  return { start, end: end < start ? start : end };
+}
+
+const isLate = (t) => t.done !== true && isDueKey(t.due) && t.due < dayKey(new Date());
+
+// Tâches à montrer pour un jour : ouvertes ce jour-là, ou dont c'est l'échéance. Les ouvertes d'abord.
+function tasksOnDay(key) {
+  return [...cal.tasks.entries()].filter(([, t]) => {
+    const span = taskSpan(t);
+    return span && ((span.start <= key && key <= span.end) || t.due === key);
+  }).sort((a, b) => Number(a[1].done === true) - Number(b[1].done === true)
+    || (taskSpan(a[1]).start).localeCompare(taskSpan(b[1]).start) || a[1].title.localeCompare(b[1].title, "fr"));
+}
+
+/**
+ * Traits des tâches pour les six semaines de la grille : par semaine, des couloirs (lanes) où chaque tâche
+ * garde la même ligne sur tous ses jours, pour que le trait soit continu d'une case à l'autre.
+ * @param {string[]} keys les 42 jours de la grille
+ */
+function taskBars(keys) {
+  const spans = [...cal.tasks.entries()].map(([id, t]) => ({ id, t, span: taskSpan(t) })).filter((x) => x.span);
+  return Array.from({ length: 6 }, (_, w) => {
+    const wk = keys.slice(w * 7, w * 7 + 7);
+    const segs = spans.filter((x) => x.span.end >= wk[0] && x.span.start <= wk[6]).map((x) => ({
+      ...x,
+      a: x.span.start <= wk[0] ? 0 : wk.indexOf(x.span.start),
+      b: x.span.end >= wk[6] ? 6 : wk.indexOf(x.span.end),
+      startsHere: x.span.start >= wk[0],
+      endsHere: x.span.end <= wk[6],
+    })).sort((p, q) => p.a - q.a || (q.b - q.a) - (p.b - p.a) || p.span.start.localeCompare(q.span.start));
+    /** @type {number[]} dernier jour occupé de chaque couloir */
+    const lastEnd = [];
+    const lanes = /** @type {any[][]} */ ([]);
+    const hidden = Array(7).fill(0);
+    for (const seg of segs) {
+      let lane = lastEnd.findIndex((end) => end < seg.a);
+      if (lane < 0) lane = lastEnd.length;
+      lastEnd[lane] = seg.b;
+      if (lane >= MAX_BAR_LANES) {
+        for (let i = seg.a; i <= seg.b; i++) hidden[i]++;
+        continue;
+      }
+      (lanes[lane] ??= Array(7).fill(null));
+      for (let i = seg.a; i <= seg.b; i++) lanes[lane][i] = { ...seg, day: i };
+    }
+    return { lanes, hidden };
+  });
+}
+
+function barElement(cell) {
+  const li = document.createElement("li");
+  if (!cell) {
+    li.className = "cal-bar-gap";
+    return li;
+  }
+  const t = cell.t;
+  const first = cell.day === cell.a;
+  const last = cell.day === cell.b;
+  li.className = "cal-bar"
+    + (t.done === true ? " done" : isLate(t) ? " late" : "")
+    + (first && cell.startsHere ? " edge-start" : first ? "" : " join-left")
+    + (last && cell.endsHere ? " edge-end" : last ? "" : " join-right");
+  if (first) li.textContent = t.title;
+  li.title = `${t.title} — ${t.done === true ? "terminée" : "ouverte"}`;
+  return li;
 }
 function goalsDue(key) {
   return [...cal.goals.entries()].filter(([, g]) => g.due === key && typeof g.title === "string");
@@ -322,6 +409,8 @@ function renderGrid() {
   const { start } = gridRange(cal.month);
   const today = dayKey(new Date());
   const rows = [];
+  const keys = Array.from({ length: 42 }, (_, i) => dayKey(addDays(start, i)));
+  const bars = taskBars(keys);
   for (let week = 0; week < 6; week++) {
     const tr = document.createElement("tr");
     for (let i = 0; i < 7; i++) {
@@ -329,7 +418,10 @@ function renderGrid() {
       const key = dayKey(day);
       const events = eventsOn(key);
       const goals = goalsDue(key);
-      const tasksOn = tasksDue(key);
+      const tasksOn = tasksOnDay(key);
+      const openOn = tasksOn.filter(([, t]) => t.done !== true).length;
+      const dueOn = tasksOn.filter(([, t]) => t.due === key && t.done !== true).length;
+      const { lanes, hidden } = bars[week];
       const td = document.createElement("td");
       td.className = "cal-cell"
         + (day.getMonth() !== cal.month.getMonth() ? " other-month" : "")
@@ -338,19 +430,29 @@ function renderGrid() {
 
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "cal-daynum" + (events.length || goals.length || tasksOn.length ? " has-items" : "");
+      btn.className = "cal-daynum" + (events.length || goals.length || openOn || dueOn ? " has-items" : "");
       btn.textContent = String(day.getDate());
       const parts = [dayFmt.format(day)];
       if (events.length) parts.push(`${events.length} réunion${events.length > 1 ? "s" : ""}`);
       if (goals.length) parts.push(`${goals.length} objectif${goals.length > 1 ? "s" : ""} à échéance`);
-      if (tasksOn.length) parts.push(`${tasksOn.length} tâche${tasksOn.length > 1 ? "s" : ""} à échéance`);
+      if (openOn) parts.push(`${openOn} tâche${openOn > 1 ? "s" : ""} ouverte${openOn > 1 ? "s" : ""}`);
+      if (dueOn) parts.push(`${dueOn} à échéance`);
       btn.setAttribute("aria-label", parts.join(", "));
       btn.setAttribute("aria-pressed", String(key === cal.selected));
       if (key === today) btn.setAttribute("aria-current", "date");
       btn.addEventListener("click", () => selectDay(key));
       td.append(btn);
 
-      if (events.length || goals.length || tasksOn.length) {
+      // Traits des tâches (décoratifs : la liste du jour, plus bas, donne le détail).
+      if (lanes.length) {
+        const barsUl = document.createElement("ul");
+        barsUl.className = "cal-bars";
+        barsUl.setAttribute("aria-hidden", "true");
+        barsUl.append(...lanes.map((lane) => barElement(lane[i])));
+        td.append(barsUl);
+      }
+
+      if (events.length || goals.length || dueOn || hidden[i]) {
         const ul = document.createElement("ul");
         ul.className = "cal-chips";
         for (const e of events.slice(0, 3)) {
@@ -365,11 +467,12 @@ function renderGrid() {
           ul.append(li);
         }
         const more = events.length - 3;
-        if (more > 0 || goals.length || tasksOn.length) {
+        if (more > 0 || goals.length || dueOn || hidden[i]) {
           const li = document.createElement("li");
           li.className = "cal-more";
           li.textContent = [more > 0 ? `+${more}` : "", goals.length ? "🎯".repeat(Math.min(goals.length, 3)) : "",
-            tasksOn.length ? "✅".repeat(Math.min(tasksOn.length, 3)) : ""].filter(Boolean).join(" ");
+            hidden[i] ? `+${hidden[i]} tâche${hidden[i] > 1 ? "s" : ""}` : "",
+            dueOn ? "⏰".repeat(Math.min(dueOn, 3)) : ""].filter(Boolean).join(" ");
           li.setAttribute("aria-hidden", "true");
           ul.append(li);
         }
@@ -449,7 +552,7 @@ function renderDay() {
   $("cal-day-label").textContent = dayFmt.format(day);
   const items = eventsOn(cal.selected).map((e) => eventItem(e));
   for (const [id, g] of goalsDue(cal.selected)) items.push(goalItem(id, g));
-  for (const [id, t] of tasksDue(cal.selected)) items.push(taskDayItem(id, t));
+  for (const [id, t] of tasksOnDay(cal.selected)) items.push(taskDayItem(id, t));
   if (!items.length) items.push(emptyLi(cal.ready ? "Rien de prévu ce jour-là." : "Chargement…"));
   $("cal-day-list").replaceChildren(...items);
 }
@@ -490,8 +593,15 @@ function taskDayItem(id, t) {
   const parts = ["tâche"];
   if (typeof t.assignee === "string" && t.assignee) parts.push("responsable : " + who(t.assignee));
   else if (!done) parts.push("sans responsable");
-  if (done) parts.push(`terminée${typeof t.doneBy === "string" ? " par " + who(t.doneBy) : ""}`);
-  else if (typeof t.due === "string" && t.due < dayKey(new Date())) parts.push("en retard");
+  const span = taskSpan(t);
+  if (done) parts.push(`terminée${typeof t.doneBy === "string" ? " par " + who(t.doneBy) : ""}${t.doneAt ? " le " + dueFmt.format(toDate(t.doneAt)) : ""}`);
+  else if (span) {
+    // Depuis quand la tâche est ouverte (jours entiers, sans effet de l'heure d'été).
+    const days = Math.round((fromKey(dayKey(new Date())).getTime() - fromKey(span.start).getTime()) / 86_400_000);
+    parts.push(days > 0 ? `ouverte depuis ${days} jour${days > 1 ? "s" : ""} (${dueFmt.format(fromKey(span.start))})` : "ouverte aujourd'hui");
+  }
+  if (isLate(t)) parts.push("en retard");
+  else if (isDueKey(t.due) && !done) parts.push("échéance " + dueFmt.format(fromKey(t.due)));
   meta.textContent = parts.join(" · ");
   li.append(meta);
 

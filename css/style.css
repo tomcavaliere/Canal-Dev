@@ -698,6 +698,28 @@ fieldset.plain legend { padding: 0; margin-bottom: .2rem; }
 .cal-chip.declined, .cal-item.declined .cal-item-title { text-decoration: line-through; opacity: .75; }
 .cal-more { font-size: .68rem; color: var(--muted); padding: 0 .3rem; }
 
+/* Tâches : un trait par tâche, du jour de sa création jusqu'à aujourd'hui, avec une pastille au bout */
+.cal-bars { list-style: none; margin: .1rem 0 .15rem; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cal-bar, .cal-bar-gap { height: .95rem; }
+.cal-bar {
+  position: relative; box-sizing: border-box; padding: 0 .3rem; font-size: .66rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text);
+  background: color-mix(in srgb, var(--proj) 26%, var(--surface));
+  border-top: 2px solid var(--proj); border-bottom: 2px solid var(--proj); line-height: calc(.95rem - 4px);
+}
+.cal-bar.edge-start { border-left: 2px solid var(--proj); border-radius: 999px 0 0 999px; padding-left: .45rem; }
+.cal-bar.edge-end { border-right: 2px solid var(--proj); border-radius: 0 999px 999px 0; padding-right: 1rem; }
+.cal-bar.edge-start.edge-end { border-radius: 999px; }
+/* Le trait traverse la marge de la case pour rejoindre celui du jour voisin */
+.cal-bar.join-left { margin-left: -.15rem; }
+.cal-bar.join-right { margin-right: -.15rem; }
+.cal-bar.edge-end::after {
+  content: ""; position: absolute; right: .15rem; top: 50%; width: .5rem; height: .5rem; margin-top: -.25rem;
+  border-radius: 50%; background: var(--proj);
+}
+.cal-bar.late { --proj: var(--danger); }
+.cal-bar.done { --proj: var(--online); opacity: .65; }
+
 .cal-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; }
 .cal-empty { padding: .2rem 0; }
 .cal-item {

@@ -27,8 +27,11 @@ Canal de communication pour suivre le développement d'un outil.
   Une tâche peut avoir un **responsable** : nommé à la création (parmi les membres du projet), ou pris plus tard par n'importe quel membre
   avec « Je m'en occupe » sur une tâche sans responsable (« Me retirer » pour s'en défaire). L'auteur et l'admin peuvent aussi le changer
   tant que la tâche n'est pas terminée.
-  Une tâche peut aussi avoir une **échéance** (facultative) : elle apparaît alors dans le 📅 du projet, dans la grille du mois (✅) et dans la
-  liste du jour, où on peut la cocher ; en retard, elle est signalée en rouge. Dans la liste, les échéances les plus proches passent en premier.
+  Toutes les tâches apparaissent dans le 📅 du projet : un **trait** va du jour de leur création jusqu'à aujourd'hui (et s'allonge d'un jour
+  chaque jour tant qu'elles sont ouvertes), avec une **pastille** au bout ; une tâche terminée s'arrête au jour où elle l'a été (en vert).
+  La liste du jour dit depuis combien de temps elle est ouverte et permet de la cocher.
+  Une tâche peut aussi avoir une **échéance** (facultative, ⏰ sur le jour concerné) ; en retard, son trait passe au rouge.
+  Dans la liste, les échéances les plus proches passent en premier.
   Le nombre de **tâches ouvertes** s'affiche en pastille sur le ✅ de chaque projet dans la barre latérale (en couleur quand certaines
   te sont assignées, « 100+ » au-delà de 100).
 - Un **tutoriel** en quelques étapes présente l'application : il s'ouvre seul à la première arrivée (une fois par compte et par
