@@ -224,13 +224,14 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .group { --proj: var(--muted); }
 .group + .group { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--border); }
 .group-head {
-  display: flex; align-items: center; padding-right: .5rem;
+  display: flex; flex-wrap: wrap; align-items: center; padding-right: .5rem;
   background: color-mix(in srgb, var(--proj) 9%, transparent);
   box-shadow: inset 3px 0 0 var(--proj);
 }
 .group-toggle {
   all: unset; box-sizing: border-box; flex: 1; min-width: 0;
   display: flex; align-items: center; gap: .45rem;
+  flex-basis: 100%; /* le nom du projet occupe sa ligne : les icônes passent dessous */
   padding: .5rem .5rem .5rem 1rem; cursor: pointer;
   font-size: .85rem; font-weight: 700; color: var(--proj);
 }
@@ -251,6 +252,8 @@ label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
   min-width: 24px; min-height: 24px;
 }
 .group-btn:hover { color: var(--text); background: var(--surface-2); }
+.group-head > .group-btn { margin-bottom: .35rem; }
+.group-toggle + .group-btn { margin-left: 1rem; }
 .group-items { margin-left: 1rem; border-left: 2px solid color-mix(in srgb, var(--proj) 35%, transparent); }
 .group-items li > button.item { padding-left: 1.1rem; }
 .group-items li > button.item.active {
