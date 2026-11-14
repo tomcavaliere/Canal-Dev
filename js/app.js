@@ -7,6 +7,7 @@ import {
   arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch,
 } from "./sdk/firebase-firestore.js";
 import { initAccount } from "./account.js";
+import { initTutorial, maybeShowTutorial } from "./tutorial.js";
 import { ADMIN_UID, auth, db, GMAIL_RE, isConfigured } from "./firebase.js";
 import { displayText, startNames, stopNames, watchNames } from "./names.js";
 import { notificationState, registerServiceWorker, toggleNotifications } from "./notify.js";
@@ -55,6 +56,7 @@ if (!isConfigured) {
   $("btn-login").addEventListener("click", login);
   document.querySelectorAll(".btn-logout").forEach((b) => b.addEventListener("click", logout));
   initAccount();
+  initTutorial();
   registerServiceWorker(openFromNotification);
   onAuthStateChanged(auth, onAuth);
 }
@@ -335,6 +337,7 @@ function listenConversations() {
     if (!state.selectedId && !state.calendarProjectId && state.conversations.size > 0 && !isMobile()) {
       selectConversation(sortedConversations()[0][0]);
     }
+    if (state.conversations.size > 0) maybeShowTutorial();
     if (!state.isAdmin) syncProjectListeners();
     syncMyTickets();
     adminSyncTickets();

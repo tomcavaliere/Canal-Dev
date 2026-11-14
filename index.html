@@ -63,6 +63,8 @@
       <span id="user-name" class="user-name"></span>
       <button id="btn-sound" class="btn small" type="button" aria-pressed="true">🔊</button>
       <button id="btn-notif" class="btn small" type="button" aria-pressed="false" hidden>🔕</button>
+      <button id="btn-help" class="btn small" type="button" title="Revoir le tutoriel"
+        aria-label="Revoir le tutoriel" aria-haspopup="dialog">?</button>
       <button class="btn small btn-account">Mon compte</button>
       <button class="btn small btn-logout">Déconnexion</button>
     </header>
@@ -556,6 +558,25 @@
     </div>
   </dialog>
 
+  <!-- Dialogue : tutoriel (première arrivée, puis bouton « ? ») -->
+  <dialog id="dlg-tutorial" class="tuto-dialog" aria-labelledby="tuto-title" aria-describedby="tuto-items">
+    <div class="stack">
+      <p id="tuto-progress" class="muted small tuto-progress" aria-live="polite"></p>
+      <div class="tuto-head">
+        <span id="tuto-icon" class="tuto-icon" aria-hidden="true"></span>
+        <h2 id="tuto-title"></h2>
+      </div>
+      <ul id="tuto-items" class="tuto-items"></ul>
+      <div id="tuto-dots" class="tuto-dots" aria-hidden="true"></div>
+      <div class="row tuto-actions">
+        <button id="btn-tuto-skip" class="btn" type="button">Passer</button>
+        <span class="spacer"></span>
+        <button id="btn-tuto-prev" class="btn" type="button">Précédent</button>
+        <button id="btn-tuto-next" class="btn primary" type="button">Suivant</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Dialogue : mon compte (droits RGPD) -->
   <dialog id="dlg-account">
     <div class="stack">
@@ -573,6 +594,12 @@
         </div>
         <p class="muted small">« Automatique » suit le réglage de ton appareil. Ce choix est gardé dans ce navigateur.</p>
       </fieldset>
+
+      <section class="stack tight">
+        <h3>Tutoriel</h3>
+        <p class="muted small">Revois la présentation de l'application, étape par étape.</p>
+        <div><button id="btn-account-tutorial" class="btn" type="button">Revoir le tutoriel</button></div>
+      </section>
 
       <section class="stack tight">
         <h3>Mes données</h3>

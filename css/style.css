@@ -726,6 +726,23 @@ fieldset.plain legend { padding: 0; margin-bottom: .2rem; }
 .cal-late { color: var(--danger); font-weight: 600; }
 
 /* Tâches d'un projet (dialogue ✅) */
+/* Tutoriel */
+dialog.tuto-dialog { width: min(520px, calc(100vw - 32px)); }
+.tuto-progress { margin: 0; }
+.tuto-head { display: flex; align-items: center; gap: .75rem; }
+.tuto-head h2 { margin: 0; }
+.tuto-icon {
+  flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2); font-size: 1.6rem;
+}
+.tuto-items { margin: 0; padding-left: 1.25rem; min-height: 8.5rem; }
+.tuto-items li { margin-bottom: .5rem; line-height: 1.45; }
+.tuto-items code { word-break: normal; }
+.tuto-dots { display: flex; justify-content: center; gap: .4rem; }
+.tuto-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.tuto-dot.current { background: var(--accent); }
+.tuto-actions { flex-wrap: wrap; }
 dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px)); }
 .tasks-dialog h2 { color: var(--proj); overflow-wrap: anywhere; }
 #form-task { flex-wrap: wrap; }
