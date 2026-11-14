@@ -17,3 +17,8 @@ export const firebaseConfig = {
 // et donner/retirer des accès). Doit être identique à ADMIN_UID dans firestore.rules.
 // Pour le trouver : connecte-toi une fois, il s'affiche sur l'écran "Accès en attente".
 export const ADMIN_UID = "WcAMpEXuhYbQjgeUnIsyMxJsO5f1";
+
+// Clé publique VAPID des notifications push (publique par conception, comme la config ci-dessus).
+// Identique à VAPID_PUBLIC_KEY dans functions/index.js ; la clé privée est un secret de la
+// Cloud Function (voir README). Vide : notifications seulement tant que l'application est ouverte.
+export const VAPID_PUBLIC_KEY = "BGIfDsUMg9u-DlSvdSZZw_X9j586Bf45DJdojiN4a6Z4KBux9iyvPhHOXkQBm4cep8uFBlKBGheZWVJ9UM-OixU";

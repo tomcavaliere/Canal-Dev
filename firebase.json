@@ -6,6 +6,14 @@
   "database": {
     "rules": "database.rules.json"
   },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs24",
+      "ignore": ["node_modules", ".git", "*.local", "*.log"]
+    }
+  ],
   "hosting": {
     "site": "canal-dev-c18d7",
     "public": ".",
@@ -19,6 +27,7 @@
       "**/*.md",
       "**/.*",
       "**/node_modules/**",
+      "functions/**",
       "tests/**",
       "scripts/**",
       "jsconfig.json",

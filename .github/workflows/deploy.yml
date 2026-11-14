@@ -1,4 +1,4 @@
-# Tests à chaque push et pull request ; déploiement (site, règles, index) après un push sur main.
+# Tests à chaque push et pull request ; déploiement (site, règles, index, Cloud Functions) après un push sur main.
 # Secret requis : FIREBASE_SERVICE_ACCOUNT (clé JSON d'un compte de service, voir README).
 name: Tests et déploiement
 
@@ -24,6 +24,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm ci
+      - run: npm ci --prefix functions
       - name: Syntaxe des scripts du site
         run: npm run check
       - name: Lint (ESLint)
@@ -45,7 +46,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Déployer sur Firebase (Hosting + règles + index)
+      - run: npm ci --prefix functions
+      - name: Déployer sur Firebase (Hosting + règles + index + Cloud Functions)
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
@@ -55,5 +57,5 @@ jobs:
           fi
           key="$RUNNER_TEMP/firebase-sa.json"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$key"
-          GOOGLE_APPLICATION_CREDENTIALS="$key" npx firebase deploy --only hosting,firestore,database --project canal-dev-c18d7 --non-interactive
+          GOOGLE_APPLICATION_CREDENTIALS="$key" npx firebase deploy --only hosting,firestore,database,functions --project canal-dev-c18d7 --non-interactive
           rm -f "$key"
