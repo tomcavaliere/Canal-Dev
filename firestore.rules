@@ -351,11 +351,20 @@ service cloud.firestore {
       // Tout membre en ajoute et coche celles qui sont faites (`doneBy` = qui a coché, `doneAt` = quand). Une tâche
       // cochée reste dans la liste : c'est l'historique du projet (le texte d'une tâche terminée ne se modifie plus).
       // Seuls l'auteur et l'admin modifient le texte d'une tâche à faire ou la suppriment.
+      // Responsable (`assignee`, facultatif) : une personne du projet (ou soi-même), nommée à la création ou ensuite par
+      // l'auteur et l'admin. Tout membre peut aussi prendre une tâche sans responsable (« je m'en occupe ») et se retirer
+      // de celle qu'il a prise. Le responsable d'une tâche terminée ne change plus (historique).
       match /tasks/{taskId} {
+        function validAssignee(a) {
+          return a is string && a.matches('[A-Za-z0-9]{1,128}')
+            && (a == request.auth.uid
+              || exists(/databases/$(database)/documents/projects/$(projectId)/members/$(a)));
+        }
         function validTask() {
           let d = request.resource.data;
-          return d.keys().hasOnly(['title', 'done', 'doneBy', 'doneAt', 'createdBy', 'createdAt', 'updatedAt'])
+          return d.keys().hasOnly(['title', 'done', 'doneBy', 'doneAt', 'assignee', 'createdBy', 'createdAt', 'updatedAt'])
             && d.title is string && d.title.size() > 0 && d.title.size() <= 200
+            && (!('assignee' in d) || d.assignee is string)
             && d.done is bool
             && (d.done || (!('doneBy' in d) && !('doneAt' in d)))
             && d.createdBy is string
@@ -373,27 +382,40 @@ service cloud.firestore {
 
         allow read: if canSeeProject(projectId);
         allow create: if canSeeProject(projectId) && validTask()
+          && (!('assignee' in request.resource.data) || validAssignee(request.resource.data.assignee))
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.createdAt == request.time
           && request.resource.data.done == false
           && rateBumped();
-        // Auteur ou admin : modifier le texte d'une tâche encore à faire.
+        // Auteur ou admin : modifier le texte et le responsable d'une tâche encore à faire.
         allow update: if canSeeProject(projectId)
           && (isAdmin() || resource.data.createdBy == request.auth.uid)
           && validTask() && validTaskDoneChange()
-          && (!resource.data.done || request.resource.data.title == resource.data.title)
+          && (!resource.data.done || (request.resource.data.title == resource.data.title
+            && request.resource.data.get('assignee', null) == resource.data.get('assignee', null)))
+          && (request.resource.data.get('assignee', null) == resource.data.get('assignee', null)
+            || !('assignee' in request.resource.data) || validAssignee(request.resource.data.assignee))
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt
           && rateBumped();
-        // Tout membre : cocher ou décocher.
+        // Tout membre : cocher ou décocher, prendre une tâche sans responsable, se retirer de celle qu'il a prise.
         allow update: if canSeeProject(projectId) && validTask() && validTaskDoneChange()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneBy', 'doneAt', 'updatedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneBy', 'doneAt', 'assignee', 'updatedAt'])
+          && (request.resource.data.get('assignee', null) == resource.data.get('assignee', null)
+            || (!resource.data.done && (
+              (!('assignee' in resource.data) && request.resource.data.assignee == request.auth.uid)
+              || (resource.data.get('assignee', '') == request.auth.uid && !('assignee' in request.resource.data)))))
           && rateBumped();
         // Droit à l'effacement : retirer son nom d'une tâche qu'on a cochée (l'admin : celui de n'importe qui).
         allow update: if signedIn()
           && (isAdmin() || resource.data.get('doneBy', '') == request.auth.uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['doneBy'])
           && !('doneBy' in request.resource.data);
+        // Droit à l'effacement : retirer son nom comme responsable (l'admin : celui de n'importe qui).
+        allow update: if signedIn()
+          && (isAdmin() || resource.data.get('assignee', '') == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignee'])
+          && !('assignee' in request.resource.data);
         // Droit à l'effacement : l'auteur supprime ses tâches (l'interface ne le propose que pour celles à faire).
         allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
       }
@@ -623,7 +645,7 @@ service cloud.firestore {
         || (signedIn() && resource.data.uid == request.auth.uid);
     }
     // Calendrier : ses fiches de membre, les réunions qu'on organise ou où l'on est invité
-    // (aussi pour la pastille des invitations), les objectifs et les tâches qu'on a créés ou cochés.
+    // (aussi pour la pastille des invitations), les objectifs et les tâches qu'on a créés ou cochés (et dont on est responsable).
     match /{path=**}/members/{uid} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
     }
@@ -637,7 +659,8 @@ service cloud.firestore {
     }
     match /{path=**}/tasks/{taskId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.createdBy == request.auth.uid
-        || resource.data.get('doneBy', '') == request.auth.uid));
+        || resource.data.get('doneBy', '') == request.auth.uid
+        || resource.data.get('assignee', '') == request.auth.uid));
     }
 
     // Tout le reste est interdit.

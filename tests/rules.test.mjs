@@ -970,6 +970,61 @@ describe("Projet : tâches (todo list)", () => {
     await assertFails(updateDoc(doc(alice(), "projects/p1/tasks/t2"), { doneBy: deleteField() }));
     await assertSucceeds(updateDoc(doc(admin(), "projects/p1/tasks/t2"), { doneBy: deleteField() }));
   });
+  it("on nomme un responsable à la création : une personne du projet ou soi-même, pas un inconnu", async () => {
+    const db = carol();
+    await assertSucceeds(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { assignee: "alice" }))));
+    await clearRate("carol");
+    await assertSucceeds(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { assignee: "carol" }))));
+    await clearRate("carol");
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { assignee: "bob" }))));
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { assignee: 12 }))));
+    await assertFails(rated(db, "carol", (b) => b.set(newTask(db), task("carol", { assignee: "a/b" }))));
+  });
+  it("un membre prend une tâche sans responsable, en son nom seulement", async () => {
+    const db = carol();
+    await assertFails(change(db, "carol", "projects/p1/tasks/t1", { assignee: "alice", ...now() }));
+    await assertSucceeds(change(db, "carol", "projects/p1/tasks/t1", { assignee: "carol", ...now() }));
+  });
+  it("un membre ne reprend pas une tâche déjà prise par un autre", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "projects/p1/tasks/t1"), { assignee: "alice" }));
+    await assertFails(change(carol(), "carol", "projects/p1/tasks/t1", { assignee: "carol", ...now() }));
+    await assertFails(change(carol(), "carol", "projects/p1/tasks/t1", { assignee: deleteField(), ...now() }));
+  });
+  it("on se retire d'une tâche qu'on a prise", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "projects/p1/tasks/t1"), { assignee: "carol" }));
+    await assertSucceeds(change(carol(), "carol", "projects/p1/tasks/t1", { assignee: deleteField(), ...now() }));
+  });
+  it("l'auteur et l'admin changent le responsable d'une tâche à faire, vers une personne du projet", async () => {
+    await assertSucceeds(change(alice(), "alice", "projects/p1/tasks/t1", { assignee: "carol", ...now() }));
+    await clearRate("alice");
+    await assertFails(change(alice(), "alice", "projects/p1/tasks/t1", { assignee: "bob", ...now() }));
+    await assertSucceeds(change(admin(), ADMIN, "projects/p1/tasks/t1", { assignee: deleteField(), ...now() }));
+  });
+  it("le responsable d'une tâche terminée ne change plus", async () => {
+    await seedDone();
+    await assertFails(change(alice(), "alice", "projects/p1/tasks/t2", { assignee: "alice", ...now() }));
+    await assertFails(change(admin(), ADMIN, "projects/p1/tasks/t2", { assignee: "alice", ...now() }));
+    await assertFails(change(carol(), "carol", "projects/p1/tasks/t2", { assignee: "carol", ...now() }));
+  });
+  it("on peut cocher une tâche en la prenant dans le même geste", () =>
+    assertSucceeds(change(carol(), "carol", "projects/p1/tasks/t1", { assignee: "carol", ...finish("carol") })));
+  it("on retrouve ses tâches en tant que responsable et on retire son nom (effacement)", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "projects/p1/tasks/t1"), { assignee: "dave" }));
+    const db = dave();
+    await assertSucceeds(getDocs(query(collectionGroup(db, "tasks"), where("assignee", "==", "dave"))));
+    await assertFails(getDocs(query(collectionGroup(db, "tasks"), where("assignee", "==", "alice"))));
+    await assertFails(updateDoc(doc(db, "projects/p1/tasks/t1"), { assignee: "dave", title: "X" }));
+    await assertSucceeds(updateDoc(doc(db, "projects/p1/tasks/t1"), { assignee: deleteField() }));
+  });
+  it("l'admin retire le nom d'un responsable, un membre non", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "projects/p1/tasks/t1"), { assignee: "dave" }));
+    await assertFails(updateDoc(doc(carol(), "projects/p1/tasks/t1"), { assignee: deleteField() }));
+    await assertSucceeds(updateDoc(doc(admin(), "projects/p1/tasks/t1"), { assignee: deleteField() }));
+  });
   it("on retrouve et supprime ses tâches, même hors du projet", async () => {
     const db = dave();
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "projects/p1/tasks/t4"),
