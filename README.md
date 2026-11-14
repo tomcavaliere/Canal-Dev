@@ -27,6 +27,8 @@ Canal de communication pour suivre le développement d'un outil.
   Une tâche peut avoir un **responsable** : nommé à la création (parmi les membres du projet), ou pris plus tard par n'importe quel membre
   avec « Je m'en occupe » sur une tâche sans responsable (« Me retirer » pour s'en défaire). L'auteur et l'admin peuvent aussi le changer
   tant que la tâche n'est pas terminée.
+  Une tâche peut aussi avoir une **échéance** (facultative) : elle apparaît alors dans le 📅 du projet, dans la grille du mois (✅) et dans la
+  liste du jour, où on peut la cocher ; en retard, elle est signalée en rouge. Dans la liste, les échéances les plus proches passent en premier.
 - Un **tutoriel** en quelques étapes présente l'application : il s'ouvre seul à la première arrivée (une fois par compte et par
   navigateur, mémorisé dans le stockage local) et se rouvre avec le bouton **?** de la barre du haut ou depuis « Mon compte ».
   L'administrateur voit en plus une étape sur l'administration.
@@ -58,7 +60,7 @@ js/search.js            recherche dans les messages chargés
 js/composer.js          saisie, photo jointe, emojis, pouce, envoi
 js/emoji.js             réactions (liste fixe), sélecteur d'emojis, emojis affichés en grand
 js/admin.js             création de conversations, gestion des membres (admin)
-js/calendar.js          calendrier d'un projet : réunions, invitations et réponses, objectifs
+js/calendar.js          calendrier d'un projet : réunions, invitations et réponses, objectifs, tâches à échéance
 js/tasks.js             liste de tâches d'un projet (todo list, historique des tâches terminées)
 js/org.js              organigramme d'un projet : rôles rangés par niveau (lecture)
 js/tickets.js           fiches de membre des projets (accès au calendrier), tenues à jour par l'admin
