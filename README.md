@@ -20,6 +20,10 @@ Canal de communication pour suivre le développement d'un outil.
   chacun y crée des **réunions** et y invite d'autres membres du projet, qui répondent « présent » ou « absent »
   (une pastille sur le 📅 compte les invitations sans réponse), et y ajoute des **objectifs**, avec ou sans échéance,
   que tout membre coche une fois atteints. L'organisateur d'une réunion ou l'auteur d'un objectif (et l'admin) les modifie ou les supprime.
+- Chaque projet a une **liste de tâches** (✅ à côté de son nom), visible de tous ses membres : chacun y ajoute des tâches et coche celles
+  qui sont faites. Une tâche terminée **ne disparaît pas** : elle passe dans « Terminées », la plus récente en premier, avec qui l'a
+  terminée et quand, ce qui garde l'historique du projet (on peut la rouvrir, mais son texte ne se modifie plus). L'auteur d'une tâche
+  (et l'admin) modifie ou supprime une tâche encore à faire.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
@@ -49,6 +53,7 @@ js/composer.js          saisie, photo jointe, emojis, pouce, envoi
 js/emoji.js             réactions (liste fixe), sélecteur d'emojis, emojis affichés en grand
 js/admin.js             création de conversations, gestion des membres (admin)
 js/calendar.js          calendrier d'un projet : réunions, invitations et réponses, objectifs
+js/tasks.js             liste de tâches d'un projet (todo list, historique des tâches terminées)
 js/org.js              organigramme d'un projet : rôles rangés par niveau (lecture)
 js/tickets.js           fiches de membre des projets (accès au calendrier), tenues à jour par l'admin
 js/account.js           « Mon compte » : export et suppression des données (RGPD)
@@ -65,7 +70,7 @@ confidentialite.html    politique de confidentialité
 RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
 firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid, thumbs.authorUid, reads.uid, members.uid,
-                        events.createdBy, events.attendees, goals.createdBy et goals.doneBy, requis pour l'export/la suppression
+                        events.createdBy, events.attendees, goals.createdBy, goals.doneBy, tasks.createdBy et tasks.doneBy, requis pour l'export/la suppression
                         et la pastille des invitations)
 firebase.json           hébergement (en-têtes HTTP, fichiers exclus), règles, index, émulateur des tests
 .firebaserc             projet Firebase par défaut
@@ -100,7 +105,7 @@ Et [database.rules.json](database.rules.json) : **Realtime Database → Règles 
 La CLI déploie aussi [firestore.indexes.json](firestore.indexes.json). Si tu passes par la console, crée l'exemption d'index à la main :
 **Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour les collections `images` et `thumbs`, et pour la collection `reads` avec le champ `uid`.
 Idem pour le calendrier : `members` (champ `uid`), `events` (champ `createdBy`, et champ `attendees` avec « contient un tableau »),
-`goals` (champs `createdBy` et `doneBy`).
+`goals` et `tasks` (champs `createdBy` et `doneBy`).
 Sans ces index, « Télécharger mes données », la suppression de compte et la pastille des invitations aux réunions échouent.
 
 ### 3. Devenir administrateur
