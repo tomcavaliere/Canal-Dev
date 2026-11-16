@@ -1114,6 +1114,65 @@ describe("Projet : tâches (todo list)", () => {
   });
 });
 
+describe("Projet : notes des tâches", () => {
+  const carol = () => as("carol");
+  const note = (uid, text = "Rapport : fait la moitié.") => ({ text, updatedBy: uid, updatedAt: serverTimestamp() });
+  const ref = (db, id = "t1") => doc(db, `projects/p1/notes/${id}`);
+  // Enregistre une note (avec le compteur anti-abus) au nom de `ctx` ; une seule instance par batch.
+  const save = (ctx, uid, data, id = "t1") => {
+    const db = ctx();
+    return rated(db, uid, (w) => w.set(ref(db, id), data));
+  };
+  const seedNote = (id = "t1", by = "alice") => env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), `projects/p1/notes/${id}`), { text: "Début", updatedBy: by, updatedAt: T0 }));
+  const seedDone = (id = "t2") => env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), `projects/p1/tasks/${id}`),
+      { title: "Fait", done: true, doneBy: "carol", doneAt: T0, createdBy: "alice", createdAt: T0, updatedAt: T0 }));
+
+  it("tout membre du projet écrit et réécrit la note d'une tâche à faire", async () => {
+    await assertSucceeds(save(carol, "carol", note("carol")));
+    await assertSucceeds(save(alice, "alice", note("alice", "Suite")));
+  });
+  it("un non-membre ne la lit ni ne l'écrit ; les membres et l'admin la lisent", async () => {
+    await seedNote();
+    await assertFails(getDoc(ref(bob())));
+    await assertFails(save(bob, "bob", note("bob")));
+    await assertSucceeds(getDoc(ref(carol())));
+    await assertSucceeds(getDoc(ref(admin())));
+  });
+  it("sans le compteur anti-abus, au nom d'un autre, trop longue ou avec un champ en plus : refusée", async () => {
+    await assertFails(setDoc(ref(carol()), note("carol")));
+    await assertFails(save(carol, "carol", note("alice")));
+    await assertFails(save(carol, "carol", note("carol", "x".repeat(20001))));
+    await assertFails(save(carol, "carol", { ...note("carol"), title: "x" }));
+    await assertSucceeds(save(carol, "carol", note("carol", "x".repeat(20000))));
+  });
+  it("pas de note sans tâche, ni sur une tâche terminée (figée avec elle)", async () => {
+    await assertFails(save(carol, "carol", note("carol"), "absente"));
+    await seedDone();
+    await assertFails(save(carol, "carol", note("carol"), "t2"));
+  });
+  it("supprimée avec sa tâche, jamais seule (sauf par l'admin)", async () => {
+    await seedNote();
+    await assertFails(deleteDoc(ref(carol())));
+    await assertFails(deleteDoc(ref(alice())));
+    const db = alice();
+    await assertSucceeds(rated(db, "alice", (w) => {
+      w.delete(doc(db, "projects/p1/tasks/t1"));
+      w.delete(ref(db));
+    }));
+    await seedNote("t3");
+    await assertSucceeds(deleteDoc(ref(admin(), "t3")));
+  });
+  it("droit à l'effacement : retirer son nom de la note, retrouver ses notes", async () => {
+    await seedNote("t1", "carol");
+    await assertSucceeds(getDocs(query(collectionGroup(carol(), "notes"), where("updatedBy", "==", "carol"))));
+    await assertFails(getDocs(query(collectionGroup(bob(), "notes"), where("updatedBy", "==", "carol"))));
+    await assertFails(updateDoc(ref(alice()), { updatedBy: deleteField() }));
+    await assertSucceeds(updateDoc(ref(carol()), { updatedBy: deleteField() }));
+  });
+});
+
 describe("Droits RGPD (requêtes sur toutes les conversations)", () => {
   const mine = (db, group, field, uid) => getDocs(query(collectionGroup(db, group), where(field, "==", uid)));
 

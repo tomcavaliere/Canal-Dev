@@ -500,6 +500,35 @@ service cloud.firestore {
         // Droit à l'effacement : l'auteur supprime ses tâches (l'interface ne le propose que pour celles à faire).
         allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
       }
+
+      // ---------- Notes des tâches (une par tâche, même identifiant) ----------
+      // Texte libre (rapport de la tâche). Tout membre du projet l'écrit tant que la tâche est à faire ;
+      // terminée, la note est figée avec elle et reste dans l'historique (rouvrir la tâche la dégèle).
+      // `updatedBy` / `updatedAt` : dernière personne qui l'a enregistrée, et quand.
+      match /notes/{taskId} {
+        function noteTask() {
+          return /databases/$(database)/documents/projects/$(projectId)/tasks/$(taskId);
+        }
+        function validNote() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['text', 'updatedBy', 'updatedAt'])
+            && d.text is string && d.text.size() <= 20000
+            && d.updatedBy == request.auth.uid
+            && d.updatedAt == request.time;
+        }
+
+        allow read: if canSeeProject(projectId);
+        allow create, update: if canSeeProject(projectId)
+          && exists(noteTask()) && get(noteTask()).data.done == false
+          && validNote() && rateBumped();
+        // Droit à l'effacement : retirer son nom de la note (l'admin : celui de n'importe qui).
+        allow update: if signedIn()
+          && (isAdmin() || resource.data.get('updatedBy', '') == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedBy'])
+          && !('updatedBy' in request.resource.data);
+        // Supprimée avec sa tâche (même batch) ; l'admin, toujours.
+        allow delete: if isAdmin() || (signedIn() && !existsAfter(noteTask()));
+      }
     }
 
     // ---------- Conversations ----------
@@ -737,6 +766,9 @@ service cloud.firestore {
     match /{path=**}/goals/{goalId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.createdBy == request.auth.uid
         || resource.data.get('doneBy', '') == request.auth.uid));
+    }
+    match /{path=**}/notes/{noteId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('updatedBy', '') == request.auth.uid);
     }
     match /{path=**}/tasks/{taskId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.createdBy == request.auth.uid
