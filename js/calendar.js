@@ -1124,7 +1124,8 @@ export function listenInvitations() {
   unsubInvites?.();
   invitesLoaded = false;
   const q = query(collectionGroup(db, "events"), where("attendees", "array-contains", uid));
-  unsubInvites = onSnapshot(q, (snap) => {
+  // includeMetadataChanges : être prévenu du passage « cache → serveur » même sans changement.
+  unsubInvites = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
     const next = new Map();
     for (const d of snap.docs) {
       const pid = d.ref.parent.parent?.id;
@@ -1145,7 +1146,9 @@ export function listenInvitations() {
       }
     }
     invites = next;
-    invitesLoaded = true;
+    // Le premier instantané peut venir du cache : les invitations qui arrivent ensuite avec la
+    // réponse du serveur ne sont pas nouvelles.
+    if (!snap.metadata.fromCache) invitesLoaded = true;
     syncNames();
     renderConversationList();
   }, (err) => console.error("Lecture des invitations aux réunions impossible", err));

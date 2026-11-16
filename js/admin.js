@@ -42,10 +42,13 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
   purgeOldLogs();
 
   /* --- Utilisateurs inscrits --- */
-  let usersLoaded = false;
-  const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
+  let usersLoaded = false; // liste complète reçue du serveur
+  // includeMetadataChanges : être prévenu du passage « cache → serveur » même sans changement.
+  const unsubUsers = onSnapshot(collection(db, "users"), { includeMetadataChanges: true }, (snap) => {
     users = new Map(snap.docs.map((d) => [d.id, d.data()]));
-    // Alerte quand quelqu'un se connecte pour la première fois (pas au chargement).
+    // Alerte quand quelqu'un se connecte pour la première fois (pas au chargement). Le premier
+    // instantané peut venir du cache (son propre profil seul) : les comptes qui arrivent ensuite
+    // avec la réponse du serveur ne sont pas nouveaux.
     if (usersLoaded) {
       for (const ch of snap.docChanges()) {
         if (ch.type !== "added" || ch.doc.id === ADMIN_UID) continue;
@@ -58,8 +61,10 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
         });
       }
     }
-    if (!usersLoaded) cleanOrphanRates();
-    usersLoaded = true;
+    if (!usersLoaded && !snap.metadata.fromCache) {
+      usersLoaded = true;
+      cleanOrphanRates(); // sur la liste complète seulement
+    }
     onUsersChanged(); // présence suivie pour tous les inscrits
     renderUsers();
     if ($("dlg-members").open) renderMembers();
