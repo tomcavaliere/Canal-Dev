@@ -627,6 +627,40 @@ dialog::backdrop { background: rgb(0 0 0 / .4); }
 label.check { flex-direction: row; align-items: center; gap: .5rem; }
 label.check input { width: auto; }
 .theme-choice { gap: 1rem; flex-wrap: wrap; }
+
+/* Paramètres (⚙️) : onglets, puis un panneau par rubrique */
+dialog.settings-dialog { width: min(600px, calc(100vw - 32px)); }
+.settings-dialog h2 { margin: 0; }
+.settings-tabs { display: flex; flex-wrap: wrap; gap: .25rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
+.settings-tab {
+  font: inherit; font-size: .88rem; color: var(--muted); background: none; cursor: pointer;
+  border: 1px solid transparent; border-radius: 999px; padding: .3rem .75rem; min-height: 32px;
+}
+.settings-tab:hover { color: var(--text); background: var(--surface-2); }
+.settings-tab[aria-selected="true"] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.settings-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.settings-panel { max-height: 62vh; overflow-y: auto; padding-right: .25rem; }
+.settings-panel h3 { margin: 0; font-size: 1rem; }
+.btn-settings { white-space: nowrap; }
+.grow { flex: 1; margin: 0; }
+@media (max-width: 720px) { .settings-label { display: none; } }
+
+/* Quotas Firebase (paramètres, admins) */
+.quotas { display: flex; flex-direction: column; gap: 1rem; }
+.quota-group { border: 1px solid var(--border); border-radius: 8px; padding: .75rem; }
+.quota + .quota { border-top: 1px solid var(--border); padding-top: .5rem; }
+.quota { display: flex; flex-direction: column; gap: .3rem; }
+.quota-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem .75rem; font-size: .9rem; }
+.quota-value { font-variant-numeric: tabular-nums; color: var(--muted); }
+.quota-bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.quota-bar span { display: block; height: 100%; border-radius: inherit; background: var(--online); }
+.quota-bar.mid span { background: var(--proj-2); }
+.quota-bar.high span { background: var(--danger); }
+.quota-note { margin: 0; }
+.quota-hist-wrap { display: flex; align-items: flex-end; gap: .75rem; }
+.quota-hist { display: flex; align-items: flex-end; gap: 3px; height: 28px; flex: 0 0 auto; }
+.quota-hist span { width: 10px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .75; }
+.quota-hist span.high { background: var(--danger); }
 fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 fieldset.plain legend { padding: 0; margin-bottom: .2rem; }
 .purge-row { padding: .5rem 1rem 0; margin: 0; }

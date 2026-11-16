@@ -1,6 +1,6 @@
 // Tutoriel : quelques étapes qui présentent l'application. Il s'ouvre seul à la première arrivée
-// sur l'application (une fois par compte et par navigateur), puis sur demande (bouton « ? » de la
-// barre du haut, ou « Mon compte »). Le fait de l'avoir vu est gardé dans ce navigateur seulement
+// sur l'application (une fois par compte et par navigateur), puis sur demande (⚙️ Paramètres →
+// Mon compte → « Revoir le tutoriel »). Le fait de l'avoir vu est gardé dans ce navigateur seulement
 // (clé « canal-dev.tutorial.<uid> », effacée avec les autres à la suppression du compte).
 
 import { $ } from "./ui.js";
@@ -89,12 +89,13 @@ const STEPS = [
     ],
   },
   {
-    icon: "🔔",
-    title: "Notifications et compte",
+    icon: "⚙️",
+    title: "Paramètres",
     items: [
-      "🔊 coupe ou remet le son des nouveaux messages ; 🔕 active les notifications, même application fermée (sur iPhone : après l'ajout à l'écran d'accueil).",
+      "⚙️ en haut à droite ouvre les paramètres : ton compte, le tutoriel, le téléchargement ou la suppression de tes données.",
+      "« Notifications » coupe ou remet le son des nouveaux messages et active les notifications, même application fermée (sur iPhone : après l'ajout à l'écran d'accueil).",
+      "« Apparence » règle le thème clair ou sombre ; « Confidentialité », les accusés de lecture et la présence « en ligne ».",
       "Canal Dev s'installe comme une application depuis le menu de ton navigateur.",
-      "« Mon compte » règle le thème clair ou sombre, les accusés de lecture et la présence « en ligne », et permet de télécharger ou supprimer tes données.",
     ],
   },
 ];
@@ -195,11 +196,10 @@ export function maybeShowTutorial() {
   openTutorial();
 }
 
-// Bouton « ? » de la barre du haut.
+// Bouton « Revoir le tutoriel » des paramètres (⚙️ → Mon compte).
 export function initTutorial() {
-  $("btn-help").addEventListener("click", openTutorial);
   $("btn-account-tutorial").addEventListener("click", () => {
-    /** @type {HTMLDialogElement} */ ($("dlg-account")).close();
+    /** @type {HTMLDialogElement} */ ($("dlg-settings")).close();
     openTutorial();
   });
 }

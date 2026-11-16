@@ -278,7 +278,7 @@ function download(filename, data) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/* ---------- Dialogue « Mon compte » ---------- */
+/* ---------- Paramètres : « Mon compte », « Apparence », « Confidentialité » (voir settings.js) ---------- */
 
 // Thème : voir js/theme.js, qui l'applique dès le chargement de la page.
 const THEME_KEY = "canal-dev.theme";
@@ -296,14 +296,15 @@ function changeTheme(e) {
   } catch { /* stockage indisponible : le choix vaut pour cette session */ }
 }
 
-function setStatus(msg, isError = false) {
+export function setStatus(msg, isError = false) {
   $("account-status").textContent = msg;
   $("account-status").classList.toggle("error", isError);
 }
 
-function openAccount() {
+// Remplit les panneaux « Mon compte », « Apparence » et « Confidentialité » à l'ouverture des paramètres.
+export function fillAccount() {
   const user = auth.currentUser;
-  if (!user) return;
+  if (!user) return false;
   $("account-email").textContent = user.email;
   $("account-name").textContent = "…";
   getDoc(doc(db, "names", user.uid))
@@ -316,9 +317,9 @@ function openAccount() {
   $("no-presence").checked = state.noPresence;
   setStatus("");
   /** @type {HTMLInputElement | null} */
-  const theme = document.querySelector(`#dlg-account input[name="theme"][value="${currentTheme()}"]`);
+  const theme = document.querySelector(`#dlg-settings input[name="theme"][value="${currentTheme()}"]`);
   if (theme) theme.checked = true;
-  $("dlg-account").showModal();
+  return true;
 }
 
 // Réglage « Ne pas envoyer d'accusés de lecture » (profil), avec effacement des accusés existants.
@@ -438,7 +439,7 @@ async function deleteAccount() {
     await purgeUserData(user.uid, user.email);
     await deleteUser(user);
     clearLocalData();
-    $("dlg-account").close();
+    $("dlg-settings").close();
     toast("Ton compte et toutes tes données ont été supprimés.", { timeout: 15000 });
   } catch (err) {
     console.error(err);
@@ -455,10 +456,9 @@ async function deleteAccount() {
 }
 
 export function initAccount() {
-  document.querySelectorAll(".btn-account").forEach((b) => b.addEventListener("click", openAccount));
   $("btn-export").addEventListener("click", exportData);
   $("btn-delete-account").addEventListener("click", deleteAccount);
   $("no-receipts").addEventListener("change", toggleReceipts);
   $("no-presence").addEventListener("change", togglePresence);
-  document.querySelectorAll('#dlg-account input[name="theme"]').forEach((r) => r.addEventListener("change", changeTheme));
+  document.querySelectorAll('#dlg-settings input[name="theme"]').forEach((r) => r.addEventListener("change", changeTheme));
 }

@@ -7,12 +7,12 @@ import {
   arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch,
 } from "./sdk/firebase-firestore.js";
 import { initAccount } from "./account.js";
+import { initSettings, renderNotifSetting } from "./settings.js";
 import { initTutorial, maybeShowTutorial } from "./tutorial.js";
 import { ADMIN_UID, auth, db, GMAIL_RE, isConfigured } from "./firebase.js";
 import { displayText, startNames, stopNames, watchNames } from "./names.js";
-import { endPush, notificationState, pushActive, registerServiceWorker, startPush, toggleNotifications } from "./notify.js";
+import { endPush, registerServiceWorker, startPush } from "./notify.js";
 import { isOnline, startPresence, stopPresence, watchPresence } from "./presence.js";
-import { isSoundEnabled, setSoundEnabled } from "./sound.js";
 import { $, initials } from "./ui.js";
 import { clearAttachment } from "./composer.js";
 import { renderLinks } from "./links.js";
@@ -56,6 +56,7 @@ if (!isConfigured) {
   $("btn-login").addEventListener("click", login);
   document.querySelectorAll(".btn-logout").forEach((b) => b.addEventListener("click", logout));
   initAccount();
+  initSettings();
   initTutorial();
   registerServiceWorker(openFromNotification);
   onAuthStateChanged(auth, onAuth);
@@ -146,7 +147,7 @@ async function startSession(user, id) {
   current();
   fillUserHeader(user);
   startPresence(user.uid, { hide: state.noPresence, onChange: renderPresence });
-  startPush(user.uid).then(renderNotifButton);
+  startPush(user.uid).then(renderNotifSetting);
 
   if (state.isAdmin) {
     const { setupAdmin } = await import("./admin.js");
@@ -616,38 +617,3 @@ export function openProjectCalendar(projectId) {
   $("screen-app").classList.add("show-chat");
   openCalendar(projectId);
 }
-
-function renderSoundButton() {
-  const on = isSoundEnabled();
-  const b = $("btn-sound");
-  b.textContent = on ? "🔊" : "🔇";
-  b.setAttribute("aria-pressed", String(on));
-  b.title = on ? "Son des nouveaux messages activé (cliquer pour couper)" : "Son des nouveaux messages coupé (cliquer pour activer)";
-  b.setAttribute("aria-label", b.title);
-}
-$("btn-sound").addEventListener("click", () => {
-  setSoundEnabled(!isSoundEnabled());
-  renderSoundButton();
-});
-renderSoundButton();
-
-const NOTIF_TITLES = {
-  push: "Notifications activées, même application fermée (cliquer pour les couper)",
-  on: "Notifications activées tant que l'application est ouverte (cliquer pour les couper)",
-  off: "Notifications coupées (cliquer pour les activer)",
-  denied: "Notifications bloquées : autorise-les dans les réglages du site de ton navigateur",
-};
-function renderNotifButton() {
-  const st = notificationState();
-  const b = $("btn-notif");
-  b.hidden = st === "unsupported";
-  b.textContent = st === "on" ? "🔔" : "🔕";
-  b.setAttribute("aria-pressed", String(st === "on"));
-  b.title = NOTIF_TITLES[st === "on" && pushActive() ? "push" : st] || "";
-  b.setAttribute("aria-label", b.title);
-}
-$("btn-notif").addEventListener("click", async () => {
-  await toggleNotifications();
-  renderNotifButton();
-});
-renderNotifButton();

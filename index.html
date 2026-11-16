@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://www.gstatic.com https://*.europe-west1.firebasedatabase.app wss://*.europe-west1.firebasedatabase.app; frame-src https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://europe-west1-canal-dev-c18d7.cloudfunctions.net https://www.gstatic.com https://*.europe-west1.firebasedatabase.app wss://*.europe-west1.firebasedatabase.app; frame-src https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="no-referrer">
   <title>Canal Dev</title>
   <meta name="theme-color" content="#2f6fde">
@@ -44,7 +44,7 @@
       <p class="muted small">Identifiant : <code id="pending-uid"></code></p>
       <p id="pending-error" class="error" hidden></p>
       <div class="row wrap">
-        <button class="btn btn-account">Mon compte et mes données</button>
+        <button class="btn btn-settings" type="button">Mon compte et mes données</button>
         <button class="btn btn-logout">Se déconnecter</button>
       </div>
       <p class="muted small legal"><a href="confidentialite.html">Politique de confidentialité</a></p>
@@ -61,11 +61,8 @@
       <span id="admin-badge" class="badge" hidden>Admin</span>
       <span id="user-avatar" class="avatar" aria-hidden="true"></span>
       <span id="user-name" class="user-name"></span>
-      <button id="btn-sound" class="btn small" type="button" aria-pressed="true">🔊</button>
-      <button id="btn-notif" class="btn small" type="button" aria-pressed="false" hidden>🔕</button>
-      <button id="btn-help" class="btn small" type="button" title="Revoir le tutoriel"
-        aria-label="Revoir le tutoriel" aria-haspopup="dialog">?</button>
-      <button class="btn small btn-account">Mon compte</button>
+      <button class="btn small btn-settings" type="button" title="Paramètres : compte, notifications, apparence…"
+        aria-haspopup="dialog"><span aria-hidden="true">⚙️</span><span class="settings-label"> Paramètres</span></button>
       <button class="btn small btn-logout">Déconnexion</button>
     </header>
 
@@ -629,23 +626,28 @@
     </div>
   </dialog>
 
-  <!-- Dialogue : mon compte (droits RGPD) -->
-  <dialog id="dlg-account">
+  <!-- Dialogue : paramètres (compte et droits RGPD, notifications, apparence, confidentialité, quotas) -->
+  <dialog id="dlg-settings" class="settings-dialog" aria-labelledby="settings-title">
     <div class="stack">
-      <h2>Mon compte</h2>
+      <h2 id="settings-title">Paramètres</h2>
+      <div class="settings-tabs" role="tablist" aria-label="Rubriques des paramètres">
+        <button id="tab-account" class="settings-tab" type="button" role="tab" aria-controls="panel-account"
+          data-tab="account">👤 Mon compte</button>
+        <button id="tab-notifications" class="settings-tab" type="button" role="tab" aria-controls="panel-notifications"
+          data-tab="notifications">🔔 Notifications</button>
+        <button id="tab-appearance" class="settings-tab" type="button" role="tab" aria-controls="panel-appearance"
+          data-tab="appearance">🎨 Apparence</button>
+        <button id="tab-privacy" class="settings-tab" type="button" role="tab" aria-controls="panel-privacy"
+          data-tab="privacy">🔒 Confidentialité</button>
+        <button id="tab-quotas" class="settings-tab" type="button" role="tab" aria-controls="panel-quotas"
+          data-tab="quotas" hidden>📊 Quotas</button>
+      </div>
+
+      <!-- Mon compte -->
+      <div id="panel-account" class="settings-panel stack" role="tabpanel" aria-labelledby="tab-account">
       <p class="small">Connecté avec <strong id="account-email"></strong><br>
         Nom affiché aux autres membres : <strong id="account-name"></strong>
         <span class="muted">(fixé par l'administrateur, qui le corrige sur demande)</span></p>
-
-      <fieldset class="stack tight plain">
-        <legend><h3>Apparence</h3></legend>
-        <div class="row theme-choice">
-          <label class="check"><input type="radio" name="theme" value="auto"> Automatique</label>
-          <label class="check"><input type="radio" name="theme" value="light"> Clair</label>
-          <label class="check"><input type="radio" name="theme" value="dark"> Sombre</label>
-        </div>
-        <p class="muted small">« Automatique » suit le réglage de ton appareil. Ce choix est gardé dans ce navigateur.</p>
-      </fieldset>
 
       <section class="stack tight">
         <h3>Tutoriel</h3>
@@ -660,20 +662,6 @@
         <div><button id="btn-export" class="btn">Télécharger mes données</button></div>
       </section>
 
-      <section class="stack tight">
-        <h3>Accusés de lecture</h3>
-        <label class="check"><input id="no-receipts" type="checkbox"> Ne pas envoyer d'accusés de lecture</label>
-        <p class="muted small">Les autres membres ne verront plus « Vu par » pour toi, et tes accusés existants sont
-          supprimés. Tes messages non lus ne seront alors plus synchronisés entre tes appareils.</p>
-      </section>
-
-      <section class="stack tight">
-        <h3>Présence</h3>
-        <label class="check"><input id="no-presence" type="checkbox"> Masquer ma présence « en ligne »</label>
-        <p class="muted small">Les autres membres ne verront plus quand tu as l'application ouverte.
-          Aucun historique n'est gardé : seule l'information « ouvert en ce moment » existe.</p>
-      </section>
-
       <section id="account-delete" class="stack tight">
         <h3>Supprimer mon compte</h3>
         <p class="muted small">Supprime définitivement ton profil, tous tes messages et photos, tes réunions, objectifs et tâches, tes accès
@@ -686,10 +674,69 @@
       </section>
       <p id="account-admin-note" class="muted small" hidden>Le compte administrateur ne peut pas être
         supprimé depuis l'application (voir RGPD.md).</p>
+      </div>
+
+      <!-- Notifications -->
+      <div id="panel-notifications" class="settings-panel stack" role="tabpanel" aria-labelledby="tab-notifications" hidden>
+        <section class="stack tight">
+          <h3>Son</h3>
+          <label class="check"><input id="set-sound" type="checkbox"> Jouer un son à l'arrivée d'un message</label>
+          <p class="muted small">Réglage gardé dans ce navigateur.</p>
+        </section>
+        <section class="stack tight">
+          <h3>Notifications</h3>
+          <label class="check"><input id="set-notif" type="checkbox"> Afficher une notification pour chaque nouveau message</label>
+          <p id="notif-status" class="muted small"></p>
+          <p class="muted small">Sur iPhone et iPad, ajoute d'abord Canal Dev à l'écran d'accueil (iOS 16.4 ou plus).
+            Le réglage vaut pour cet appareil seulement.</p>
+        </section>
+      </div>
+
+      <!-- Apparence -->
+      <div id="panel-appearance" class="settings-panel stack" role="tabpanel" aria-labelledby="tab-appearance" hidden>
+        <fieldset class="stack tight plain">
+          <legend><h3>Thème</h3></legend>
+          <div class="row theme-choice">
+            <label class="check"><input type="radio" name="theme" value="auto"> Automatique</label>
+            <label class="check"><input type="radio" name="theme" value="light"> Clair</label>
+            <label class="check"><input type="radio" name="theme" value="dark"> Sombre</label>
+          </div>
+          <p class="muted small">« Automatique » suit le réglage de ton appareil. Ce choix est gardé dans ce navigateur.</p>
+        </fieldset>
+      </div>
+
+      <!-- Confidentialité -->
+      <div id="panel-privacy" class="settings-panel stack" role="tabpanel" aria-labelledby="tab-privacy" hidden>
+        <section class="stack tight">
+          <h3>Accusés de lecture</h3>
+          <label class="check"><input id="no-receipts" type="checkbox"> Ne pas envoyer d'accusés de lecture</label>
+          <p class="muted small">Les autres membres ne verront plus « Vu par » pour toi, et tes accusés existants sont
+            supprimés. Tes messages non lus ne seront alors plus synchronisés entre tes appareils.</p>
+        </section>
+        <section class="stack tight">
+          <h3>Présence</h3>
+          <label class="check"><input id="no-presence" type="checkbox"> Masquer ma présence « en ligne »</label>
+          <p class="muted small">Les autres membres ne verront plus quand tu as l'application ouverte.
+            Aucun historique n'est gardé : seule l'information « ouvert en ce moment » existe.</p>
+        </section>
+        <p class="muted small">Pour toute autre demande (rectification, limitation, opposition) :
+          voir la <a href="confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>.</p>
+      </div>
+
+      <!-- Quotas Firebase (admins) -->
+      <div id="panel-quotas" class="settings-panel stack" role="tabpanel" aria-labelledby="tab-quotas" hidden>
+        <div class="row">
+          <p class="muted small grow">Consommation des quotas gratuits du plan Blaze (au-delà, c'est facturé).
+            Les compteurs ont quelques minutes de retard ; certains stockages ne sont relevés qu'une fois par jour.</p>
+          <button id="btn-quotas-refresh" class="btn small" type="button">Actualiser</button>
+        </div>
+        <div id="quotas-body" class="quotas" aria-live="polite"></div>
+        <p class="muted small">Détail et facturation :
+          <a href="https://console.firebase.google.com/project/canal-dev-c18d7/usage" target="_blank" rel="noopener">console Firebase</a>
+          · <a href="https://console.cloud.google.com/billing/linkedaccount?project=canal-dev-c18d7" target="_blank" rel="noopener">facturation</a></p>
+      </div>
 
       <p id="account-status" class="small" role="status"></p>
-      <p class="muted small">Pour toute autre demande (rectification, limitation, opposition) :
-        voir la <a href="confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>.</p>
       <div class="row end">
         <button type="button" class="btn" data-close>Fermer</button>
       </div>

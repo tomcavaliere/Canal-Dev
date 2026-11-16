@@ -7,7 +7,7 @@ Canal de communication pour suivre le développement d'un outil.
 - Seul l'administrateur crée/supprime les conversations et ajoute/retire des membres.
 - Liste triée par dernière activité, non-lus synchronisés entre appareils, messages paginés par 100,
   recherche dans les messages chargés, modification de ses messages, liens et `code` mis en forme.
-- Installable comme application (PWA). **Notifications** des nouveaux messages (🔔 dans la barre du haut), **même application
+- Installable comme application (PWA). **Notifications** des nouveaux messages (⚙️ Paramètres → Notifications), **même application
   fermée** : une Cloud Function envoie une notification push aux appareils des autres membres (et des admins). Sur iPhone et iPad,
   il faut d'abord ajouter Canal Dev à l'écran d'accueil (iOS 16.4 ou plus). Sans push (navigateur trop ancien), les notifications
   s'affichent tant que l'application est ouverte.
@@ -45,8 +45,12 @@ Canal de communication pour suivre le développement d'un outil.
   Le nombre de **tâches ouvertes** s'affiche en pastille sur le ✅ de chaque projet dans la barre latérale (en couleur quand certaines
   te sont assignées, « 100+ » au-delà de 100).
 - Un **tutoriel** en quelques étapes présente l'application : il s'ouvre seul à la première arrivée (une fois par compte et par
-  navigateur, mémorisé dans le stockage local) et se rouvre avec le bouton **?** de la barre du haut ou depuis « Mon compte ».
+  navigateur, mémorisé dans le stockage local) et se rouvre depuis ⚙️ Paramètres → Mon compte.
   L'administrateur voit en plus une étape sur l'administration.
+- Un dialogue **⚙️ Paramètres** (barre du haut) regroupe, en onglets : **Mon compte** (tutoriel, export et suppression des
+  données), **Notifications** (son, notifications), **Apparence** (thème), **Confidentialité** (accusés de lecture, présence)
+  et, pour les administrateurs, **Quotas** : consommation des quotas gratuits Firebase (Firestore par jour avec les 7 derniers
+  jours, Realtime Database, Hosting, Cloud Functions), lue dans Cloud Monitoring par la fonction `firebaseUsage`.
 - Un utilisateur connecté sans accès voit un écran « Accès en attente » et apparaît dans la liste « Utilisateurs » de l'admin.
 - Un **journal d'activité** (bouton **Journal** dans « Utilisateurs », réservé aux admins) liste qui a fait quoi et quand :
   projets et conversations créés, modifiés, déplacés ou supprimés, membres ajoutés ou retirés, invitations, noms affichés,
@@ -85,15 +89,16 @@ js/tasks.js             liste de tâches d'un projet (todo list, historique des 
 js/log.js               journal d'activité : écriture des entrées, dialogue « Journal » (admins), purge à 12 mois
 js/org.js              organigramme d'un projet : rôles rangés par niveau (lecture)
 js/tickets.js           fiches de membre des projets (accès au calendrier), tenues à jour par l'admin
-js/tutorial.js          tutoriel : première arrivée, puis bouton « ? » et « Mon compte »
-js/account.js           « Mon compte » : export et suppression des données (RGPD)
+js/tutorial.js          tutoriel : première arrivée, puis ⚙️ Paramètres → Mon compte
+js/settings.js          dialogue ⚙️ Paramètres : onglets, son et notifications, quotas Firebase (admins)
+js/account.js           « Mon compte », apparence et confidentialité : export et suppression des données (RGPD)
 js/names.js             annuaire des noms affichés (names/{uid}, écrit par l'admin seul)
 js/ui.js                helpers d'affichage (avatar à initiales)
 js/dialogs.js           dialogue de confirmation et messages brefs (remplacent alert/confirm)
 js/richtext.js          liens cliquables et code dans les messages
 js/links.js             liens attachés à une conversation (barre au-dessus de la saisie) ; validation des liens de projet
 js/pinned.js            messages épinglés par l'admin (barre sous l'en-tête de la conversation)
-js/notify.js            notifications (bouton 🔔), enregistrement du service worker, abonnement push à la connexion
+js/notify.js            notifications (⚙️ → Notifications), enregistrement du service worker, abonnement push à la connexion
 js/push.js              abonnement Web Push de l'appareil (users/{uid}/push/{id})
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting
@@ -112,8 +117,10 @@ jsconfig.json           vérification des types par tsc (JSDoc)
 scripts/test-rules.sh   lance l'émulateur Firestore et les tests
 tests/rules.test.mjs    tests des règles de sécurité
 tests/functions.test.mjs tests de la Cloud Function (fonctions pures, configuration identique au site)
-functions/              Cloud Functions (Node 24, europe-west1) : notification push de chaque nouveau message
-  index.js              déclencheur Firestore et envoi Web Push (clés VAPID)
+tests/usage.test.mjs    tests du relevé des quotas (Cloud Monitoring simulé)
+functions/              Cloud Functions (Node 24, europe-west1) : notification push de chaque nouveau message, quotas
+  index.js              déclencheur Firestore et envoi Web Push (clés VAPID) ; fonction appelable `firebaseUsage`
+  usage.js              relevé des quotas dans Cloud Monitoring
   push-utils.js         destinataires, texte, adresses autorisées des services de push
 ```
 
@@ -194,12 +201,24 @@ Cloud Secret Manager, jamais dans le dépôt. Mise en place, une fois :
 Changer de clés : `npx web-push generate-vapid-keys` (dans `functions/`), mets la clé publique aux deux endroits et la
 clé privée dans le secret, puis déploie. Chaque appareil se réabonne avec la nouvelle clé à sa prochaine ouverture.
 
-Côté appareil : 🔔 active les notifications ; l'appareil s'abonne et enregistre son abonnement (adresse du service de push
+Côté appareil : ⚙️ Paramètres → Notifications les active ; l'appareil s'abonne et enregistre son abonnement (adresse du service de push
 du navigateur et clés de chiffrement) dans `users/{uid}/push/{id}`. Il est retiré quand on coupe les notifications, à la
 déconnexion, à la suppression du compte, ou par la fonction quand le navigateur le déclare expiré. Quand l'application est au
 premier plan, elle prévient elle-même et le service worker n'affiche rien (sauf Safari, qui l'exige).
 Chaque notification reçue application fermée augmente la **pastille** de l'icône (iPhone, Android, ordinateur) ;
 à l'ouverture, l'application la remplace par le nombre exact de messages non lus.
+
+### 6 bis. Quotas (⚙️ Paramètres → Quotas, admins)
+La fonction appelable `firebaseUsage` ([functions/usage.js](functions/usage.js)) lit la consommation dans **Cloud Monitoring**
+(lecture gratuite) : elle vérifie que l'appelant est administrateur et garde son relevé une minute. Mise en place, une fois :
+1. Google Cloud Console → **API et services** : vérifie que l'*API Cloud Monitoring* est activée.
+2. **IAM** : donne le rôle *Lecteur Monitoring* (`roles/monitoring.viewer`) au compte de service des fonctions
+   (par défaut `259632246117-compute@developer.gserviceaccount.com`). Sans lui, l'onglet affiche « accès refusé ».
+
+Les seuils affichés sont les quotas gratuits du plan Blaze ([tarifs](https://firebase.google.com/pricing)) : Firestore
+50 000 lectures, 20 000 écritures et 20 000 suppressions par jour (remis à zéro à minuit, heure du Pacifique) et 1 Gio stocké ;
+Realtime Database 1 Go stocké et 10 Go téléchargés par mois ; Hosting 10 Go stockés et 10 Go transférés par mois ;
+Cloud Functions 2 millions d'appels par mois. Ils sont définis dans `QUOTAS` ([functions/usage.js](functions/usage.js)).
 
 ### 7. Quitter GitHub Pages
 Une fois le site en ligne sur web.app, laisse GitHub Pages actif quelque temps : [js/redirect.js](js/redirect.js)
@@ -271,7 +290,7 @@ Le détail est dans [RGPD.md](RGPD.md) (registre, base légale, procédures) et 
 - [x] Déployer site, règles **et** index (`npm run deploy`, ou automatiquement par la CI).
 
 Au quotidien :
-- Un utilisateur exporte ou supprime ses données depuis **Mon compte**.
+- Un utilisateur exporte ou supprime ses données depuis **⚙️ Paramètres → Mon compte**.
 - La section « Utilisateurs » signale les personnes **en attente** d'accès (son et notification à leur première connexion).
 - Tous les trimestres, annuler les invitations marquées **« > 3 mois »** et supprimer les comptes marqués **« inactif > 12 mois »** (bouton **« Supprimer N comptes inactifs »** sous la liste) (✕ dans « Utilisateurs »), puis le compte correspondant dans **Authentication → Users**. Y supprimer aussi les comptes absents de « Utilisateurs » (voir [RGPD.md](RGPD.md#6-conservation--procédure)).
 - Une demande par email (opposition, effacement…) : répondre sous 1 mois, voir [RGPD.md](RGPD.md#4-exercice-des-droits-art-12-à-22).
