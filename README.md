@@ -30,6 +30,10 @@ Canal de communication pour suivre le développement d'un outil.
   Une tâche peut avoir un **responsable** : nommé à la création (parmi les membres du projet), ou pris plus tard par n'importe quel membre
   avec « Je m'en occupe » sur une tâche sans responsable (« Me retirer » pour s'en défaire). L'auteur et l'admin peuvent aussi le changer
   tant que la tâche n'est pas terminée.
+  Chaque tâche a une **note** (📝 sous la tâche) : un texte libre pour en écrire le rapport (avancement, décisions, problèmes).
+  Tout membre du projet l'écrit tant que la tâche est en cours ; on voit qui l'a modifiée en dernier et quand. Une fois la tâche
+  terminée, la note se lit sans se modifier et reste dans l'historique (rouvrir la tâche permet de la compléter). « Copier » la
+  reprend ailleurs. Elle est supprimée avec sa tâche.
   Toutes les tâches apparaissent dans le 📅 du projet : un **trait** va du jour de leur création jusqu'à aujourd'hui (et s'allonge d'un jour
   chaque jour tant qu'elles sont ouvertes), avec une **pastille** au bout ; une tâche terminée s'arrête au jour où elle l'a été (en vert).
   La liste du jour dit depuis combien de temps elle est ouverte et permet de la cocher.
