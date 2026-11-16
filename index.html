@@ -493,6 +493,23 @@
         <button type="button" class="btn" data-close>Annuler</button>
         <button id="task-edit-submit" type="submit" class="btn primary">Enregistrer</button>
       </div>
+  <!-- Dialogue : note d'une tâche (rapport en texte libre) -->
+  <dialog id="dlg-task-note">
+    <form id="form-task-note" class="stack">
+      <h2 id="task-note-title">Note</h2>
+      <p id="task-note-meta" class="muted small"></p>
+      <textarea id="task-note-text" rows="14" maxlength="20000" aria-label="Texte de la note"
+        placeholder="Avancement, décisions, problèmes rencontrés… (texte libre)"></textarea>
+      <p id="task-note-error" class="error small" role="alert" hidden></p>
+      <div class="row end">
+        <button id="task-note-copy" type="button" class="btn">Copier</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Fermer</button>
+        <button id="task-note-save" type="submit" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
     </form>
   </dialog>
 

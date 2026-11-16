@@ -145,7 +145,7 @@ async function writeAllTickets(expected) {
  * @param {string} projectId
  */
 export async function deleteProjectCalendar(projectId) {
-  for (const sub of ["events", "goals", "tasks", "members"]) {
+  for (const sub of ["events", "goals", "tasks", "notes", "members"]) {
     const snap = await getDocs(collection(db, "projects", projectId, sub));
     for (let i = 0; i < snap.docs.length; i += 400) {
       const batch = writeBatch(db);

@@ -845,6 +845,19 @@ dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px
   /* Sur petit écran, les réunions d'un jour se lisent sous la grille : un point suffit dans la case. */
   .cal-chips { display: none; }
   .cal-grid.week .cal-cell { height: 12rem; text-align: left; }
+.task-actions { grid-column: 1; display: flex; flex-wrap: wrap; gap: .4rem; margin: .2rem 0 0 1.6rem; }
+.task-actions .task-take { margin: 0; }
+.task-note {
+  padding: 0 .5rem; min-height: 24px;
+  background: none; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); cursor: pointer;
+  font: inherit; font-size: .78rem;
+}
+.task-note.has-note { color: var(--accent); border-color: var(--accent); }
+.task-note:hover { color: var(--accent); border-color: var(--accent); }
+.task-note:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#dlg-task-note { width: min(640px, calc(100vw - 32px)); }
+#task-note-text { width: 100%; min-height: 40vh; resize: vertical; font: inherit; line-height: 1.45; }
+#task-note-text[readonly] { background: var(--surface-2, transparent); }
   .cal-daynum.has-items { position: relative; }
   .cal-daynum.has-items::after {
     content: ""; position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);

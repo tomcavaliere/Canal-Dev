@@ -9,6 +9,8 @@
 //   - Une tâche peut avoir une échéance : elle apparaît alors dans le calendrier du projet (calendar.js), où on
 //     peut aussi la cocher.
 //   - Le nombre de tâches ouvertes de chaque projet est suivi en permanence et affiché sur le bouton ✅ (sidebar.js).
+//   - Chaque tâche a une note en texte libre (projects/{p}/notes/{id}, même identifiant), pour en écrire le
+//     rapport : tout membre l'écrit tant que la tâche est à faire ; terminée, elle se lit sans se modifier.
 // La liste s'ouvre dans un dialogue (bouton ✅ d'un projet, barre latérale).
 import {
   collection, deleteField, doc, limit, onSnapshot, orderBy, query, serverTimestamp, where, writeBatch,
@@ -57,6 +59,9 @@ let pid = null;
 let tasks = new Map();
 let unsub = /** @type {null | (() => void)} */ (null);
 let unsubMembers = /** @type {null | (() => void)} */ (null);
+let unsubNotes = /** @type {null | (() => void)} */ (null);
+/** @type {Map<string, any>} id de la tâche -> note */
+let notes = new Map();
 /** @type {Set<string>} personnes du projet (fiches de membre), proposées comme responsables */
 let members = new Set();
 let editingId = /** @type {string | null} */ (null);
@@ -71,6 +76,8 @@ function stop() {
   unsub = null;
   unsubMembers?.();
   unsubMembers = null;
+  unsubNotes?.();
+  unsubNotes = null;
 }
 
 /**
@@ -84,6 +91,7 @@ export async function openTasks(projectId) {
     stop();
     pid = projectId;
     tasks = new Map();
+    notes = new Map();
     members = new Set();
     showError("");
     $("task-new").value = "";
@@ -105,6 +113,11 @@ export async function openTasks(projectId) {
     syncNames();
     render();
   }, (err) => console.error("Lecture des membres du projet impossible", err));
+  unsubNotes = onSnapshot(collection(db, "projects", projectId, "notes"), (snap) => {
+    notes = new Map(snap.docs.map((d) => [d.id, d.data({ serverTimestamps: "estimate" })]));
+    render();
+    renderNote();
+  }, (err) => console.error("Lecture des notes impossible", err));
   unsub = onSnapshot(
     query(collection(db, "projects", projectId, "tasks"), orderBy("createdAt", "desc"), limit(MAX_TASKS)),
     (snap) => {
@@ -112,6 +125,7 @@ export async function openTasks(projectId) {
       showError("");
       syncNames();
       render();
+      renderNote();
     },
     (err) => {
       console.error("Lecture des tâches impossible", err);
@@ -125,8 +139,10 @@ $("dlg-tasks").addEventListener("close", () => {
   stop();
   pid = null;
   tasks = new Map();
+  notes = new Map();
   members = new Set();
   if ($("dlg-task").open) $("dlg-task").close();
+  if ($("dlg-task-note").open) $("dlg-task-note").close();
 });
 
 // Personnes à suivre dans l'annuaire des noms (app.js, syncNames) : auteurs et personnes qui ont coché.
@@ -137,6 +153,7 @@ export function taskUids() {
     if (typeof t.doneBy === "string") uids.add(t.doneBy);
     if (typeof t.assignee === "string") uids.add(t.assignee);
   }
+  for (const n of notes.values()) if (typeof n.updatedBy === "string") uids.add(n.updatedBy);
   return uids;
 }
 
@@ -229,7 +246,9 @@ export function teardownTasks() {
   pid = null;
   stop();
   tasks = new Map();
+  notes = new Map();
   members = new Set();
+  drafts.clear(); // brouillons du compte qui se déconnecte
 }
 
 /* ---------- Affichage ---------- */
@@ -327,6 +346,8 @@ function taskItem(id, t) {
   parts.forEach((p, i) => meta.append(i ? " · " : "", p));
   if (parts.length) li.append(meta);
 
+  const actions = document.createElement("div");
+  actions.className = "task-actions";
   // Tâche libre : « Je m'en occupe ». Tâche qu'on a prise : on peut s'en retirer.
   if (!done && (!assignee || assignee === me())) {
     const take = document.createElement("button");
@@ -335,8 +356,20 @@ function taskItem(id, t) {
     take.textContent = assignee ? "Me retirer" : "Je m'en occupe";
     take.title = assignee ? `Ne plus être responsable de « ${t.title} »` : `Devenir responsable de « ${t.title} »`;
     take.addEventListener("click", () => setAssignee(id, assignee ? null : me(), take));
-    li.append(take);
+    actions.append(take);
   }
+  // Note : à écrire tant que la tâche est à faire ; terminée, seulement si elle en a une (lecture).
+  const hasNote = Boolean(noteText(notes.get(id)));
+  if (!done || hasNote) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "task-note" + (hasNote ? " has-note" : "");
+    btn.textContent = hasNote ? "📝 Note" : "📝 Ajouter une note";
+    btn.title = (hasNote ? "Ouvrir la note de " : "Écrire une note sur ") + `« ${t.title} »`;
+    btn.addEventListener("click", () => openNote(id));
+    actions.append(btn);
+  }
+  if (actions.childElementCount) li.append(actions);
 
   // L'historique n'est pas modifiable : seules les tâches à faire ont un ✎.
   if (!done && canManage(t.createdBy)) {
@@ -520,6 +553,7 @@ $("btn-delete-task").addEventListener("click", async () => {
   try {
     const batch = writeBatch(db);
     batch.delete(doc(db, "projects", projectId, "tasks", editingId));
+    batch.delete(doc(db, "projects", projectId, "notes", editingId)); // sa note part avec elle
     addLog(batch, "task.delete", { projectId, label: t.title });
     bumpRate(batch);
     await batch.commit();
@@ -527,5 +561,123 @@ $("btn-delete-task").addEventListener("click", async () => {
   } catch (err) {
     console.error(err);
     toast("Suppression impossible : " + err.message, { error: true });
+  }
+});
+
+/* ---------- Dialogue : note d'une tâche ---------- */
+
+const NOTE_MAX = 20000; // identique à firestore.rules
+/** @type {string | null} tâche dont la note est ouverte */
+let noteId = null;
+// Version de la note chargée dans la zone de texte (date et texte) : sert à savoir si l'on a écrit
+// quelque chose, et si quelqu'un d'autre l'a enregistrée entre-temps.
+let noteBase = 0;
+let noteLoaded = "";
+// Texte non enregistré d'une note fermée (Fermer, Échap) : retrouvé à sa réouverture, jusqu'au
+// rechargement de la page. Rien n'est écrit dans le navigateur.
+/** @type {Map<string, string>} « projet/tâche » -> brouillon */
+const drafts = new Map();
+
+/** @returns {string} texte d'une note (jamais supposée bien formée) */
+function noteText(n) {
+  return typeof n?.text === "string" ? n.text : "";
+}
+
+function noteFail(msg) {
+  $("task-note-error").textContent = msg;
+  $("task-note-error").hidden = !msg;
+}
+
+function openNote(id) {
+  const t = tasks.get(id);
+  if (!t) return;
+  const n = notes.get(id);
+  noteId = id;
+  noteLoaded = noteText(n);
+  noteBase = millis(n?.updatedAt);
+  const draft = drafts.get(`${pid}/${id}`);
+  $("task-note-text").value = t.done !== true && draft !== undefined ? draft : noteLoaded;
+  noteFail(t.done !== true && draft !== undefined ? "Brouillon non enregistré repris." : "");
+  $("dlg-task-note").showModal();
+  renderNote();
+  if (t.done !== true) $("task-note-text").focus();
+}
+
+// Titre, dernière modification et lecture seule (tâche terminée). Si la note change ailleurs : reprend
+// le nouveau texte si l'on n'a rien écrit, sinon prévient qu'enregistrer remplacera l'autre version.
+function renderNote() {
+  if (!noteId || !$("dlg-task-note").open) return;
+  const t = tasks.get(noteId);
+  if (!t) {
+    $("dlg-task-note").close();
+    return;
+  }
+  const n = notes.get(noteId);
+  const done = t.done === true;
+  const by = typeof n?.updatedBy === "string" ? " par " + who(n.updatedBy) : "";
+  $("task-note-title").textContent = `Note : « ${t.title} »`;
+  $("task-note-meta").textContent = (n ? `Modifiée${by}${stamp(n.updatedAt)}.` : "Pas encore de note.")
+    + (done ? " Tâche terminée : la note ne se modifie plus (rouvre la tâche pour la compléter)." : "");
+  const area = /** @type {HTMLTextAreaElement} */ ($("task-note-text"));
+  area.readOnly = done;
+  $("task-note-save").hidden = done;
+  const at = millis(n?.updatedAt);
+  if (at === noteBase) return;
+  if (done || area.value === noteLoaded) {
+    noteLoaded = area.value = noteText(n);
+    noteBase = at;
+    noteFail("");
+  } else {
+    noteFail(`Note modifiée${by} pendant que tu écrivais : enregistrer remplacera sa version.`);
+  }
+}
+
+$("dlg-task-note").addEventListener("close", () => {
+  const text = /** @type {HTMLTextAreaElement} */ ($("task-note-text")).value;
+  if (noteId && pid) {
+    const key = `${pid}/${noteId}`;
+    if (text !== noteLoaded && tasks.get(noteId)?.done !== true) drafts.set(key, text);
+    else drafts.delete(key);
+  }
+  noteId = null;
+});
+
+$("form-task-note").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const projectId = pid;
+  const id = noteId;
+  const t = id && tasks.get(id);
+  if (!projectId || !t || t.done === true) return;
+  const text = /** @type {HTMLTextAreaElement} */ ($("task-note-text")).value;
+  if (text.length > NOTE_MAX) return noteFail(`${NOTE_MAX} caractères au plus.`);
+  if (!await rateOk()) return;
+  const btn = $("task-note-save");
+  btn.disabled = true;
+  try {
+    const batch = writeBatch(db);
+    batch.set(doc(db, "projects", projectId, "notes", id), {
+      text, updatedBy: me(), updatedAt: serverTimestamp(),
+    });
+    bumpRate(batch);
+    await batch.commit();
+    noteLoaded = text; // enregistrée : pas de brouillon à garder
+    $("dlg-task-note").close();
+    announce("Note enregistrée.");
+  } catch (err) {
+    console.error(err);
+    noteFail("Enregistrement impossible : " + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("task-note-copy").addEventListener("click", async () => {
+  const text = /** @type {HTMLTextAreaElement} */ ($("task-note-text")).value;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Note copiée.");
+  } catch {
+    $("task-note-text").select();
+    toast("Copie impossible : le texte est sélectionné, copie-le avec Cmd/Ctrl + C.", { error: true });
   }
 });
