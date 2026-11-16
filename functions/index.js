@@ -1,5 +1,8 @@
 // Cloud Functions de Canal Dev.
 //
+// Quotas : `firebaseUsage` (appelable, admins seulement) lit la consommation dans Cloud Monitoring
+// pour le panneau « Quotas » des paramètres (voir usage.js).
+//
 // Notifications push : à chaque nouveau message, une notification est envoyée aux appareils des
 // autres membres de la conversation (et des administrateurs, qui voient toutes les conversations),
 // même quand l'application est fermée. Protocole Web Push standard (clés VAPID), sans SDK côté site :
@@ -11,10 +14,13 @@ import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { GoogleAuth } from "google-auth-library";
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import webpush from "web-push";
 import { excerpt, PUSH_ENDPOINT_RE, recipientsOf } from "./push-utils.js";
+import { collectUsage } from "./usage.js";
 
 // Base Firestore en multirégion « eur3 » : fonctions en Europe (Belgique).
 // maxInstances : garde-fou contre une facture inattendue (boucle, rafale de messages).
@@ -93,3 +99,26 @@ export const notifyNewMessage = onDocumentCreated(
     await Promise.all(recipients.map((uid) => sendTo(uid, payload, topic)));
   },
 );
+
+/* ---------- Quotas (panneau « Paramètres → Quotas », admins) ---------- */
+
+// Le compte de service de la fonction doit avoir le rôle « Lecteur Monitoring » (voir README).
+const monitoring = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/monitoring.read"] });
+// Relevé gardé une minute : ouvrir le panneau plusieurs fois de suite n'interroge Monitoring qu'une fois.
+const CACHE_MS = 60_000;
+let cached = null;
+
+export const firebaseUsage = onCall({ maxInstances: 1, memory: "256MiB" }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Connexion requise.");
+  if (!(await adminUids()).includes(uid)) throw new HttpsError("permission-denied", "Réservé aux administrateurs.");
+  if (cached && Date.now() - cached.time < CACHE_MS) return cached.data;
+  const project = process.env.GCLOUD_PROJECT || (await monitoring.getProjectId());
+  const client = await monitoring.getClient();
+  const data = await collectUsage((opts) => client.request(opts), project);
+  if (data.rows.every((r) => r.error === "forbidden")) {
+    throw new HttpsError("failed-precondition", "La fonction n'a pas accès à Cloud Monitoring (rôle « Lecteur Monitoring » manquant).");
+  }
+  cached = { time: Date.now(), data };
+  return data;
+});
