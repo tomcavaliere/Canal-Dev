@@ -49,6 +49,8 @@ export function syncMessageWatchers() {
         if (!first && t > latest && m.authorUid !== state.user.uid) onIncomingMessage(id, m);
         latest = Math.max(latest, t);
       }
+      // Première réponse du serveur : la pastille reprend le nombre exact, même s'il n'a pas changé.
+      if (first && !snap.metadata.fromCache) queueMicrotask(renderUnreadTotal);
       if (!snap.metadata.fromCache) first = false;
       state.recent.set(id, snap.docs.filter((d) => !d.get("event")).map((d) => {
         const m = d.data({ serverTimestamps: "estimate" });
@@ -207,4 +209,13 @@ export function renderUnreadTotal() {
     if (total) navigator.setAppBadge?.(total)?.catch(() => {});
     else navigator.clearAppBadge?.()?.catch(() => {});
   } catch { /* non pris en charge */ }
+  // Point de départ du service worker, qui augmente la pastille à chaque notification push
+  // reçue application fermée (même nom de cache et de clé que dans sw.js).
+  globalThis.caches?.open("canal-dev-badge")
+    .then((c) => c.put("badge-count", new Response(String(total))))
+    .catch(() => {});
 }
+// Retour dans l'application : la pastille reprend le nombre exact (le service worker a pu l'augmenter).
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.user) renderUnreadTotal();
+});

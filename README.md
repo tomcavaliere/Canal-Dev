@@ -60,7 +60,7 @@ Le contrôle d'accès est appliqué côté serveur par [firestore.rules](firesto
 ```
 index.html              page unique
 manifest.webmanifest    installation comme application (PWA)
-sw.js                   service worker : installation, notifications et notifications push (aucun cache, aucune donnée)
+sw.js                   service worker : installation, notifications, notifications push et pastille de l'icône (aucune page en cache)
 icons/                  icônes de l'application (icon.svg est la source des PNG)
 css/style.css           styles (clair/sombre, responsive)
 js/firebase-config.js   config Firebase + ADMIN_UID  ← à remplir
@@ -194,6 +194,8 @@ Côté appareil : 🔔 active les notifications ; l'appareil s'abonne et enregis
 du navigateur et clés de chiffrement) dans `users/{uid}/push/{id}`. Il est retiré quand on coupe les notifications, à la
 déconnexion, à la suppression du compte, ou par la fonction quand le navigateur le déclare expiré. Quand l'application est au
 premier plan, elle prévient elle-même et le service worker n'affiche rien (sauf Safari, qui l'exige).
+Chaque notification reçue application fermée augmente la **pastille** de l'icône (iPhone, Android, ordinateur) ;
+à l'ouverture, l'application la remplace par le nombre exact de messages non lus.
 
 ### 7. Quitter GitHub Pages
 Une fois le site en ligne sur web.app, laisse GitHub Pages actif quelque temps : [js/redirect.js](js/redirect.js)
