@@ -364,16 +364,13 @@ function renderMessage(id, m) {
   if (edited) head.append(tag("edited", "modifié", "Modifié le " + fullFmt.format(edited)));
   if (pinned) head.append(tag("pin-tag", "📌 Épinglé", "Message mis en avant par l'administrateur"));
 
+  // Barre d'actions qui apparaît au survol de la bulle (ordinateur) : réagir, répondre, et « ⋯ »
+  // pour le reste (copier, épingler, modifier, supprimer). Sur écran tactile : appui long.
   const actions = document.createElement("div");
   actions.className = "msg-actions";
   // Réagir : pas sur un message encore en attente d'envoi (il n'existe pas encore sur le serveur).
   if (!state.pending.has(id)) {
-    const react = document.createElement("button");
-    react.type = "button";
-    react.className = "react";
-    react.textContent = "🙂+";
-    react.title = "Réagir avec un emoji";
-    react.setAttribute("aria-label", "Réagir avec un emoji");
+    const react = actionButton("😊", "Réagir avec un emoji");
     react.setAttribute("aria-haspopup", "dialog");
     react.setAttribute("aria-expanded", "false");
     react.addEventListener("click", () => toggleEmojiMenu(react, {
@@ -381,38 +378,13 @@ function renderMessage(id, m) {
     }));
     actions.append(react);
   }
-  const reply = document.createElement("button");
-  reply.type = "button";
-  reply.textContent = "Répondre";
+  const reply = actionButton("↩", "Répondre");
   reply.addEventListener("click", () => startReply(id));
-  actions.append(reply);
-  head.append(actions);
-
-  // Mise en avant : l'admin seul (règles), et pas un message encore en attente d'envoi.
-  if (state.isAdmin && !state.pending.has(id)) {
-    const pin = document.createElement("button");
-    pin.type = "button";
-    pin.textContent = pinned ? "Désépingler" : "Épingler";
-    pin.title = pinned ? "Retirer ce message des messages épinglés" : "Mettre ce message en avant en haut de la conversation";
-    pin.addEventListener("click", () => togglePin(id));
-    actions.append(pin);
-  }
-
-  if (mine) {
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.textContent = "Modifier";
-    edit.addEventListener("click", () => startEdit(id));
-    actions.append(edit);
-  }
-  if (mine || state.isAdmin) {
-    const del = document.createElement("button");
-    del.className = "del";
-    del.type = "button";
-    del.textContent = "Supprimer";
-    del.addEventListener("click", () => deleteMessage(id, m));
-    actions.append(del);
-  }
+  const more = actionButton("⋯", "Plus d'actions");
+  more.setAttribute("aria-haspopup", "dialog");
+  more.setAttribute("aria-expanded", "false");
+  more.addEventListener("click", () => openMsgSheet(id, more));
+  actions.append(reply, more);
 
   bubble.append(head);
   if (m.replyTo) bubble.append(renderQuote(m.replyTo));
@@ -422,15 +394,25 @@ function renderMessage(id, m) {
   } else if (m.text) {
     const text = document.createElement("div");
     text.className = "msg-text" + (isJumbo(m.text) && !m.image ? " jumbo" : "");
+    if (date) text.title = fullFmt.format(date); // heure au survol, comme dans les messageries
     text.append(renderRichText(m.text));
     bubble.append(text);
   }
   const reactions = renderReactions(id, m);
   if (reactions) bubble.append(reactions);
-  // Ses propres messages sont à droite, sans avatar.
-  if (mine) li.append(bubble);
-  else li.append(avatar, bubble);
+  // Ses propres messages sont à droite, sans avatar (la barre d'actions passe à gauche, en CSS).
+  if (mine) li.append(bubble, actions);
+  else li.append(avatar, bubble, actions);
   return li;
+}
+
+function actionButton(icon, label) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = icon;
+  b.title = label;
+  b.setAttribute("aria-label", label);
+  return b;
 }
 
 async function deleteMessage(id, m) {
@@ -855,7 +837,13 @@ function sheetButton(label, icon, run, danger = false) {
   return b;
 }
 
-function openMsgSheet(id) {
+/**
+ * Actions d'un message : feuille en bas de l'écran (appui long), ou petit menu sous le bouton
+ * « ⋯ » de la barre d'actions (`anchor`, ordinateur), sans les réactions qui ont leur bouton.
+ * @param {string} id
+ * @param {HTMLElement} [anchor]
+ */
+function openMsgSheet(id, anchor) {
   const m = state.msgById.get(id);
   if (!m || m.event || sheet.open) return;
   const pending = state.pending.has(id);
@@ -896,10 +884,33 @@ function openMsgSheet(id) {
   if (mine || state.isAdmin) actions.push(sheetButton("Supprimer", "🗑️", () => deleteMessage(id, m), true));
   $("sheet-actions").replaceChildren(...actions);
 
+  if (anchor) {
+    sheetAnchor = anchor;
+    anchor.setAttribute("aria-expanded", "true");
+    sheet.classList.add("popover");
+    sheet.showModal();
+    // Sous le bouton (au-dessus s'il manque de place), sans sortir de la fenêtre.
+    const r = anchor.getBoundingClientRect();
+    const w = sheet.offsetWidth;
+    const h = sheet.offsetHeight;
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+    const top = r.bottom + 4 + h <= innerHeight - 8 ? r.bottom + 4 : Math.max(8, r.top - 4 - h);
+    sheet.style.left = left + "px";
+    sheet.style.top = top + "px";
+    return;
+  }
   sheetGuardUntil = Date.now() + 700;
   navigator.vibrate?.(10);
   sheet.showModal();
 }
+
+let sheetAnchor = null; // bouton « ⋯ » qui a ouvert le menu
+sheet.addEventListener("close", () => {
+  sheet.classList.remove("popover");
+  sheet.style.left = sheet.style.top = "";
+  sheetAnchor?.setAttribute("aria-expanded", "false");
+  sheetAnchor = null;
+});
 
 // Toucher le fond (hors de la feuille) la ferme.
 sheet.addEventListener("click", (e) => {

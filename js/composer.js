@@ -44,18 +44,9 @@ function syncComposer() {
   $("composer").classList.toggle("has-text", !!input.value.trim() || !!attachment);
 }
 
-const narrow = window.matchMedia("(max-width: 720px)");
-function adaptComposer() {
-  const input = $("msg-input");
-  input.rows = narrow.matches ? 1 : 2;
-  input.placeholder = enterSends()
-    ? "Écrire un message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"
-    : "Message…";
-  syncComposer();
-}
-narrow.addEventListener("change", adaptComposer);
+if (enterSends()) $("msg-input").title = "Entrée pour envoyer, Maj+Entrée pour aller à la ligne";
 $("msg-input").addEventListener("input", syncComposer);
-adaptComposer();
+syncComposer();
 
 async function attachFile(file) {
   if (!file || !state.selectedId) return;

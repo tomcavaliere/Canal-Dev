@@ -349,7 +349,7 @@ dialog.org-dialog { width: min(720px, calc(100vw - 32px)); }
   background: none; border: none; color: var(--muted); cursor: pointer; font-size: .8rem;
   min-width: 24px; min-height: 24px; padding: 0 2px; border-radius: 6px;
 }
-.del-user:focus-visible, .edit-user:focus-visible, .msg-actions button:focus-visible, .toast button:focus-visible {
+.del-user:focus-visible, .edit-user:focus-visible, .toast button:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
 .del-user:hover { color: var(--danger); }
@@ -377,8 +377,8 @@ a.edit-user { display: inline-flex; align-items: center; justify-content: center
 .chat-head-text { min-width: 0; }
 .chat-tools { flex-wrap: wrap; justify-content: flex-end; }
 .chat-admin { display: flex; align-items: center; }
-/* Éléments propres à l'affichage mobile (voir « Mobile : conversation » plus bas) */
-.chat-back, .chat-avatar, .chat-more, .send-icon { display: none; }
+/* Bouton retour : mobile seulement (voir « Conversation façon messagerie » plus bas) */
+.chat-back { display: none; }
 .search-bar {
   display: flex; gap: .5rem; align-items: center;
   padding: .5rem 1rem; border-bottom: 1px solid var(--border); background: var(--surface);
@@ -423,13 +423,6 @@ a.edit-user { display: inline-flex; align-items: center; justify-content: center
 .msg-head strong { color: var(--text); font-size: .85rem; }
 .msg-head .badge { font-size: .68rem; padding: 0 6px; }
 .msg-head .unverified { cursor: help; }
-.msg-actions { margin-left: auto; padding-left: .5rem; display: flex; gap: .6rem; }
-.msg-actions button {
-  background: none; border: none; color: var(--muted); cursor: pointer; font: inherit; font-size: .8rem;
-  min-height: 24px; padding: 0 .2rem; border-radius: 4px;
-}
-.msg-actions button:hover { color: var(--accent); }
-.msg-actions .del:hover { color: var(--danger); }
 .msg-quote {
   all: unset; box-sizing: border-box; display: block; cursor: pointer;
   margin: .3rem 0 .2rem; padding: .25rem .55rem; max-width: 100%;
@@ -939,60 +932,172 @@ dialog.msg-sheet { width: min(420px, calc(100vw - 16px)); padding: .75rem; }
 .sheet-icon { width: 1.5rem; text-align: center; }
 .sheet-cancel { width: 100%; margin-top: .4rem; min-height: 44px; }
 
-/* Mobile : conversation façon messagerie. En-tête compact (la barre du haut est masquée),
-   bulles arrondies regroupées par auteur, actions à l'appui long, saisie en pilule. */
+/* Conversation façon messagerie (toutes tailles d'écran) : en-tête compact avec avatar, bulles
+   arrondies regroupées par auteur, barre d'actions au survol, saisie en pilule avec 👍 ou ➤. */
+.chat-view { background: var(--surface); }
+
+/* En-tête */
+#chat-view .chat-head { flex-direction: row; align-items: center; gap: .65rem; padding: .5rem 1rem; }
+.chat-avatar {
+  display: inline-flex; width: 40px; height: 40px; font-size: .8rem;
+  background: color-mix(in srgb, var(--proj, var(--accent)) 20%, var(--surface));
+  color: var(--proj, var(--accent));
+}
+#chat-view .chat-head-text { flex: 1; }
+#chat-view .chat-head h2 { font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#chat-view .chat-project, #chat-desc, .chat-online { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#chat-view .chat-project { font-size: .66rem; }
+.chat-online { font-size: .75rem; }
+#chat-view .chat-tools { flex-wrap: nowrap; gap: .1rem; flex-shrink: 0; }
+#btn-search, .chat-more {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; min-height: 40px; padding: 0; border: none; border-radius: 50%;
+  background: none; color: var(--accent); font: inherit; font-size: 1.15rem; font-weight: 700; cursor: pointer;
+}
+#btn-search:hover, .chat-more:hover, .chat-back:hover { background: var(--surface-2); }
+.chat-back:focus-visible, .chat-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.chat-admin { position: relative; }
+.chat-admin-menu {
+  display: none; position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
+  flex-direction: column; align-items: stretch; gap: 0; min-width: 12rem; padding: .3rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / .2);
+}
+.chat-admin.open .chat-admin-menu { display: flex; }
+.chat-admin-menu .btn { border: none; text-align: left; font-size: .92rem; min-height: 38px; padding: 0 .8rem; border-radius: 8px; }
+
+/* Fil */
+.messages { gap: 2px; padding: 1rem 1.25rem; }
+.msg { position: relative; max-width: min(640px, 75%); gap: .5rem; align-items: flex-end; }
+.msg.grp-start { margin-top: .6rem; }
+.msg > .avatar { width: 28px; height: 28px; font-size: .62rem; visibility: hidden; }
+.msg.grp-end > .avatar { visibility: visible; }
+
+.msg .bubble, .msg.mine .bubble, .msg.pinned .bubble {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; max-width: 100%;
+  padding: 0; border: none; border-radius: 0; background: none; box-shadow: none;
+}
+.msg.mine .bubble { align-items: flex-end; }
+.msg.flash .bubble { animation: none; }
+.msg.flash .msg-text, .msg.flash .msg-img-btn { animation: flash 1.4s ease-out; }
+
+/* Nom et heure au début d'une série ; ensuite, seulement les mentions (modifié, épinglé) */
+.msg-head { padding: 0 .75rem; font-size: .72rem; }
+.msg-head strong { font-size: .74rem; font-weight: 500; color: var(--muted); }
+.msg.mine .msg-head > :is(strong, .badge) { display: none; }
+.msg:not(.grp-start) .msg-head:not(:has(.edited, .pin-tag)) { display: none; }
+.msg:not(.grp-start) .msg-head > :is(strong, .badge, .unverified, time) { display: none; }
+
+.msg-text {
+  position: relative; z-index: 1; max-width: 100%;
+  padding: .45rem .8rem; border-radius: 18px; line-height: 1.35;
+  background: var(--bubble); color: var(--text);
+}
+.msg.mine .msg-text { background: var(--accent); color: var(--accent-text); }
+.msg-text.jumbo, .msg.mine .msg-text.jumbo { background: none; padding: 0 .15rem; }
+.msg.mine .msg-text a { color: inherit; text-decoration: underline; }
+.msg-text code, .msg-text pre { background: rgb(0 0 0 / .1); }
+.msg.mine .msg-text code, .msg.mine .msg-text pre { background: rgb(0 0 0 / .18); }
+.msg.pinned .msg-text { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* Coins resserrés à l'intérieur d'une série */
+.msg:not(.mine):not(.grp-start) :is(.msg-text, .msg-img-btn) { border-top-left-radius: 5px; }
+.msg:not(.mine):not(.grp-end) :is(.msg-text, .msg-img-btn) { border-bottom-left-radius: 5px; }
+.msg.mine:not(.grp-start) :is(.msg-text, .msg-img-btn) { border-top-right-radius: 5px; }
+.msg.mine:not(.grp-end) :is(.msg-text, .msg-img-btn) { border-bottom-right-radius: 5px; }
+
+/* Message cité : bulle estompée, glissée sous la réponse */
+.msg-quote {
+  margin: 0 0 -.55rem; padding: .35rem .8rem .8rem; border-left: none; border-radius: 16px;
+  background: color-mix(in srgb, var(--bubble) 75%, var(--surface)); opacity: .8; font-size: .8rem;
+}
+.msg-quote strong { font-size: .72rem; font-weight: 500; color: var(--muted); }
+.msg-quote strong::before { content: "↩ "; }
+.msg-quote:disabled { border-left: none; }
+
+.msg-img-btn { position: relative; z-index: 1; margin: 0; width: 320px; border-radius: 18px; }
+
+/* Réactions posées à cheval sur le bas de la bulle */
+.reactions { position: relative; z-index: 2; margin: -.5rem .5rem 0; gap: .2rem; }
+.reaction {
+  min-height: 22px; padding: 0 .35rem; gap: .15rem; font-size: .8rem;
+  background: var(--surface); box-shadow: 0 1px 3px rgb(0 0 0 / .18);
+}
+.reaction-count { font-size: .7rem; }
+
+/* Barre d'actions au survol (à droite de la bulle, à gauche pour ses propres messages) */
+.msg-actions {
+  align-self: center; flex-shrink: 0; display: flex; gap: 1px;
+  opacity: 0; transition: opacity .12s;
+}
+.msg.mine .msg-actions { order: -1; }
+.msg:hover .msg-actions, .msg:focus-within .msg-actions, .msg-actions:has([aria-expanded="true"]) { opacity: 1; }
+.msg-actions button {
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: none; border-radius: 50%; background: none; color: var(--muted);
+  font: inherit; font-size: 1rem; line-height: 1; cursor: pointer;
+}
+.msg-actions button:hover, .msg-actions button[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+.msg-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.receipt { margin: .15rem .3rem 0 0; font-size: .7rem; }
+.day-sep { justify-content: center; margin: 1rem 0 .3rem; font-size: .72rem; font-weight: 600; }
+.day-sep::before, .day-sep::after { display: none; }
+.load-more { margin-bottom: .25rem; }
+
+/* Saisie : icônes, pilule qui grandit avec le texte, 👍 ou ➤ */
+.composer { align-items: flex-end; gap: .2rem; padding: .5rem 1rem .65rem; border-top: none; }
+.composer .btn.icon, .composer .composer-send {
+  align-self: flex-end; flex-shrink: 0; min-width: 40px; min-height: 40px; padding: 0;
+  border: none; border-radius: 50%; background: none; font-size: 1.25rem; line-height: 1;
+}
+.composer .btn.icon:hover, .composer .composer-send:hover { background: var(--surface-2); filter: none; }
+.composer .composer-send { color: var(--accent); font-size: 1.35rem; }
+.composer textarea {
+  flex: 1; min-width: 0; min-height: 40px; max-height: 160px; padding: .5rem 1rem; line-height: 1.35;
+  border: none; border-radius: 20px; background: var(--bubble);
+}
+.composer textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
+.send-label { display: none; }
+.composer:not(.has-text) .composer-send { display: none; }
+.composer.has-text #btn-thumb { display: none; }
+
+.reply-preview { border-top: none; background: var(--surface-2); }
+
+/* Menu « ⋯ » d'un message (ordinateur) : la feuille d'actions, posée sous le bouton */
+dialog.msg-sheet.popover {
+  position: fixed; margin: 0; width: 15rem; padding: .3rem; border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / .2);
+}
+dialog.msg-sheet.popover::backdrop { background: transparent; }
+.msg-sheet.popover .sheet-reactions, .msg-sheet.popover .sheet-cancel { display: none; }
+.msg-sheet.popover .sheet-action { min-height: 38px; font-size: .92rem; border-radius: 8px; }
+
+/* Mobile : barre du haut masquée, bouton retour, actions à l'appui long, glisser pour répondre */
 @media (max-width: 720px) {
   input, textarea, select { font-size: 16px; } /* sous 16px, iOS zoome à la saisie */
 
   .app.show-chat:has(#chat-view:not([hidden])) .topbar { display: none; }
-  .chat-view { background: var(--surface); }
 
   /* En-tête */
-  #chat-view .chat-head { flex-direction: row; align-items: center; gap: .4rem; padding: .35rem 8px; }
+  #chat-view .chat-head { gap: .4rem; padding: .35rem 8px; }
   .chat-back {
     display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
     min-width: 40px; min-height: 40px; padding: 0 .35rem; border: none; border-radius: 999px;
     background: none; color: var(--accent); font: inherit; font-size: 1.25rem; font-weight: 600;
     white-space: nowrap; cursor: pointer;
   }
-  .chat-avatar {
-    display: inline-flex; width: 38px; height: 38px; font-size: .8rem;
-    background: color-mix(in srgb, var(--proj, var(--accent)) 20%, var(--surface));
-    color: var(--proj, var(--accent));
-  }
-  #chat-view .chat-head-text { flex: 1; }
-  #chat-view .chat-head h2 { font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #chat-view .chat-project { font-size: .66rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-avatar { width: 38px; height: 38px; }
+  #chat-view .chat-head h2 { font-size: 1rem; }
   #chat-desc { display: none; }
-  .chat-online { font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #chat-view .chat-tools { flex-wrap: nowrap; gap: 0; flex-shrink: 0; }
-  #btn-search, .chat-more {
-    display: inline-flex; align-items: center; justify-content: center;
-    min-width: 40px; min-height: 40px; padding: 0; border: none; border-radius: 50%;
-    background: none; color: var(--accent); font: inherit; font-size: 1.15rem; font-weight: 700; cursor: pointer;
-  }
-  #btn-search:hover, .chat-more:hover, .chat-back:hover { background: var(--surface-2); }
-  .chat-back:focus-visible, .chat-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .chat-admin { position: relative; }
-  .chat-admin-menu {
-    display: none; position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
-    flex-direction: column; align-items: stretch; gap: 0; min-width: 12rem; padding: .3rem;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    box-shadow: 0 8px 28px rgb(0 0 0 / .2);
-  }
-  .chat-admin.open .chat-admin-menu { display: flex; }
-  .chat-admin-menu .btn { border: none; text-align: left; font-size: .95rem; min-height: 44px; padding: 0 .8rem; border-radius: 8px; }
+  #chat-view .chat-tools { gap: 0; }
+  .chat-admin-menu .btn { font-size: .95rem; min-height: 44px; }
 
   /* Fil */
-  .messages { gap: 2px; padding: .75rem 10px; overflow-x: hidden; overscroll-behavior: contain; }
-  .msg {
-    position: relative; max-width: 82%; gap: .4rem; align-items: flex-end;
-    touch-action: pan-y; transition: transform .2s ease-out;
-  }
-  .msg.swiping { transition: none; }
+  .messages { padding: .75rem 10px; overflow-x: hidden; overscroll-behavior: contain; }
+  .msg { max-width: 82%; gap: .4rem; touch-action: pan-y; transition: transform .2s ease-out; }
   .msg.grp-start { margin-top: .55rem; }
-  .msg > .avatar { width: 28px; height: 28px; font-size: .62rem; visibility: hidden; }
-  .msg.grp-end > .avatar { visibility: visible; }
+  .msg.swiping { transition: none; }
   /* Glisser pour répondre : flèche qui apparaît derrière la bulle */
   .msg.swiping::before {
     content: "↩"; position: absolute; top: 50%; transform: translateY(-50%); left: -2rem;
@@ -1001,90 +1106,23 @@ dialog.msg-sheet { width: min(420px, calc(100vw - 16px)); padding: .75rem; }
   }
   .msg.mine.swiping::before { left: auto; right: -2rem; }
   .msg.swipe-ready::before { opacity: 1; color: var(--accent); }
-
-  .msg .bubble, .msg.mine .bubble, .msg.pinned .bubble {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 2px; max-width: 100%;
-    padding: 0; border: none; border-radius: 0; background: none; box-shadow: none;
-    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
-  }
-  .msg.mine .bubble { align-items: flex-end; }
-  .msg.flash .bubble { animation: none; }
-  .msg.flash .msg-text, .msg.flash .msg-img-btn { animation: flash 1.4s ease-out; }
+  .msg .bubble { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .msg.pinned .bubble::before { content: "📌 Épinglé"; font-size: .7rem; color: var(--muted); padding: 0 .75rem; }
+  .msg-actions { display: none; }
 
   /* Nom au début d'une série (messages des autres) ; heure et mentions au toucher */
-  .msg-head { padding: 0 .75rem; font-size: .72rem; }
-  .msg-head strong { font-size: .74rem; font-weight: 500; color: var(--muted); }
-  .msg-head > time, .msg-head > .edited, .msg-head > .pin-tag, .msg-actions { display: none; }
+  .msg-head > time, .msg-head > .edited, .msg-head > .pin-tag { display: none; }
   .msg.mine .msg-head, .msg:not(.grp-start) .msg-head { display: none; }
   .msg.show-meta .msg-head { display: flex; }
-  .msg.show-meta .msg-head > time, .msg.show-meta .msg-head > .edited { display: inline; }
-  .msg.mine .msg-head strong, .msg.mine .msg-head .badge { display: none; }
-
-  .msg-text {
-    position: relative; z-index: 1; max-width: 100%;
-    padding: .45rem .8rem; border-radius: 18px; line-height: 1.35;
-    background: var(--bubble); color: var(--text);
-  }
-  .msg.mine .msg-text { background: var(--accent); color: var(--accent-text); }
-  .msg-text.jumbo, .msg.mine .msg-text.jumbo { background: none; padding: 0 .15rem; }
-  .msg.mine .msg-text a { color: inherit; text-decoration: underline; }
-  .msg-text code, .msg-text pre { background: rgb(0 0 0 / .1); }
-  .msg.mine .msg-text code, .msg.mine .msg-text pre { background: rgb(0 0 0 / .18); }
+  .msg.show-meta .msg-head > :is(time, .edited) { display: inline; }
   .msg-edit { min-width: min(320px, 75vw); }
+  .msg-img-btn { width: 240px; }
+  .day-sep { margin: .9rem 0 .2rem; }
 
-  /* Coins resserrés à l'intérieur d'une série, comme dans les messageries */
-  .msg:not(.mine):not(.grp-start) :is(.msg-text, .msg-img-btn) { border-top-left-radius: 5px; }
-  .msg:not(.mine):not(.grp-end) :is(.msg-text, .msg-img-btn) { border-bottom-left-radius: 5px; }
-  .msg.mine:not(.grp-start) :is(.msg-text, .msg-img-btn) { border-top-right-radius: 5px; }
-  .msg.mine:not(.grp-end) :is(.msg-text, .msg-img-btn) { border-bottom-right-radius: 5px; }
-
-  /* Message cité : bulle estompée, glissée sous la réponse */
-  .msg-quote {
-    margin: 0 0 -.55rem; padding: .35rem .8rem .8rem; border-left: none; border-radius: 16px;
-    background: color-mix(in srgb, var(--bubble) 75%, var(--surface)); opacity: .8; font-size: .8rem;
-  }
-  .msg-quote strong { font-size: .72rem; font-weight: 500; color: var(--muted); }
-  .msg-quote strong::before { content: "↩ "; }
-  .msg-quote:disabled { border-left: none; }
-
-  .msg-img-btn { position: relative; z-index: 1; margin: 0; width: 240px; border-radius: 18px; }
-
-  /* Réactions posées à cheval sur le bas de la bulle */
-  .reactions { position: relative; z-index: 2; margin: -.5rem .5rem 0; gap: .2rem; }
-  .reaction {
-    min-height: 22px; padding: 0 .35rem; gap: .15rem; font-size: .8rem;
-    background: var(--surface); box-shadow: 0 1px 3px rgb(0 0 0 / .18);
-  }
-  .reaction-count { font-size: .7rem; }
-
-  .receipt { margin: .15rem .3rem 0 0; font-size: .7rem; }
-  .day-sep { justify-content: center; margin: .9rem 0 .2rem; font-size: .72rem; font-weight: 600; }
-  .day-sep::before, .day-sep::after { display: none; }
-  .load-more { margin-bottom: .25rem; }
-
-  /* Saisie : icônes, pilule qui grandit avec le texte, 👍 ou ➤ */
-  .composer {
-    align-items: flex-end; gap: .15rem; border-top: none;
-    padding: .35rem 8px max(.35rem, env(safe-area-inset-bottom));
-  }
-  .composer .btn.icon, .composer .composer-send {
-    align-self: flex-end; flex-shrink: 0; min-width: 40px; min-height: 40px; padding: 0;
-    border: none; border-radius: 50%; background: none; font-size: 1.25rem; line-height: 1;
-  }
-  .composer .btn.icon:hover, .composer .composer-send:hover { background: var(--surface-2); filter: none; }
-  .composer .composer-send { color: var(--accent); font-size: 1.35rem; }
-  .composer textarea {
-    flex: 1; min-width: 0; min-height: 40px; max-height: 160px; padding: .5rem .9rem; line-height: 1.35;
-    border: none; border-radius: 20px; background: var(--bubble);
-  }
-  .composer textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
-  .send-label { display: none; }
-  .send-icon { display: inline; }
-  .composer:not(.has-text) .composer-send { display: none; }
-  .composer.has-text #btn-thumb { display: none; }
-
-  .reply-preview { padding: .45rem 12px; border-top: none; background: var(--surface-2); }
+  /* Saisie */
+  .composer { gap: .15rem; padding: .35rem 8px max(.35rem, env(safe-area-inset-bottom)); }
+  .composer textarea { padding: .5rem .9rem; }
+  .reply-preview { padding: .45rem 12px; }
   .attach-preview { padding: .5rem 12px; }
   .attach-preview img { width: 52px; height: 52px; }
 
