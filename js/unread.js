@@ -203,8 +203,10 @@ export function renderUnreadTotal() {
   let total = 0;
   for (const n of state.unread.values()) total += n;
   document.title = total ? `(${formatCount(total)}) Canal Dev` : "Canal Dev";
-  $("btn-back").textContent = total ? `← ${formatCount(total)}` : "←";
-  $("btn-back").setAttribute("aria-label", "Retour aux conversations" + (total ? ` (${unreadLabel(total)})` : ""));
+  for (const b of [$("btn-back"), $("btn-chat-back")]) {
+    b.textContent = total ? `← ${formatCount(total)}` : "←";
+    b.setAttribute("aria-label", "Retour aux conversations" + (total ? ` (${unreadLabel(total)})` : ""));
+  }
   try {
     if (total) navigator.setAppBadge?.(total)?.catch(() => {});
     else navigator.clearAppBadge?.()?.catch(() => {});

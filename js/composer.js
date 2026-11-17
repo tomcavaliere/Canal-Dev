@@ -5,7 +5,7 @@ import { toast } from "./dialogs.js";
 import { db } from "./firebase.js";
 import { prepareImage } from "./images.js";
 import { bumpRate, rateReady, rateWait } from "./rate.js";
-import { $ } from "./ui.js";
+import { $, enterSends } from "./ui.js";
 import { clearReply, images, startReply } from "./messages.js";
 import { toggleEmojiMenu } from "./emoji.js";
 import { state } from "./state.js";
@@ -20,13 +20,42 @@ export function clearAttachment() {
   $("attach-preview").hidden = true;
   $("attach-img").removeAttribute("src");
   $("attach-error").hidden = true;
+  syncComposer();
 }
 
 function setAttachment(image) {
   attachment = image;
   $("attach-img").src = image.data;
   $("attach-preview").hidden = false;
+  syncComposer();
 }
+
+/* ---------- Zone de saisie : hauteur, bouton d'envoi ---------- */
+
+const MAX_INPUT_HEIGHT = 160; // px, au-delà la zone défile
+
+// La zone grandit avec le texte ; sur mobile, 👍 laisse la place au bouton d'envoi dès qu'il y a
+// quelque chose à envoyer (comme dans les messageries).
+function syncComposer() {
+  const input = $("msg-input");
+  input.style.height = "auto";
+  const border = input.offsetHeight - input.clientHeight;
+  input.style.height = Math.min(input.scrollHeight + border, MAX_INPUT_HEIGHT) + "px";
+  $("composer").classList.toggle("has-text", !!input.value.trim() || !!attachment);
+}
+
+const narrow = window.matchMedia("(max-width: 720px)");
+function adaptComposer() {
+  const input = $("msg-input");
+  input.rows = narrow.matches ? 1 : 2;
+  input.placeholder = enterSends()
+    ? "Écrire un message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"
+    : "Message…";
+  syncComposer();
+}
+narrow.addEventListener("change", adaptComposer);
+$("msg-input").addEventListener("input", syncComposer);
+adaptComposer();
 
 async function attachFile(file) {
   if (!file || !state.selectedId) return;
@@ -144,6 +173,7 @@ async function send(thumb) {
   bumpRate(batch); // limitation anti-abus, exigée par les règles
   if (!thumb) input.value = "";
   if (image) clearAttachment();
+  syncComposer();
   if (replyTo) clearReply();
 
   batch.commit().catch((err) => {
@@ -152,6 +182,7 @@ async function send(thumb) {
     images.cache.delete("t:" + msgRef.id);
     if (state.selectedId === convId) {
       if (!thumb && !input.value.trim()) input.value = text;
+      syncComposer();
       if (image && !attachment) setAttachment(image);
       if (replyTo && !state.replyTo) startReply(replyTo);
     }
@@ -191,7 +222,7 @@ $("msg-input").addEventListener("keydown", (e) => {
     clearReply();
     return;
   }
-  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && enterSends()) {
     e.preventDefault();
     $("composer").requestSubmit();
   }

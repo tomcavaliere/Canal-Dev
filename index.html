@@ -97,6 +97,8 @@
       <div id="chat-empty" class="center muted">Sélectionne une conversation.</div>
       <div id="chat-view" class="chat-view" hidden>
         <div class="chat-head">
+          <button id="btn-chat-back" class="chat-back" type="button" aria-label="Retour aux conversations">←</button>
+          <span id="chat-avatar" class="avatar chat-avatar" aria-hidden="true"></span>
           <div class="chat-head-text">
             <p id="chat-project" class="chat-project muted small" hidden></p>
             <h2 id="chat-title"></h2>
@@ -106,11 +108,15 @@
           <div class="row chat-tools">
             <button id="btn-search" class="btn small" type="button" title="Rechercher dans la conversation"
               aria-label="Rechercher dans la conversation" aria-expanded="false" aria-controls="search-bar">🔍</button>
-            <div id="chat-admin-actions" class="row" hidden>
-              <button id="btn-members" class="btn small">Membres</button>
-              <button id="btn-edit-conv" class="btn small">Renommer</button>
-              <button id="btn-move-conv" class="btn small">Déplacer</button>
-              <button id="btn-delete-conv" class="btn small danger">Supprimer</button>
+            <div id="chat-admin-actions" class="chat-admin" hidden>
+              <button id="btn-chat-more" class="chat-more" type="button" aria-label="Gérer la conversation"
+                title="Gérer la conversation" aria-expanded="false" aria-controls="chat-admin-menu">⋯</button>
+              <div id="chat-admin-menu" class="row chat-admin-menu">
+                <button id="btn-members" class="btn small">Membres</button>
+                <button id="btn-edit-conv" class="btn small">Renommer</button>
+                <button id="btn-move-conv" class="btn small">Déplacer</button>
+                <button id="btn-delete-conv" class="btn small danger">Supprimer</button>
+              </div>
             </div>
           </div>
         </div>
@@ -162,7 +168,8 @@
             placeholder="Écrire un message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
           <button id="btn-thumb" type="button" class="btn icon" title="Envoyer un pouce"
             aria-label="Envoyer un pouce levé">👍</button>
-          <button class="btn primary" type="submit">Envoyer</button>
+          <button class="btn primary composer-send" type="submit" aria-label="Envoyer"><span
+            class="send-label">Envoyer</span><span class="send-icon" aria-hidden="true">➤</span></button>
         </form>
       </div>
 
@@ -595,6 +602,13 @@
         <button id="goal-submit" type="submit" class="btn primary">Enregistrer</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Feuille d'actions d'un message (appui long sur mobile) -->
+  <dialog id="dlg-msg-sheet" class="msg-sheet" aria-label="Actions sur le message">
+    <div id="sheet-reactions" class="sheet-reactions" role="group" aria-label="Réagir"></div>
+    <div id="sheet-actions" class="sheet-actions"></div>
+    <button type="button" class="btn sheet-cancel" data-close>Annuler</button>
   </dialog>
 
   <!-- Dialogue : photo en grand -->

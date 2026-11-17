@@ -36,3 +36,8 @@ export function avatarEl(name) {
   el.textContent = initials(name);
   return el;
 }
+
+// Écran tactile (téléphone, tablette) : Entrée va à la ligne, on envoie avec le bouton,
+// comme dans les applications de messagerie. Au clavier : Entrée envoie.
+const coarse = window.matchMedia("(pointer: coarse)");
+export const enterSends = () => !coarse.matches;

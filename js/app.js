@@ -565,6 +565,9 @@ function renderChatHeader() {
   $("chat-project").hidden = !pid;
   $("chat-project").style.setProperty("--proj", projectColor(pid ?? ""));
   $("chat-title").textContent = c.title || "(sans titre)";
+  // Avatar de la conversation (en-tête mobile) : initiales du titre, couleur du projet.
+  $("chat-avatar").textContent = initials(c.title || "?");
+  $("chat-avatar").style.setProperty("--proj", projectColor(pid ?? ""));
   $("chat-desc").textContent = c.description || "";
   $("chat-desc").hidden = !c.description;
   renderOnline();
@@ -588,6 +591,32 @@ function renderOnline() {
 $("btn-back").addEventListener("click", () => {
   $("screen-app").classList.remove("show-chat");
   closeCalendar();
+});
+// Mobile : la barre du haut est masquée dans une conversation, l'en-tête a son propre retour.
+$("btn-chat-back").addEventListener("click", () => $("btn-back").click());
+
+// Mobile : les actions d'administration de la conversation sont rangées derrière « ⋯ ».
+function closeChatMenu() {
+  if (!$("chat-admin-actions").classList.contains("open")) return;
+  $("chat-admin-actions").classList.remove("open");
+  $("btn-chat-more").setAttribute("aria-expanded", "false");
+}
+$("btn-chat-more").addEventListener("click", () => {
+  const open = $("chat-admin-actions").classList.toggle("open");
+  $("btn-chat-more").setAttribute("aria-expanded", String(open));
+  if (open) $("chat-admin-menu").querySelector("button")?.focus();
+});
+$("chat-admin-menu").addEventListener("click", (e) => {
+  if (/** @type {Element} */ (e.target).closest("button")) closeChatMenu();
+});
+document.addEventListener("pointerdown", (e) => {
+  if (!$("chat-admin-actions").contains(e.target)) closeChatMenu();
+}, true);
+$("chat-admin-actions").addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !$("chat-admin-actions").classList.contains("open")) return;
+  e.preventDefault();
+  closeChatMenu();
+  $("btn-chat-more").focus();
 });
 
 // Barre latérale repliable (ordinateur) : le choix est gardé dans ce navigateur.

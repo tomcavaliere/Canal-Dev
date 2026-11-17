@@ -7,11 +7,11 @@ import { confirmDialog, toast } from "./dialogs.js";
 import { ADMIN_UID, db } from "./firebase.js";
 import { displayName, displayText, nameOf } from "./names.js";
 import { renderRichText } from "./richtext.js";
-import { $, avatarEl } from "./ui.js";
+import { $, avatarEl, enterSends } from "./ui.js";
 import { syncNames } from "./app.js";
 import { renderReceipt, syncMyRead } from "./receipts.js";
 import { applySearch } from "./search.js";
-import { state } from "./state.js";
+import { isMobile, state } from "./state.js";
 import { bumpRate, rateWait } from "./rate.js";
 import { isPinned, renderPinned, togglePin } from "./pinned.js";
 import { REACTIONS, isJumbo, toggleEmojiMenu } from "./emoji.js";
@@ -266,12 +266,36 @@ export function renderMessages(docs, forceScroll) {
   next = new Map();
   patchList(list, messageItems(docs));
   rendered = next;
+  markGroups(list);
   renderPinned();
   renderReceipt();
   if (forceScroll || nearBottom) list.scrollTop = list.scrollHeight;
   else restoreAnchor(list, anchor);
   applySearch();
   syncMyRead();
+}
+
+// Messages consécutifs d'un même auteur (moins de 5 min d'écart) : une seule série de bulles,
+// avec le nom au début et l'avatar à la fin (affichage mobile). Posé après coup sur les éléments,
+// réutilisés ou non : l'arrivée d'un message change la place du précédent dans sa série.
+const GROUP_GAP = 5 * 60 * 1000;
+function markGroups(list) {
+  let prev = null; // { el, uid, t }
+  for (const el of list.children) {
+    if (!el.classList.contains("msg")) {
+      prev?.el.classList.add("grp-end");
+      prev = null;
+      continue;
+    }
+    const m = state.msgById.get(el.id.slice(4));
+    const uid = m?.authorUid;
+    const t = millis(m?.createdAt) ?? 0;
+    const joined = !!prev && prev.uid === uid && t - prev.t < GROUP_GAP;
+    el.classList.toggle("grp-start", !joined);
+    prev?.el.classList.toggle("grp-end", !joined);
+    prev = { el, uid, t };
+  }
+  prev?.el.classList.add("grp-end");
 }
 
 function tag(className, text, title) {
@@ -386,25 +410,7 @@ function renderMessage(id, m) {
     del.className = "del";
     del.type = "button";
     del.textContent = "Supprimer";
-    del.addEventListener("click", async () => {
-      if (!await confirmDialog("Supprimer ce message ?", { ok: "Supprimer", danger: true })) return;
-      try {
-        // La photo éventuelle est supprimée en même temps que le message.
-        const batch = writeBatch(db);
-        batch.delete(doc(db, "conversations", state.selectedId, "messages", id));
-        if (m.image) batch.delete(doc(db, "conversations", state.selectedId, "images", id));
-        if (m.image?.thumb) batch.delete(doc(db, "conversations", state.selectedId, "thumbs", id));
-        // Épingle retirée en même temps (l'admin seul peut modifier la conversation ; une épingle
-        // orpheline laissée par un membre est simplement ignorée à l'affichage).
-        if (state.isAdmin && isPinned(id)) {
-          batch.update(doc(db, "conversations", state.selectedId), { pinned: arrayRemove(id) });
-        }
-        await batch.commit();
-      } catch (err) {
-        console.error(err);
-        toast("Suppression impossible : " + err.message, { error: true });
-      }
-    });
+    del.addEventListener("click", () => deleteMessage(id, m));
     actions.append(del);
   }
 
@@ -425,6 +431,26 @@ function renderMessage(id, m) {
   if (mine) li.append(bubble);
   else li.append(avatar, bubble);
   return li;
+}
+
+async function deleteMessage(id, m) {
+  if (!await confirmDialog("Supprimer ce message ?", { ok: "Supprimer", danger: true })) return;
+  try {
+    // La photo éventuelle est supprimée en même temps que le message.
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "conversations", state.selectedId, "messages", id));
+    if (m.image) batch.delete(doc(db, "conversations", state.selectedId, "images", id));
+    if (m.image?.thumb) batch.delete(doc(db, "conversations", state.selectedId, "thumbs", id));
+    // Épingle retirée en même temps (l'admin seul peut modifier la conversation ; une épingle
+    // orpheline laissée par un membre est simplement ignorée à l'affichage).
+    if (state.isAdmin && isPinned(id)) {
+      batch.update(doc(db, "conversations", state.selectedId), { pinned: arrayRemove(id) });
+    }
+    await batch.commit();
+  } catch (err) {
+    console.error(err);
+    toast("Suppression impossible : " + err.message, { error: true });
+  }
 }
 
 /* ---------- Réactions ---------- */
@@ -531,7 +557,7 @@ function renderEditor(id, m) {
     if (e.key === "Escape") {
       e.preventDefault();
       cancelEdit();
-    } else if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    } else if (e.key === "Enter" && !e.shiftKey && !e.isComposing && enterSends()) {
       e.preventDefault();
       form.requestSubmit();
     }
@@ -724,3 +750,161 @@ function renderImage(id, m) {
 }
 
 $("dlg-image").addEventListener("close", () => { $("viewer-img").removeAttribute("src"); });
+
+/* ---------- Écran tactile : appui long, glisser pour répondre, heure au toucher ---------- */
+
+// Comme dans les messageries : un appui long sur un message ouvre ses actions (réactions,
+// répondre, copier, modifier…), un glissement vers le centre y répond, un toucher montre l'heure.
+const LONG_PRESS_MS = 450;
+const SWIPE_REPLY = 56; // px
+let gesture = null; // { id, li, x, y, dir, dx, swiping, pointerId, timer }
+
+function endGesture() {
+  const g = gesture;
+  if (!g) return;
+  gesture = null;
+  clearTimeout(g.timer);
+  g.li.classList.remove("swiping", "swipe-ready");
+  g.li.style.transform = "";
+}
+
+function longPress() {
+  const g = gesture;
+  endGesture();
+  if (g && g.li.isConnected) openMsgSheet(g.id);
+}
+
+$("messages").addEventListener("pointerdown", (e) => {
+  if (e.pointerType !== "touch" || gesture || !e.isPrimary) return;
+  const target = /** @type {Element} */ (e.target);
+  const li = target.closest(".msg");
+  if (!li || target.closest(".msg-edit")) return;
+  gesture = {
+    id: li.id.slice(4), li, x: e.clientX, y: e.clientY, dir: li.classList.contains("mine") ? -1 : 1,
+    dx: 0, swiping: false, pointerId: e.pointerId, timer: setTimeout(longPress, LONG_PRESS_MS),
+  };
+});
+
+$("messages").addEventListener("pointermove", (e) => {
+  const g = gesture;
+  if (!g || e.pointerId !== g.pointerId) return;
+  const dx = (e.clientX - g.x) * g.dir;
+  const dy = e.clientY - g.y;
+  if (!g.swiping) {
+    if (dx > 12 && dx > Math.abs(dy) * 1.5) {
+      g.swiping = true;
+      clearTimeout(g.timer);
+      g.li.classList.add("swiping");
+    } else if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+      endGesture(); // défilement ou geste dans l'autre sens
+      return;
+    } else {
+      return;
+    }
+  }
+  g.dx = Math.max(0, Math.min(80, dx - 12));
+  g.li.style.transform = `translateX(${g.dx * g.dir}px)`;
+  g.li.classList.toggle("swipe-ready", g.dx >= SWIPE_REPLY);
+});
+
+$("messages").addEventListener("pointerup", (e) => {
+  const g = gesture;
+  if (!g || e.pointerId !== g.pointerId) return;
+  const reply = g.swiping && g.dx >= SWIPE_REPLY;
+  endGesture();
+  if (reply) startReply(g.id);
+});
+$("messages").addEventListener("pointercancel", (e) => {
+  if (gesture && e.pointerId === gesture.pointerId) endGesture();
+});
+
+// Menu natif de l'appui long (Android) : remplacé par la feuille d'actions.
+$("messages").addEventListener("contextmenu", (e) => {
+  if (!gesture || gesture.swiping) return;
+  e.preventDefault();
+  longPress();
+});
+
+// Toucher un message : affiche (ou masque) son heure et ses mentions (modifié, épinglé).
+$("messages").addEventListener("click", (e) => {
+  if (!isMobile()) return;
+  const target = /** @type {Element} */ (e.target);
+  if (target.closest("a, button, textarea, input, form")) return;
+  target.closest(".msg")?.classList.toggle("show-meta");
+});
+
+/* ---------- Feuille d'actions d'un message ---------- */
+
+const sheet = $("dlg-msg-sheet");
+// Le doigt qui a déclenché l'appui long se relève sur la feuille : ce « clic » ne doit pas la fermer.
+let sheetGuardUntil = 0;
+
+function sheetButton(label, icon, run, danger = false) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "sheet-action" + (danger ? " danger" : "");
+  const i = document.createElement("span");
+  i.className = "sheet-icon";
+  i.setAttribute("aria-hidden", "true");
+  i.textContent = icon;
+  b.append(i, label);
+  b.addEventListener("click", () => {
+    sheet.close();
+    run();
+  });
+  return b;
+}
+
+function openMsgSheet(id) {
+  const m = state.msgById.get(id);
+  if (!m || m.event || sheet.open) return;
+  const pending = state.pending.has(id);
+  const mine = m.authorUid === state.user.uid;
+
+  const reactions = $("sheet-reactions");
+  reactions.replaceChildren();
+  reactions.hidden = pending; // pas encore sur le serveur
+  if (!pending) {
+    for (const emoji of REACTIONS) {
+      const chosen = m.reactions?.[state.user.uid] === emoji;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "emoji-btn" + (chosen ? " mine" : "");
+      b.textContent = emoji;
+      b.setAttribute("aria-pressed", String(chosen));
+      b.setAttribute("aria-label", chosen ? `Retirer la réaction ${emoji}` : `Réagir avec ${emoji}`);
+      b.addEventListener("click", () => {
+        sheet.close();
+        toggleReaction(id, emoji);
+      });
+      reactions.append(b);
+    }
+  }
+
+  const actions = [sheetButton("Répondre", "↩️", () => startReply(id))];
+  if (m.text) {
+    actions.push(sheetButton("Copier le texte", "📋", () => {
+      navigator.clipboard?.writeText(m.text)
+        .then(() => toast("Texte copié."), () => toast("Copie impossible.", { error: true }));
+    }));
+  }
+  if (state.isAdmin && !pending) {
+    const pinned = isPinned(id);
+    actions.push(sheetButton(pinned ? "Désépingler" : "Épingler", "📌", () => togglePin(id)));
+  }
+  if (mine) actions.push(sheetButton("Modifier", "✏️", () => startEdit(id)));
+  if (mine || state.isAdmin) actions.push(sheetButton("Supprimer", "🗑️", () => deleteMessage(id, m), true));
+  $("sheet-actions").replaceChildren(...actions);
+
+  sheetGuardUntil = Date.now() + 700;
+  navigator.vibrate?.(10);
+  sheet.showModal();
+}
+
+// Toucher le fond (hors de la feuille) la ferme.
+sheet.addEventListener("click", (e) => {
+  if (e.target !== sheet || Date.now() < sheetGuardUntil) return;
+  sheet.close();
+});
+// Nouveau toucher après l'appui long : le garde ne sert plus.
+sheet.addEventListener("pointerdown", () => { sheetGuardUntil = 0; });

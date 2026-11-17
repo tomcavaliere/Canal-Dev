@@ -9,6 +9,7 @@
   --accent-text: #ffffff;
   --mine: #e3edff;
   --muted-on-mine: #545d69; /* --muted n'atteint pas 4,5:1 sur --mine en clair */
+  --bubble: #eceef1; /* bulles des autres (mobile) */
   --danger: #c93636;
   --online: #1e9e5a;
   --radius: 10px;
@@ -32,6 +33,7 @@
     --accent-text: #0d1117;
     --mine: #1f2f4d;
     --muted-on-mine: #a7b0bc;
+    --bubble: #2d333c;
     --danger: #ef6b6b;
     --online: #3fcf7f;
     --proj-0: #6ea0f5; --proj-1: #4cc58f; --proj-2: #e2a052; --proj-3: #f07aa3;
@@ -50,6 +52,7 @@
   --accent-text: #0d1117;
   --mine: #1f2f4d;
   --muted-on-mine: #a7b0bc;
+  --bubble: #2d333c;
   --danger: #ef6b6b;
   --online: #3fcf7f;
   --proj-0: #6ea0f5; --proj-1: #4cc58f; --proj-2: #e2a052; --proj-3: #f07aa3;
@@ -373,6 +376,9 @@ a.edit-user { display: inline-flex; align-items: center; justify-content: center
 }
 .chat-head-text { min-width: 0; }
 .chat-tools { flex-wrap: wrap; justify-content: flex-end; }
+.chat-admin { display: flex; align-items: center; }
+/* Éléments propres à l'affichage mobile (voir « Mobile : conversation » plus bas) */
+.chat-back, .chat-avatar, .chat-more, .send-icon { display: none; }
 .search-bar {
   display: flex; gap: .5rem; align-items: center;
   padding: .5rem 1rem; border-bottom: 1px solid var(--border); background: var(--surface);
@@ -913,6 +919,184 @@ dialog.tasks-dialog { --proj: var(--accent); width: min(560px, calc(100vw - 32px
   .chat-head { flex-direction: column; gap: .5rem; }
   .msg { max-width: 92%; }
 }
+
+/* Feuille d'actions d'un message (appui long sur écran tactile) */
+dialog.msg-sheet { width: min(420px, calc(100vw - 16px)); padding: .75rem; }
+.sheet-reactions {
+  display: flex; justify-content: space-around; gap: .25rem;
+  padding-bottom: .6rem; margin-bottom: .3rem; border-bottom: 1px solid var(--border);
+}
+.sheet-reactions .emoji-btn { font-size: 1.7rem; min-width: 46px; min-height: 46px; border-radius: 50%; }
+.sheet-reactions .emoji-btn.mine { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.sheet-actions { display: flex; flex-direction: column; }
+.sheet-action {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: .85rem;
+  min-height: 48px; padding: 0 .6rem; border-radius: 10px; cursor: pointer; font-size: 1rem;
+}
+.sheet-action:hover, .sheet-action:focus-visible { background: var(--surface-2); }
+.sheet-action:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sheet-action.danger { color: var(--danger); }
+.sheet-icon { width: 1.5rem; text-align: center; }
+.sheet-cancel { width: 100%; margin-top: .4rem; min-height: 44px; }
+
+/* Mobile : conversation façon messagerie. En-tête compact (la barre du haut est masquée),
+   bulles arrondies regroupées par auteur, actions à l'appui long, saisie en pilule. */
+@media (max-width: 720px) {
+  input, textarea, select { font-size: 16px; } /* sous 16px, iOS zoome à la saisie */
+
+  .app.show-chat:has(#chat-view:not([hidden])) .topbar { display: none; }
+  .chat-view { background: var(--surface); }
+
+  /* En-tête */
+  #chat-view .chat-head { flex-direction: row; align-items: center; gap: .4rem; padding: .35rem 8px; }
+  .chat-back {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    min-width: 40px; min-height: 40px; padding: 0 .35rem; border: none; border-radius: 999px;
+    background: none; color: var(--accent); font: inherit; font-size: 1.25rem; font-weight: 600;
+    white-space: nowrap; cursor: pointer;
+  }
+  .chat-avatar {
+    display: inline-flex; width: 38px; height: 38px; font-size: .8rem;
+    background: color-mix(in srgb, var(--proj, var(--accent)) 20%, var(--surface));
+    color: var(--proj, var(--accent));
+  }
+  #chat-view .chat-head-text { flex: 1; }
+  #chat-view .chat-head h2 { font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #chat-view .chat-project { font-size: .66rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #chat-desc { display: none; }
+  .chat-online { font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #chat-view .chat-tools { flex-wrap: nowrap; gap: 0; flex-shrink: 0; }
+  #btn-search, .chat-more {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; min-height: 40px; padding: 0; border: none; border-radius: 50%;
+    background: none; color: var(--accent); font: inherit; font-size: 1.15rem; font-weight: 700; cursor: pointer;
+  }
+  #btn-search:hover, .chat-more:hover, .chat-back:hover { background: var(--surface-2); }
+  .chat-back:focus-visible, .chat-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .chat-admin { position: relative; }
+  .chat-admin-menu {
+    display: none; position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
+    flex-direction: column; align-items: stretch; gap: 0; min-width: 12rem; padding: .3rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 8px 28px rgb(0 0 0 / .2);
+  }
+  .chat-admin.open .chat-admin-menu { display: flex; }
+  .chat-admin-menu .btn { border: none; text-align: left; font-size: .95rem; min-height: 44px; padding: 0 .8rem; border-radius: 8px; }
+
+  /* Fil */
+  .messages { gap: 2px; padding: .75rem 10px; overflow-x: hidden; overscroll-behavior: contain; }
+  .msg {
+    position: relative; max-width: 82%; gap: .4rem; align-items: flex-end;
+    touch-action: pan-y; transition: transform .2s ease-out;
+  }
+  .msg.swiping { transition: none; }
+  .msg.grp-start { margin-top: .55rem; }
+  .msg > .avatar { width: 28px; height: 28px; font-size: .62rem; visibility: hidden; }
+  .msg.grp-end > .avatar { visibility: visible; }
+  /* Glisser pour répondre : flèche qui apparaît derrière la bulle */
+  .msg.swiping::before {
+    content: "↩"; position: absolute; top: 50%; transform: translateY(-50%); left: -2rem;
+    width: 1.6rem; height: 1.6rem; display: grid; place-items: center; border-radius: 50%;
+    background: var(--surface-2); color: var(--muted); opacity: .6; font-size: .9rem;
+  }
+  .msg.mine.swiping::before { left: auto; right: -2rem; }
+  .msg.swipe-ready::before { opacity: 1; color: var(--accent); }
+
+  .msg .bubble, .msg.mine .bubble, .msg.pinned .bubble {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px; max-width: 100%;
+    padding: 0; border: none; border-radius: 0; background: none; box-shadow: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  .msg.mine .bubble { align-items: flex-end; }
+  .msg.flash .bubble { animation: none; }
+  .msg.flash .msg-text, .msg.flash .msg-img-btn { animation: flash 1.4s ease-out; }
+  .msg.pinned .bubble::before { content: "📌 Épinglé"; font-size: .7rem; color: var(--muted); padding: 0 .75rem; }
+
+  /* Nom au début d'une série (messages des autres) ; heure et mentions au toucher */
+  .msg-head { padding: 0 .75rem; font-size: .72rem; }
+  .msg-head strong { font-size: .74rem; font-weight: 500; color: var(--muted); }
+  .msg-head > time, .msg-head > .edited, .msg-head > .pin-tag, .msg-actions { display: none; }
+  .msg.mine .msg-head, .msg:not(.grp-start) .msg-head { display: none; }
+  .msg.show-meta .msg-head { display: flex; }
+  .msg.show-meta .msg-head > time, .msg.show-meta .msg-head > .edited { display: inline; }
+  .msg.mine .msg-head strong, .msg.mine .msg-head .badge { display: none; }
+
+  .msg-text {
+    position: relative; z-index: 1; max-width: 100%;
+    padding: .45rem .8rem; border-radius: 18px; line-height: 1.35;
+    background: var(--bubble); color: var(--text);
+  }
+  .msg.mine .msg-text { background: var(--accent); color: var(--accent-text); }
+  .msg-text.jumbo, .msg.mine .msg-text.jumbo { background: none; padding: 0 .15rem; }
+  .msg.mine .msg-text a { color: inherit; text-decoration: underline; }
+  .msg-text code, .msg-text pre { background: rgb(0 0 0 / .1); }
+  .msg.mine .msg-text code, .msg.mine .msg-text pre { background: rgb(0 0 0 / .18); }
+  .msg-edit { min-width: min(320px, 75vw); }
+
+  /* Coins resserrés à l'intérieur d'une série, comme dans les messageries */
+  .msg:not(.mine):not(.grp-start) :is(.msg-text, .msg-img-btn) { border-top-left-radius: 5px; }
+  .msg:not(.mine):not(.grp-end) :is(.msg-text, .msg-img-btn) { border-bottom-left-radius: 5px; }
+  .msg.mine:not(.grp-start) :is(.msg-text, .msg-img-btn) { border-top-right-radius: 5px; }
+  .msg.mine:not(.grp-end) :is(.msg-text, .msg-img-btn) { border-bottom-right-radius: 5px; }
+
+  /* Message cité : bulle estompée, glissée sous la réponse */
+  .msg-quote {
+    margin: 0 0 -.55rem; padding: .35rem .8rem .8rem; border-left: none; border-radius: 16px;
+    background: color-mix(in srgb, var(--bubble) 75%, var(--surface)); opacity: .8; font-size: .8rem;
+  }
+  .msg-quote strong { font-size: .72rem; font-weight: 500; color: var(--muted); }
+  .msg-quote strong::before { content: "↩ "; }
+  .msg-quote:disabled { border-left: none; }
+
+  .msg-img-btn { position: relative; z-index: 1; margin: 0; width: 240px; border-radius: 18px; }
+
+  /* Réactions posées à cheval sur le bas de la bulle */
+  .reactions { position: relative; z-index: 2; margin: -.5rem .5rem 0; gap: .2rem; }
+  .reaction {
+    min-height: 22px; padding: 0 .35rem; gap: .15rem; font-size: .8rem;
+    background: var(--surface); box-shadow: 0 1px 3px rgb(0 0 0 / .18);
+  }
+  .reaction-count { font-size: .7rem; }
+
+  .receipt { margin: .15rem .3rem 0 0; font-size: .7rem; }
+  .day-sep { justify-content: center; margin: .9rem 0 .2rem; font-size: .72rem; font-weight: 600; }
+  .day-sep::before, .day-sep::after { display: none; }
+  .load-more { margin-bottom: .25rem; }
+
+  /* Saisie : icônes, pilule qui grandit avec le texte, 👍 ou ➤ */
+  .composer {
+    align-items: flex-end; gap: .15rem; border-top: none;
+    padding: .35rem 8px max(.35rem, env(safe-area-inset-bottom));
+  }
+  .composer .btn.icon, .composer .composer-send {
+    align-self: flex-end; flex-shrink: 0; min-width: 40px; min-height: 40px; padding: 0;
+    border: none; border-radius: 50%; background: none; font-size: 1.25rem; line-height: 1;
+  }
+  .composer .btn.icon:hover, .composer .composer-send:hover { background: var(--surface-2); filter: none; }
+  .composer .composer-send { color: var(--accent); font-size: 1.35rem; }
+  .composer textarea {
+    flex: 1; min-width: 0; min-height: 40px; max-height: 160px; padding: .5rem .9rem; line-height: 1.35;
+    border: none; border-radius: 20px; background: var(--bubble);
+  }
+  .composer textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .send-label { display: none; }
+  .send-icon { display: inline; }
+  .composer:not(.has-text) .composer-send { display: none; }
+  .composer.has-text #btn-thumb { display: none; }
+
+  .reply-preview { padding: .45rem 12px; border-top: none; background: var(--surface-2); }
+  .attach-preview { padding: .5rem 12px; }
+  .attach-preview img { width: 52px; height: 52px; }
+
+  /* Feuille d'actions collée en bas de l'écran */
+  dialog.msg-sheet {
+    width: 100%; max-width: 100%; margin: auto 0 0; border: none; border-radius: 18px 18px 0 0;
+    padding: .9rem 12px max(.75rem, env(safe-area-inset-bottom));
+    box-shadow: 0 -6px 24px rgb(0 0 0 / .18);
+  }
+  dialog.msg-sheet[open] { animation: sheet-in .18s ease-out; }
+}
+@keyframes sheet-in { from { transform: translateY(100%); } }
 
 /* Page « Politique de confidentialité » */
 .doc { max-width: 760px; margin: 0 auto; padding: 2rem 16px 3rem; }
