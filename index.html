@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://europe-west1-canal-dev-c18d7.cloudfunctions.net https://www.gstatic.com https://*.europe-west1.firebasedatabase.app wss://*.europe-west1.firebasedatabase.app; frame-src https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://europe-west1-canal-dev-c18d7.cloudfunctions.net https://www.gstatic.com https://*.europe-west1.firebasedatabase.app wss://*.europe-west1.firebasedatabase.app; frame-src 'self' https://canal-dev-c18d7.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="no-referrer">
   <title>Canal Dev</title>
   <meta name="theme-color" content="#2f6fde">
@@ -515,6 +515,47 @@
         <button id="task-note-save" type="submit" class="btn primary">Enregistrer</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Dialogue : fichiers d'un projet (zone de dépôt) -->
+  <dialog id="dlg-files" class="files-dialog" aria-labelledby="files-title">
+    <div class="stack">
+      <h2 id="files-title">Fichiers</h2>
+      <p class="muted small">Visibles par tous les membres du projet. Fichiers texte (HTML, Markdown, texte, CSV, JSON, code…),
+        900 Ko au plus chacun. Les pages HTML s'affichent dans un aperçu isolé, sans accès à ton compte.</p>
+      <label id="files-drop" class="drop-zone">
+        <input id="files-input" type="file" multiple class="visually-hidden">
+        <span class="drop-icon" aria-hidden="true">📥</span>
+        <span><strong>Dépose tes fichiers ici</strong><br><span class="muted small">ou clique pour les choisir</span></span>
+      </label>
+      <p id="files-status" class="muted small" role="status" aria-live="polite"></p>
+      <p id="files-error" class="error small files-error" role="alert" hidden></p>
+      <section class="stack tight" aria-labelledby="files-list-label">
+        <h3 id="files-list-label">Fichiers déposés <span id="files-count" class="muted small"></span></h3>
+        <ul id="files-list" class="file-list"></ul>
+      </section>
+      <div class="row end">
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialogue : fichier ouvert (aperçu, source, téléchargement) -->
+  <dialog id="dlg-file-view" class="file-viewer" aria-labelledby="file-view-title">
+    <div class="file-view-head">
+      <div class="file-view-titles">
+        <h2 id="file-view-title"></h2>
+        <p id="file-view-meta" class="muted small"></p>
+      </div>
+      <div class="row file-view-actions">
+        <button id="file-view-source" type="button" class="btn" aria-pressed="false" hidden>Source</button>
+        <button id="file-view-copy" type="button" class="btn">Copier</button>
+        <button id="file-view-download" type="button" class="btn">Télécharger</button>
+        <button id="file-view-delete" type="button" class="btn danger" hidden>Supprimer</button>
+        <button type="button" class="btn" data-close>Fermer</button>
+      </div>
+    </div>
+    <div id="file-view-body" class="file-view-body"></div>
   </dialog>
 
   <!-- Dialogue : nouvelle réunion / modifier une réunion -->

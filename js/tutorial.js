@@ -78,6 +78,15 @@ const STEPS = [
     ],
   },
   {
+    icon: "📁",
+    title: "Les fichiers",
+    items: [
+      "📁 à côté du nom d'un projet ouvre sa zone de dépôt, partagée par tous ses membres.",
+      "Glisse-y des fichiers HTML, Markdown, texte, CSV, JSON ou de code (900 Ko au plus chacun).",
+      "Un clic sur un fichier l'affiche : le Markdown est mis en forme, une page HTML s'ouvre dans un aperçu isolé. Tu peux aussi le copier ou le télécharger.",
+    ],
+  },
+  {
     icon: "🛠️",
     title: "Administration",
     admin: true,

@@ -1117,7 +1117,7 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     const id = editingProjectId;
     const p = id && getProjects().get(id);
     if (!p) return;
-    if (!await confirmDialog(`Supprimer le projet « ${p.title} » ? Ses conversations sont conservées et passent dans « Sans projet ». Son calendrier (réunions et objectifs) est supprimé.`,
+    if (!await confirmDialog(`Supprimer le projet « ${p.title} » ? Ses conversations sont conservées et passent dans « Sans projet ». Son calendrier, ses tâches et ses fichiers sont supprimés.`,
       { ok: "Supprimer", danger: true })) return;
     try {
       const convs = await getDocs(query(collection(db, "conversations"), where("projectId", "==", id)));

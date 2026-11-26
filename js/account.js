@@ -65,7 +65,7 @@ export async function purgeUserData(uid, email) {
   // Calendriers des projets : réunions organisées, objectifs et tâches créés (supprimés), invitations
   // (retirée de la liste, avec sa réponse), objectifs et tâches cochés ou dont on est responsable (son nom est retiré), fiches de membre.
   /** @type {[string, string][]} */
-  const owned = [["events", "createdBy"], ["goals", "createdBy"], ["tasks", "createdBy"], ["members", "uid"]];
+  const owned = [["events", "createdBy"], ["goals", "createdBy"], ["tasks", "createdBy"], ["files", "createdBy"], ["members", "uid"]];
   for (const [group, field] of owned) {
     const snap = await calendarDocs(group, field, uid);
     for (let i = 0; i < snap.docs.length; i += 200) {
@@ -74,6 +74,8 @@ export async function purgeUserData(uid, email) {
         batch.delete(d.ref);
         // Une tâche supprimée emporte sa note (projects/{p}/notes/{même id}), dans le même batch.
         if (group === "tasks") batch.delete(doc(d.ref.parent.parent, "notes", d.id));
+        // Un fichier déposé emporte son contenu (projects/{p}/fileData/{même id}).
+        if (group === "files") batch.delete(doc(d.ref.parent.parent, "fileData", d.id));
       });
       await batch.commit();
     }
@@ -152,7 +154,8 @@ async function collectMyData(user) {
     getDocs(collection(db, "users", user.uid, "push")),
   ]);
   const reacted = await Promise.all(convs.docs.map((c) => getDocs(reactedQuery(c.id, user.uid))));
-  const [tickets, organized, invited, goalsCreated, goalsDone, tasksCreated, tasksDone, tasksAssigned, notesWritten] = await Promise.all([
+  const [tickets, organized, invited, goalsCreated, goalsDone, tasksCreated, tasksDone, tasksAssigned, notesWritten,
+    filesMeta, filesData] = await Promise.all([
     calendarDocs("members", "uid", user.uid),
     calendarDocs("events", "createdBy", user.uid),
     calendarDocs("events", "attendees", user.uid, "array-contains"),
@@ -162,7 +165,10 @@ async function collectMyData(user) {
     calendarDocs("tasks", "doneBy", user.uid),
     calendarDocs("tasks", "assignee", user.uid),
     calendarDocs("notes", "updatedBy", user.uid),
+    calendarDocs("files", "createdBy", user.uid),
+    calendarDocs("fileData", "createdBy", user.uid),
   ]);
+  const fileText = new Map(filesData.docs.map((d) => [d.ref.path.replace(/\/fileData\//, "/files/"), d.data().text]));
   const [logsBy, logsAbout] = await Promise.all(["uid", "about"].map((field) =>
     getDocs(query(collection(db, "logs"), where(field, "==", user.uid)))));
   const logs = new Map([...logsBy.docs, ...logsAbout.docs].map((d) => [d.id, plain(d.data())]));
@@ -264,6 +270,10 @@ async function collectMyData(user) {
     })),
     // Notes de tâches dont on a enregistré la dernière version (taskId : la tâche concernée).
     taskNotes: notesWritten.docs.map((d) => ({ projectId: projectOf(d), taskId: d.id, ...plain(d.data()) })),
+    // Fichiers déposés dans les projets, avec leur contenu.
+    filesUploaded: filesMeta.docs.map((d) => ({
+      projectId: projectOf(d), id: d.id, ...plain(d.data()), text: fileText.get(d.ref.path) ?? null,
+    })),
   };
 }
 

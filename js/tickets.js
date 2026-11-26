@@ -141,15 +141,19 @@ async function writeAllTickets(expected) {
 }
 
 /**
- * Admin : supprime les fiches, réunions, objectifs et tâches d'un projet (avant de supprimer le projet).
+ * Admin : supprime les fiches, réunions, objectifs, tâches et fichiers d'un projet (avant de supprimer le projet).
  * @param {string} projectId
  */
 export async function deleteProjectCalendar(projectId) {
-  for (const sub of ["events", "goals", "tasks", "notes", "members"]) {
+  for (const sub of ["events", "goals", "tasks", "notes", "files", "members"]) {
     const snap = await getDocs(collection(db, "projects", projectId, sub));
-    for (let i = 0; i < snap.docs.length; i += 400) {
+    for (let i = 0; i < snap.docs.length; i += 200) {
       const batch = writeBatch(db);
-      snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+      snap.docs.slice(i, i + 200).forEach((d) => {
+        batch.delete(d.ref);
+        // Le contenu d'un fichier (même identifiant) part avec lui, sans être téléchargé.
+        if (sub === "files") batch.delete(doc(db, "projects", projectId, "fileData", d.id));
+      });
       await batch.commit();
     }
   }

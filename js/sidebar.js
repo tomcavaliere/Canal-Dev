@@ -8,6 +8,7 @@ import { openProjectCalendar, selectConversation } from "./app.js";
 import { pendingInvitations } from "./calendar.js";
 import { openOrgChart } from "./org.js";
 import { COUNT_LIMIT, openTaskCount, openTasks } from "./tasks.js";
+import { openFiles } from "./files.js";
 import { state } from "./state.js";
 import { unreadBadge, unreadLabel, unreadMessages } from "./unread.js";
 
@@ -301,6 +302,10 @@ function projectGroup(projectId, title, convs) {
       tasksBtn.append(badge);
     }
     head.append(tasksBtn);
+    // Fichiers déposés dans le projet (HTML, Markdown, texte…).
+    const filesBtn = smallButton("📁", `Fichiers de « ${title} »`, () => openFiles(projectId), "files:" + projectId);
+    filesBtn.classList.add("group-files");
+    head.append(filesBtn);
     // Organigramme, s'il a au moins un niveau.
     if (projectOrgLevels(state.projects.get(projectId)).length) {
       const org = smallButton("🏢", `Organigramme de « ${title} »`, () => openOrgChart(projectId), "org:" + projectId);

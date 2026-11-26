@@ -24,6 +24,7 @@ import { projectColor, projectOf, renderConversationList, roleUids, sortedConver
 import { isLogo } from "./images.js";
 import { renderOrgChart } from "./org.js";
 import { renderTasks, syncTaskCounts, taskUids, teardownTasks } from "./tasks.js";
+import { fileUids, renderFiles, teardownFiles } from "./files.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
@@ -277,6 +278,7 @@ function teardown() {
   state.admin?.teardown();
   teardownCalendar();
   teardownTasks();
+  teardownFiles();
   resetTickets();
   stopNames();
   stopPresence();
@@ -370,6 +372,7 @@ function listenConversations() {
     syncTaskCounts();
     onCalendarContextChanged();
     renderTasks();
+    renderFiles();
     syncNames();
     syncPresence();
     if (state.myReads) {
@@ -400,6 +403,7 @@ function listenAllProjects() {
     renderConversationList();
     renderOrgChart();
     renderTasks();
+    renderFiles();
     if (state.selectedId) renderChatHeader();
     state.admin?.onProjectsChanged();
   }, (err) => console.error("Lecture des projets impossible", err));
@@ -426,6 +430,7 @@ function syncProjectListeners() {
       renderConversationList();
       renderOrgChart();
       renderTasks();
+      renderFiles();
       if (state.selectedId) renderChatHeader();
     }, (err) => console.error("Lecture du projet impossible", err)));
   }
@@ -439,7 +444,7 @@ function syncProjectListeners() {
 // L'admin, lui, écoute tout l'annuaire.
 export function syncNames() {
   if (state.isAdmin || !state.user) return;
-  const uids = new Set([ADMIN_UID, ...roleUids(), ...calendarUids(), ...taskUids()]);
+  const uids = new Set([ADMIN_UID, ...roleUids(), ...calendarUids(), ...taskUids(), ...fileUids()]);
   for (const c of state.conversations.values()) for (const uid of c.members || []) uids.add(uid);
   for (const m of state.msgById.values()) uids.add(m.authorUid);
   watchNames(uids);
@@ -473,6 +478,7 @@ function scheduleNamesRender() {
     renderCalendarNames();
     renderOrgChart();
     renderTasks();
+    renderFiles();
     const replied = state.replyTo && state.msgById.get(state.replyTo);
     if (replied) $("reply-author").textContent = displayText(replied.authorUid, replied.authorName);
     state.admin?.onNamesChanged();

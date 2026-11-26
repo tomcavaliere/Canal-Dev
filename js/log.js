@@ -119,6 +119,8 @@ function describe(e, projectTitle) {
     case "event.create": return `a créé la réunion ${l}`;
     case "event.update": return `a modifié la réunion ${l}`;
     case "event.delete": return `a supprimé la réunion ${l}`;
+    case "file.create": return `a déposé le fichier ${l}`;
+    case "file.delete": return `a supprimé le fichier ${l}`;
     default: return `${e.action} ${l}`;
   }
 }
