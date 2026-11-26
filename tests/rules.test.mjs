@@ -754,6 +754,19 @@ describe("Liens des projets", () => {
     assertFails(updateDoc(doc(admin(), "projects/p1"), { links: { a: "https://exemple.fr/" } })));
 });
 
+describe("Outils des projets", () => {
+  it("l'admin attache un outil à un projet", () =>
+    assertSucceeds(updateDoc(doc(admin(), "projects/p1"), { tools: ["refuges-ffcam"] })));
+  it("l'admin retire tous les outils", () =>
+    assertSucceeds(updateDoc(doc(admin(), "projects/p1"), { tools: [] })));
+  it("un membre n'attache pas d'outil", () =>
+    assertFails(updateDoc(doc(alice(), "projects/p1"), { tools: ["refuges-ffcam"] })));
+  it("un outil inconnu est refusé, même pour l'admin", () =>
+    assertFails(updateDoc(doc(admin(), "projects/p1"), { tools: ["refuges-ffcam", "inconnu"] })));
+  it("les outils doivent former une liste", () =>
+    assertFails(updateDoc(doc(admin(), "projects/p1"), { tools: "refuges-ffcam" })));
+});
+
 describe("Calendrier : membres du projet", () => {
   const ticket = (uid, via) => ({ uid, via, at: serverTimestamp() });
   const carol = () => as("carol");
