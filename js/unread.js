@@ -5,7 +5,8 @@ import {
   collection, collectionGroup, limitToLast, onSnapshot, orderBy, query, Timestamp, where,
 } from "./sdk/firebase-firestore.js";
 import { db } from "./firebase.js";
-import { displayText } from "./names.js";
+import { displayText, nameOf } from "./names.js";
+import { mentionedUid } from "./mentions.js";
 import { pushActive, showNotification } from "./notify.js";
 import { playMessageSound } from "./sound.js";
 import { $, announce } from "./ui.js";
@@ -62,10 +63,20 @@ export function syncMessageWatchers() {
   }
 }
 
+// Message adressé à quelqu'un d'autre (« @Nom … » en tête) : ni son, ni notification.
+function mentionsSomeoneElse(c, m) {
+  if (typeof m.text !== "string" || !m.text.trimStart().startsWith("@")) return false;
+  const uids = new Set([state.user.uid, ...(c?.members || [])]);
+  uids.delete(m.authorUid);
+  const target = mentionedUid(m.text, [...uids].map((uid) => ({ uid, name: nameOf(uid) })));
+  return target !== null && target !== state.user.uid;
+}
+
 function onIncomingMessage(convId, m) {
+  const c = state.conversations.get(convId);
+  if (mentionsSomeoneElse(c, m)) return;
   playMessageSound();
   const who = displayText(m.authorUid, m.authorName);
-  const c = state.conversations.get(convId);
   // Seuls les messages qui arrivent sont annoncés (pas le chargement d'une conversation).
   if (isViewing(convId)) {
     announce(`${who} : ${excerpt(m)}`);

@@ -10,7 +10,9 @@ Canal de communication pour suivre le développement d'un outil.
 - Installable comme application (PWA). **Notifications** des nouveaux messages (⚙️ Paramètres → Notifications), **même application
   fermée** : une Cloud Function envoie une notification push aux appareils des autres membres (et des admins). Sur iPhone et iPad,
   il faut d'abord ajouter Canal Dev à l'écran d'accueil (iOS 16.4 ou plus). Sans push (navigateur trop ancien), les notifications
-  s'affichent tant que l'application est ouverte.
+  s'affichent tant que l'application est ouverte. Un message qui **commence par `@Nom`** (nom de l'annuaire, sans tenir compte
+  de la casse ni des accents, ex. `@Jean Dupont tu peux regarder ?`) ne notifie que cette personne : les autres le voient
+  sans son ni notification.
 - L'administrateur peut ranger les conversations dans des **projets** (ou les laisser « Sans projet ») et les déplacer de l'un à l'autre. Les membres voient le nom du projet de leurs conversations, jamais la liste des autres projets.
 - Chaque projet peut avoir un **logo** (choisi par l'administrateur, réduit à 256 px et enregistré dans le document du projet), affiché dans la barre latérale et au-dessus du titre de ses conversations.
 - Chaque projet peut avoir des **rôles** (Développeur, Design…) modifiables par l'administrateur. Les rôles et les personnes qui les tiennent s'affichent dans la barre latérale, juste sous le nom du projet.
@@ -111,6 +113,7 @@ js/richtext.js          liens cliquables et code dans les messages
 js/links.js             liens attachés à une conversation (barre au-dessus de la saisie) ; validation des liens de projet
 js/pinned.js            messages épinglés par l'admin (barre sous l'en-tête de la conversation)
 js/notify.js            notifications (⚙️ → Notifications), enregistrement du service worker, abonnement push à la connexion
+js/mentions.js          mention « @Nom » en tête de message (copie identique : functions/mentions.js)
 js/push.js              abonnement Web Push de l'appareil (users/{uid}/push/{id})
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting

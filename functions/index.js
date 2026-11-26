@@ -9,6 +9,7 @@
 // chaque appareil s'abonne avec PushManager et enregistre son abonnement dans users/{uid}/push/{id}.
 // Le contenu est chiffré de bout en bout pour l'appareil (RFC 8291) : le service de push du
 // navigateur (Google, Mozilla, Apple, Microsoft) ne le lit pas.
+// Un message qui commence par « @Nom » (nom de l'annuaire) n'est envoyé qu'à cette personne.
 
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -19,6 +20,7 @@ import { GoogleAuth } from "google-auth-library";
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import webpush from "web-push";
+import { mentionedUid } from "./mentions.js";
 import { excerpt, PUSH_ENDPOINT_RE, recipientsOf } from "./push-utils.js";
 import { collectUsage } from "./usage.js";
 
@@ -55,6 +57,13 @@ async function authorLabel(m) {
   return m.authorUid === ADMIN_UID ? claimed : `${claimed} (non vérifié)`;
 }
 
+// Destinataire mentionné en tête du message (« @Nom … »), d'après l'annuaire, ou null.
+async function mentionOf(text, uids) {
+  if (typeof text !== "string" || !text.trimStart().startsWith("@")) return null;
+  const snaps = await db.getAll(...uids.map((uid) => db.doc(`names/${uid}`)));
+  return mentionedUid(text, snaps.map((s) => ({ uid: s.id, name: s.get("name") })));
+}
+
 async function sendTo(uid, payload, topic) {
   const subs = await db.collection(`users/${uid}/push`).orderBy("updatedAt", "desc").limit(MAX_DEVICES).get();
   await Promise.all(subs.docs.map(async (d) => {
@@ -88,8 +97,10 @@ export const notifyNewMessage = onDocumentCreated(
     const conv = await db.doc(`conversations/${convId}`).get();
     if (!conv.exists) return;
 
-    const recipients = recipientsOf(conv.get("members"), await adminUids(), m.authorUid);
+    let recipients = recipientsOf(conv.get("members"), await adminUids(), m.authorUid);
     if (!recipients.length) return;
+    const target = await mentionOf(m.text, recipients);
+    if (target) recipients = [target];
     const payload = JSON.stringify({
       title: `${await authorLabel(m)} · ${conv.get("title") || "Canal Dev"}`,
       body: excerpt(m),

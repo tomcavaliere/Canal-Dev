@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { ADMIN_UID, VAPID_PUBLIC_KEY } from "../js/firebase-config.js";
 import { excerpt, PUSH_ENDPOINT_RE, recipientsOf } from "../functions/push-utils.js";
+import { mentionedUid } from "../functions/mentions.js";
 
 const SOURCE = readFileSync(new URL("../functions/index.js", import.meta.url), "utf8");
 const constant = (name) => SOURCE.match(new RegExp(`const ${name} = "([^"]*)"`))?.[1];
@@ -29,6 +30,29 @@ describe("Destinataires", () => {
   it("des membres absents ou invalides sont ignorés", () => {
     assert.deepEqual(recipientsOf(undefined, ["admin"], "x"), ["admin"]);
     assert.deepEqual(recipientsOf(["a/b", "", 3, "ok"], [], "x"), ["ok"]);
+  });
+});
+
+describe("Mention en tête de message", () => {
+  const people = [
+    { uid: "jean", name: "Jean" }, { uid: "jd", name: "Jean Dupont" },
+    { uid: "elo", name: "Éloïse" }, { uid: "anon", name: null },
+  ];
+  it("le site et la Cloud Function utilisent le même code", () =>
+    assert.equal(readFileSync(new URL("../js/mentions.js", import.meta.url), "utf8"),
+      readFileSync(new URL("../functions/mentions.js", import.meta.url), "utf8")));
+  it("trouve la personne nommée, sans tenir compte de la casse ni des accents", () => {
+    assert.equal(mentionedUid("@jean tu peux regarder ?", people), "jean");
+    assert.equal(mentionedUid("  @eloise, merci", people), "elo");
+    assert.equal(mentionedUid("@Éloïse", people), "elo");
+  });
+  it("le nom le plus long l'emporte", () =>
+    assert.equal(mentionedUid("@Jean Dupont salut", people), "jd"));
+  it("pas de mention : null", () => {
+    assert.equal(mentionedUid("Salut @Jean", people), null);
+    assert.equal(mentionedUid("@Jeanne bonjour", people), null);
+    assert.equal(mentionedUid("@inconnu bonjour", people), null);
+    assert.equal(mentionedUid("", people), null);
   });
 });
 
