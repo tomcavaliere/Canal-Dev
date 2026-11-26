@@ -1173,6 +1173,113 @@ describe("Projet : notes des tâches", () => {
   });
 });
 
+describe("Projet : fichiers déposés", () => {
+  const carol = () => as("carol");
+  const meta = (uid, extra = {}) => ({ name: "rapport.md", size: 12, createdBy: uid, createdAt: serverTimestamp(), ...extra });
+  const data = (uid, extra = {}) => ({ text: "# Rapport\n", createdBy: uid, createdAt: serverTimestamp(), ...extra });
+  // Dépose un fichier (nom + contenu, même identifiant, avec le compteur anti-abus) au nom de `uid`.
+  const deposit = (db, uid, { m = {}, d = {}, withData = true, withMeta = true, id = "f9" } = {}) =>
+    rated(db, uid, (b) => {
+      if (withMeta) b.set(doc(db, `projects/p1/files/${id}`), meta(uid, m));
+      if (withData) b.set(doc(db, `projects/p1/fileData/${id}`), data(uid, d));
+    });
+  const seedFile = (id = "f1", by = "alice") => env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, `projects/p1/files/${id}`), { name: "page.html", size: 5, createdBy: by, createdAt: T0 });
+    await setDoc(doc(db, `projects/p1/fileData/${id}`), { text: "<p>x", createdBy: by, createdAt: T0 });
+  });
+
+  it("un membre dépose un fichier (nom et contenu ensemble), pas un non-membre ni un ancien membre", async () => {
+    await assertSucceeds(deposit(carol(), "carol"));
+    await assertFails(deposit(bob(), "bob"));
+    await assertFails(deposit(dave(), "dave"));
+    await assertSucceeds(deposit(admin(), ADMIN, { id: "f8" }));
+  });
+  it("le nom et le contenu vont ensemble : l'un sans l'autre est refusé", async () => {
+    await assertFails(deposit(carol(), "carol", { withData: false }));
+    await assertFails(deposit(carol(), "carol", { withMeta: false }));
+  });
+  it("sans le compteur anti-abus : refusé", async () => {
+    const db = carol();
+    const batch = writeBatch(db);
+    batch.set(doc(db, "projects/p1/files/f9"), meta("carol"));
+    batch.set(doc(db, "projects/p1/fileData/f9"), data("carol"));
+    await assertFails(batch.commit());
+  });
+  it("au nom d'un autre, à une autre date ou avec un champ en plus : refusé", async () => {
+    await assertFails(deposit(carol(), "carol", { m: { createdBy: "alice" } }));
+    await assertFails(deposit(carol(), "carol", { d: { createdBy: "alice" } }));
+    await assertFails(deposit(carol(), "carol", { m: { createdAt: T0 } }));
+    await assertFails(deposit(carol(), "carol", { m: { extra: 1 } }));
+    await assertFails(deposit(carol(), "carol", { d: { extra: 1 } }));
+  });
+  it("seuls les fichiers texte autorisés, de 900 Ko au plus", async () => {
+    for (const [k, name] of ["page.HTML", "notes.markdown", "data.csv", "script.py"].entries()) {
+      await clearRate("carol");
+      await assertSucceeds(deposit(carol(), "carol", { m: { name }, id: `ok${k}` }));
+    }
+    for (const name of ["image.png", "doc.pdf", "sans-extension", ".md", "a/b.md", "x".repeat(198) + ".md"]) {
+      await assertFails(deposit(carol(), "carol", { m: { name } }));
+    }
+    await assertFails(deposit(carol(), "carol", { m: { size: 900001 } }));
+    await assertFails(deposit(carol(), "carol", { m: { size: "12" } }));
+    await assertFails(deposit(carol(), "carol", { d: { text: "x".repeat(900001) } }));
+  });
+  it("les membres et l'admin lisent la liste et le contenu, pas un non-membre ni un ancien membre", async () => {
+    await seedFile();
+    await assertSucceeds(getDocs(collection(carol(), "projects/p1/files")));
+    await assertSucceeds(getDoc(doc(carol(), "projects/p1/fileData/f1")));
+    await assertSucceeds(getDoc(doc(admin(), "projects/p1/fileData/f1")));
+    await assertFails(getDocs(collection(bob(), "projects/p1/files")));
+    await assertFails(getDoc(doc(bob(), "projects/p1/fileData/f1")));
+    await assertFails(getDoc(doc(dave(), "projects/p1/fileData/f1")));
+  });
+  it("un fichier ne se modifie pas, même par son auteur ou l'admin", async () => {
+    await seedFile();
+    await assertFails(updateDoc(doc(alice(), "projects/p1/files/f1"), { name: "autre.md" }));
+    await assertFails(updateDoc(doc(alice(), "projects/p1/fileData/f1"), { text: "autre" }));
+    await assertFails(updateDoc(doc(admin(), "projects/p1/fileData/f1"), { text: "autre" }));
+  });
+  it("seuls l'auteur et l'admin le suppriment, avec son contenu", async () => {
+    await seedFile();
+    const db = carol();
+    await assertFails(rated(db, "carol", (b) => {
+      b.delete(doc(db, "projects/p1/files/f1"));
+      b.delete(doc(db, "projects/p1/fileData/f1"));
+    }));
+    const own = alice();
+    await assertSucceeds(rated(own, "alice", (b) => {
+      b.delete(doc(own, "projects/p1/files/f1"));
+      b.delete(doc(own, "projects/p1/fileData/f1"));
+      b.set(doc(collection(own, "logs")),
+        { action: "file.delete", uid: "alice", at: serverTimestamp(), projectId: "p1", label: "page.html" });
+    }));
+    await seedFile("f2");
+    await assertSucceeds(deleteDoc(doc(admin(), "projects/p1/files/f2")));
+    await assertSucceeds(deleteDoc(doc(admin(), "projects/p1/fileData/f2")));
+  });
+  it("le dépôt est journalisé dans le même batch", async () => {
+    const db = carol();
+    await assertSucceeds(rated(db, "carol", (b) => {
+      b.set(doc(db, "projects/p1/files/f9"), meta("carol"));
+      b.set(doc(db, "projects/p1/fileData/f9"), data("carol"));
+      b.set(doc(collection(db, "logs")),
+        { action: "file.create", uid: "carol", at: serverTimestamp(), projectId: "p1", label: "rapport.md" });
+    }));
+  });
+  it("droit à l'effacement : un ancien membre retrouve et supprime ses fichiers", async () => {
+    await seedFile("f1", "dave");
+    const db = dave();
+    await assertSucceeds(getDocs(query(collectionGroup(db, "files"), where("createdBy", "==", "dave"))));
+    await assertSucceeds(getDocs(query(collectionGroup(db, "fileData"), where("createdBy", "==", "dave"))));
+    await assertFails(getDocs(query(collectionGroup(carol(), "fileData"), where("createdBy", "==", "dave"))));
+    await assertSucceeds(rated(db, "dave", (b) => {
+      b.delete(doc(db, "projects/p1/files/f1"));
+      b.delete(doc(db, "projects/p1/fileData/f1"));
+    }));
+  });
+});
+
 describe("Droits RGPD (requêtes sur toutes les conversations)", () => {
   const mine = (db, group, field, uid) => getDocs(query(collectionGroup(db, group), where(field, "==", uid)));
 

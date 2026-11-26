@@ -216,7 +216,7 @@ service cloud.firestore {
     // Écrit dans le même batch que l'action. Ni modifiable ni falsifiable : l'auteur (`uid`) et l'heure
     // (`at`) sont ceux du serveur. Champs : `action` (« objet.verbe »), `projectId`, `convId` (facultatifs),
     // `about` (UID de la personne concernée : membre ajouté, nom changé…), `label` (titre au moment de l'action).
-    // Les admins écrivent toutes les actions ; un membre, seulement celles du calendrier et des tâches d'un
+    // Les admins écrivent toutes les actions ; un membre, seulement celles du calendrier, des tâches et des fichiers d'un
     // projet dont il est membre, comptées par le compteur anti-abus (30 écritures par minute).
     // Lu par les admins seuls ; chacun lit et efface les entrées qu'il a écrites ou qui le concernent
     // (export, effacement RGPD). Les admins suppriment les entrées de plus de 12 mois.
@@ -234,7 +234,7 @@ service cloud.firestore {
       }
       function memberLog() {
         let d = request.resource.data;
-        return d.action.matches('(task|goal|event)[.](create|update|done|reopen|assign|delete)')
+        return d.action.matches('(task|goal|event|file)[.](create|update|done|reopen|assign|delete)')
           && 'projectId' in d && !('convId' in d)
           && isProjectMember(d.projectId) && rateBumped();
       }
@@ -529,6 +529,55 @@ service cloud.firestore {
         // Supprimée avec sa tâche (même batch) ; l'admin, toujours.
         allow delete: if isAdmin() || (signedIn() && !existsAfter(noteTask()));
       }
+
+      // ---------- Fichiers déposés (zone de dépôt du projet) ----------
+      // Fichiers texte (HTML, Markdown, texte, code…) déposés par les membres du projet. Deux documents
+      // de même identifiant, écrits dans le même batch : files/{id} (nom, taille, auteur, date : c'est ce
+      // que la liste écoute) et fileData/{id} (le contenu, chargé seulement à l'ouverture du fichier).
+      // Ni l'un ni l'autre ne se modifie : on dépose une nouvelle version. L'auteur et l'admin suppriment.
+      // L'extension autorisée est la même que FILE_TYPES dans js/files.js.
+      match /files/{fileId} {
+        function fileData() {
+          return /databases/$(database)/documents/projects/$(projectId)/fileData/$(fileId);
+        }
+        function validFile() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['name', 'size', 'createdBy', 'createdAt'])
+            && d.name is string && d.name.size() <= 200
+            && d.name.lower().matches('[^/\\\\]+[.](html|htm|md|markdown|txt|csv|tsv|json|xml|yaml|yml|log|css|js|ts|py|sql|sh)')
+            && d.size is int && d.size >= 0 && d.size <= 900000
+            && d.createdBy == request.auth.uid
+            && d.createdAt == request.time
+            && existsAfter(fileData())
+            && getAfter(fileData()).data.createdBy == request.auth.uid;
+        }
+
+        allow read: if canSeeProject(projectId);
+        allow create: if canSeeProject(projectId) && validFile() && rateBumped();
+        allow update: if false;
+        // Supprimé avec son contenu (même batch, voir fileData) ; l'auteur même s'il a quitté le projet (effacement).
+        allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+      }
+
+      // ---------- Contenu des fichiers déposés (même identifiant que files/{id}) ----------
+      match /fileData/{fileId} {
+        function fileMeta() {
+          return /databases/$(database)/documents/projects/$(projectId)/files/$(fileId);
+        }
+        function validFileData() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['text', 'createdBy', 'createdAt'])
+            && d.text is string && d.text.size() <= 900000
+            && d.createdBy == request.auth.uid
+            && d.createdAt == request.time
+            && getAfter(fileMeta()).data.createdBy == request.auth.uid;
+        }
+
+        allow read: if canSeeProject(projectId);
+        allow create: if canSeeProject(projectId) && validFileData();
+        allow update: if false;
+        allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+      }
     }
 
     // ---------- Conversations ----------
@@ -769,6 +818,13 @@ service cloud.firestore {
     }
     match /{path=**}/notes/{noteId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('updatedBy', '') == request.auth.uid);
+    }
+    // Fichiers déposés dans les projets : ceux que l'on a déposés (export, effacement).
+    match /{path=**}/files/{fileId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+    }
+    match /{path=**}/fileData/{fileId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
     }
     match /{path=**}/tasks/{taskId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.createdBy == request.auth.uid
