@@ -127,6 +127,7 @@ js/links.js             liens attachés à une conversation (barre au-dessus de 
 js/pinned.js            messages épinglés par l'admin (barre sous l'en-tête de la conversation)
 js/notify.js            notifications (⚙️ → Notifications), enregistrement du service worker, abonnement push à la connexion
 js/mentions.js          mention « @Nom » en tête de message (copie identique : functions/mentions.js)
+js/mention-picker.js    suggestions « @… » dans la zone de saisie (membres de la conversation)
 js/push.js              abonnement Web Push de l'appareil (users/{uid}/push/{id})
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting

@@ -8,6 +8,7 @@ import { bumpRate, rateReady, rateWait } from "./rate.js";
 import { $, enterSends } from "./ui.js";
 import { clearReply, images, startReply } from "./messages.js";
 import { toggleEmojiMenu } from "./emoji.js";
+import { handleMentionKey, initMentionPicker } from "./mention-picker.js";
 import { state } from "./state.js";
 
 /* ---------- Photos : pièce jointe ---------- */
@@ -46,6 +47,7 @@ function syncComposer() {
 
 if (enterSends()) $("msg-input").title = "Entrée pour envoyer, Maj+Entrée pour aller à la ligne";
 $("msg-input").addEventListener("input", syncComposer);
+initMentionPicker(/** @type {HTMLTextAreaElement} */ ($("msg-input")));
 syncComposer();
 
 async function attachFile(file) {
@@ -208,6 +210,7 @@ window.addEventListener("offline", renderOnline);
 renderOnline();
 
 $("msg-input").addEventListener("keydown", (e) => {
+  if (handleMentionKey(e)) return; // menu « @… » ouvert : flèches, Entrée, Tab, Échap
   if (e.key === "Escape" && state.replyTo) {
     e.preventDefault();
     clearReply();
