@@ -54,6 +54,16 @@ Canal de communication pour suivre le développement d'un outil.
   Canal Dev. Les autres fichiers s'affichent en texte brut. « Source », « Copier » et « Télécharger » sont toujours disponibles.
   Un fichier ne se modifie pas (on dépose une nouvelle version) ; la personne qui l'a déposé (et l'admin) le supprime.
   Stockage : dans Firestore (`files/{id}` pour la liste, `fileData/{id}` pour le contenu, lu seulement à l'ouverture).
+- Une section **Outils** dans la barre latérale, ouverte à tous les utilisateurs qui ont accès à l'application.
+  **⛰️ Refuges FFCAM** y affiche, à la place de la conversation, une **carte OpenStreetMap** des 117 refuges et chalets
+  du Club alpin (un point par refuge, coloré selon sa chaîne) et leur **liste par chaîne et massif** (Alpes › Écrins,
+  Mont-Blanc… ; Pyrénées › Bigorre, Ariégeois… ; Massif central, Jura, Vosges), filtrable par nom ou massif. Un clic
+  sur un refuge (dans la liste ou sur la carte) ouvre sa **fiche** : massif, altitude, places, téléphone, description,
+  liens vers son site, ses tarifs et OpenStreetMap. La liste n'est pas lue en direct sur ffcam.fr (le navigateur ne le
+  permet pas) : elle est relevée par `node scripts/ffcam-refuges.mjs`, qui réécrit [data/refuges-ffcam.json](data/refuges-ffcam.json)
+  (à relancer puis commiter quand la FFCAM modifie sa liste ; un massif inconnu est signalé et rangé dans « Autres »).
+  Le nom des gardiens n'est pas repris. La carte utilise [Leaflet](https://leafletjs.com) 1.9.4, copié dans `vendor/leaflet/`
+  et chargé à la première ouverture de l'outil.
 - Un **tutoriel** en quelques étapes présente l'application : il s'ouvre seul à la première arrivée (une fois par compte et par
   navigateur, mémorisé dans le stockage local) et se rouvre depuis ⚙️ Paramètres → Mon compte.
   L'administrateur voit en plus une étape sur l'administration.
@@ -117,6 +127,9 @@ js/mentions.js          mention « @Nom » en tête de message (copie identique 
 js/push.js              abonnement Web Push de l'appareil (users/{uid}/push/{id})
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting
+js/refuges.js           outil « Refuges FFCAM » : carte OpenStreetMap, liste par chaîne et massif, fiche d'un refuge
+data/refuges-ffcam.json refuges et chalets FFCAM (produit par scripts/ffcam-refuges.mjs)
+vendor/leaflet/         Leaflet 1.9.4 (carte, licence BSD-2), copie du paquet npm
 confidentialite.html    politique de confidentialité
 RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
@@ -130,6 +143,7 @@ eslint.config.js        règles ESLint
 jsconfig.json           vérification des types par tsc (JSDoc)
 .github/workflows/      tests à chaque push, déploiement automatique depuis main
 scripts/test-rules.sh   lance l'émulateur Firestore et les tests
+scripts/ffcam-refuges.mjs relève les refuges sur ffcam.fr et écrit data/refuges-ffcam.json
 tests/rules.test.mjs    tests des règles de sécurité
 tests/functions.test.mjs tests de la Cloud Function (fonctions pures, configuration identique au site)
 tests/usage.test.mjs    tests du relevé des quotas (Cloud Monitoring simulé)
