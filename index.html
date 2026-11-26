@@ -250,6 +250,21 @@
         <div class="refuges-body">
           <div id="refuges-map" class="refuges-map" role="region" aria-label="Carte des refuges"></div>
           <nav class="refuges-list" aria-label="Refuges par chaîne et massif">
+            <fieldset class="refuges-dates">
+              <legend>Gardé pendant mon séjour</legend>
+              <div class="refuges-dates-row">
+                <label>Du <input id="refuges-from" type="date"></label>
+                <label>Au <input id="refuges-to" type="date"></label>
+              </div>
+              <div class="refuges-dates-row">
+                <label class="check"><input type="radio" name="refuges-mode" value="entiere" checked> Tous les jours</label>
+                <label class="check"><input type="radio" name="refuges-mode" value="un"> Au moins un jour</label>
+              </div>
+              <label class="check"><input id="refuges-unknown" type="checkbox"> Montrer aussi les refuges sans dates publiées</label>
+              <label class="check"><input id="refuges-free" type="checkbox"> Montrer aussi les refuges non gardés (accès libre)</label>
+              <p id="refuges-dates-summary" class="muted small" role="status"></p>
+              <div><button id="btn-refuges-dates-clear" class="btn small" type="button" hidden>Effacer les dates</button></div>
+            </fieldset>
             <input id="refuges-filter" type="search" placeholder="Filtrer : nom, massif…"
               aria-label="Filtrer les refuges par nom ou massif" autocomplete="off">
             <p id="refuges-empty" class="muted small" hidden>Aucun refuge ne correspond.</p>
@@ -454,15 +469,14 @@
   <dialog id="dlg-refuge" class="refuge-dialog" aria-labelledby="refuge-title">
     <div class="stack">
       <div>
-        <h2 id="refuge-title"></h2>
+        <h2 id="refuge-title" tabindex="-1" autofocus></h2>
         <p id="refuge-where" class="muted small"></p>
       </div>
-      <dl id="refuge-facts" class="refuge-facts"></dl>
-      <p id="refuge-desc"></p>
+      <div id="refuge-body" class="refuge-body"></div>
       <ul id="refuge-links" class="refuge-links"></ul>
-      <p class="muted small">Source : FFCAM. Vérifie l'ouverture et réserve auprès du refuge.</p>
+      <p id="refuge-source" class="muted small"></p>
       <div class="row end">
-        <button type="button" class="btn" data-close autofocus>Fermer</button>
+        <button type="button" class="btn" data-close>Fermer</button>
       </div>
     </div>
   </dialog>

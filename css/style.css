@@ -1017,8 +1017,34 @@ dialog.file-viewer[open] { display: flex; flex-direction: column; }
 .refuge-item.active { --muted: var(--muted-on-mine); background: var(--mine); }
 .refuge-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .refuge-item .muted { white-space: nowrap; }
-dialog.refuge-dialog { width: min(520px, calc(100vw - 32px)); }
+.refuge-dot.unknown { fill-opacity: .25; stroke-dasharray: 3 2; stroke: var(--chaine); }
+.refuges-dates { border: 1px solid var(--border); border-radius: 8px; padding: .5rem .65rem .6rem; margin: 0; display: flex; flex-direction: column; gap: .35rem; }
+.refuges-dates legend { font-weight: 700; font-size: .9rem; padding: 0 .25rem; }
+.refuges-dates-row { display: flex; flex-wrap: wrap; gap: .35rem .9rem; }
+.refuges-dates-row > label:not(.check) { display: flex; flex-direction: column; gap: .15rem; font-size: .85rem; flex: 1; min-width: 8.5rem; }
+.refuges-dates label.check { font-size: .85rem; }
+.refuges-dates p { margin: 0; }
+.refuge-item-name { flex: 1; min-width: 0; }
+.refuge-tag { font-size: .7rem; border: 1px solid currentColor; border-radius: 999px; padding: 0 .4rem; white-space: nowrap; color: var(--muted); }
+.refuge-tag.approx { border-style: dashed; }
+dialog.refuge-dialog { width: min(640px, calc(100vw - 32px)); }
+.refuge-body { display: flex; flex-direction: column; gap: .9rem; }
+.refuge-section { display: flex; flex-direction: column; gap: .4rem; border-top: 1px solid var(--border); padding-top: .7rem; }
+.refuge-section h3 { margin: 0; font-size: .95rem; }
+.refuge-text { white-space: pre-line; overflow-wrap: anywhere; margin: 0; }
+.refuge-statut { margin: 0; font-weight: 600; }
+.refuge-statut.garde, .refuge-statut.annee { color: var(--online); }
+.refuge-statut.ferme { color: var(--danger); }
+.refuge-range { margin: 0; padding: .35rem .6rem; border-radius: 8px; background: var(--surface-2); }
+.refuge-range.oui { background: color-mix(in srgb, var(--online) 14%, var(--surface)); }
+.refuge-range.non { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); }
+.refuge-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem; }
+.refuge-chips li { font-size: .8rem; padding: .1rem .55rem; border-radius: 999px; background: var(--surface-2); }
+.refuge-more summary { cursor: pointer; color: var(--accent); font-size: .9rem; min-height: 28px; display: flex; align-items: center; }
+.refuge-more summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
+.refuge-more p { margin-top: .3rem; }
 .refuge-dialog h2 { margin: 0; }
+.refuge-dialog h2:focus { outline: none; }
 .refuge-dialog p { margin: 0; }
 .refuge-facts { display: grid; grid-template-columns: auto 1fr; gap: .3rem 1rem; margin: 0; }
 .refuge-facts dt { color: var(--muted); }
