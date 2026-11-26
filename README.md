@@ -54,8 +54,11 @@ Canal de communication pour suivre le développement d'un outil.
   Canal Dev. Les autres fichiers s'affichent en texte brut. « Source », « Copier » et « Télécharger » sont toujours disponibles.
   Un fichier ne se modifie pas (on dépose une nouvelle version) ; la personne qui l'a déposé (et l'admin) le supprime.
   Stockage : dans Firestore (`files/{id}` pour la liste, `fileData/{id}` pour le contenu, lu seulement à l'ouverture).
-- Une section **Outils** dans la barre latérale, ouverte à tous les utilisateurs qui ont accès à l'application.
-  **⛰️ Refuges FFCAM** y affiche, à la place de la conversation, une **carte OpenStreetMap** des 117 refuges et chalets
+- Chaque projet peut avoir des **outils**, cochés par l'administrateur dans le ✎ du projet (catalogue dans
+  [js/tools.js](js/tools.js), identifiants autorisés par [firestore.rules](firestore.rules)). Ils s'affichent dans la barre
+  latérale, sous les liens du projet, **pour les seuls membres de ses conversations** (et les admins). Les données d'un
+  outil restent des fichiers publics du site : l'attacher à un projet règle ce qui est montré, pas un contrôle d'accès.
+  **⛰️ Refuges FFCAM** affiche, à la place de la conversation, une **carte OpenStreetMap** des 117 refuges et chalets
   du Club alpin (un point par refuge, coloré selon sa chaîne) et leur **liste par chaîne et massif** (Alpes › Écrins,
   Mont-Blanc… ; Pyrénées › Bigorre, Ariégeois… ; Massif central, Jura, Vosges), filtrable par nom ou massif. Un clic
   sur un refuge (dans la liste ou sur la carte) ouvre sa **fiche** : massif, altitude, places, téléphone, description,
@@ -127,6 +130,7 @@ js/mentions.js          mention « @Nom » en tête de message (copie identique 
 js/push.js              abonnement Web Push de l'appareil (users/{uid}/push/{id})
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting
+js/tools.js             catalogue des outils attachables à un projet, et qui peut les ouvrir
 js/refuges.js           outil « Refuges FFCAM » : carte OpenStreetMap, liste par chaîne et massif, fiche d'un refuge
 data/refuges-ffcam.json refuges et chalets FFCAM (produit par scripts/ffcam-refuges.mjs)
 vendor/leaflet/         Leaflet 1.9.4 (carte, licence BSD-2), copie du paquet npm
