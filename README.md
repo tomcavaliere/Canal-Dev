@@ -60,13 +60,20 @@ Canal de communication pour suivre le développement d'un outil.
   outil restent des fichiers publics du site : l'attacher à un projet règle ce qui est montré, pas un contrôle d'accès.
   **⛰️ Refuges FFCAM** affiche, à la place de la conversation, une **carte OpenStreetMap** des 117 refuges et chalets
   du Club alpin (un point par refuge, coloré selon sa chaîne) et leur **liste par chaîne et massif** (Alpes › Écrins,
-  Mont-Blanc… ; Pyrénées › Bigorre, Ariégeois… ; Massif central, Jura, Vosges), filtrable par nom ou massif. Un clic
-  sur un refuge (dans la liste ou sur la carte) ouvre sa **fiche** : massif, altitude, places, téléphone, description,
-  liens vers son site, ses tarifs et OpenStreetMap. La liste n'est pas lue en direct sur ffcam.fr (le navigateur ne le
-  permet pas) : elle est relevée par `node scripts/ffcam-refuges.mjs`, qui réécrit [data/refuges-ffcam.json](data/refuges-ffcam.json)
-  (à relancer puis commiter quand la FFCAM modifie sa liste ; un massif inconnu est signalé et rangé dans « Autres »).
-  Le nom des gardiens n'est pas repris. La carte utilise [Leaflet](https://leafletjs.com) 1.9.4, copié dans `vendor/leaflet/`
-  et chargé à la première ouverture de l'outil.
+  Mont-Blanc… ; Pyrénées › Bigorre, Ariégeois… ; Massif central, Jura, Vosges), filtrable par nom, massif ou gardien.
+  Le filtre **« Gardé pendant mon séjour »** (dates d'arrivée et de départ) ne garde que les refuges gardés tous les jours
+  de la plage (ou au moins un jour) ; les refuges dont les dates de l'année ne sont pas encore publiées et les refuges non
+  gardés peuvent être montrés à part. Les dates viennent du texte libre « Période de gardiennage » de chaque refuge,
+  analysé par [scripts/ffcam-periodes.mjs](scripts/ffcam-periodes.mjs) : « mi-juin », « début septembre » sont des dates
+  approximatives, signalées par ≈. Un clic sur un refuge (dans la liste ou sur la carte) ouvre sa **fiche** : localisation,
+  adresse, altitude, places, téléphone, gardien(ne)s, période de gardiennage, couchages et équipements (en période gardée et
+  hors gardiennage), accès (départ, distance, dénivelé, temps, difficulté, itinéraires, route et transports), réglementation,
+  liens vers son site, ses tarifs et OpenStreetMap. Les données ne sont pas lues en direct sur ffcam.fr (le navigateur ne le
+  permet pas) : `node scripts/ffcam-refuges.mjs` relève la page de recherche puis, pour chaque refuge, l'accueil et la page
+  « Accès » de son mini-site (une page par seconde, quatre minutes environ ; `--cache <dossier>` garde les pages pour la
+  mise au point), et réécrit [data/refuges-ffcam.json](data/refuges-ffcam.json). À relancer puis commiter en début de
+  saison, quand les refuges publient leurs dates ; un massif inconnu ou une période introuvable est signalé.
+  La carte utilise [Leaflet](https://leafletjs.com) 1.9.4, copié dans `vendor/leaflet/` et chargé à la première ouverture de l'outil.
 - Un **tutoriel** en quelques étapes présente l'application : il s'ouvre seul à la première arrivée (une fois par compte et par
   navigateur, mémorisé dans le stockage local) et se rouvre depuis ⚙️ Paramètres → Mon compte.
   L'administrateur voit en plus une étape sur l'administration.
@@ -132,7 +139,8 @@ js/push.js              abonnement Web Push de l'appareil (users/{uid}/push/{id}
 js/images.js            préparation des photos (redimensionnement, suppression des métadonnées)
 js/redirect.js          redirige l'ancienne adresse GitHub Pages vers Firebase Hosting
 js/tools.js             catalogue des outils attachables à un projet, et qui peut les ouvrir
-js/refuges.js           outil « Refuges FFCAM » : carte OpenStreetMap, liste par chaîne et massif, fiche d'un refuge
+js/refuges.js           outil « Refuges FFCAM » : carte OpenStreetMap, liste par chaîne et massif, filtre par dates, fiche d'un refuge
+js/periodes.js          filtre « gardé du … au … » : périodes de gardiennage comparées à une plage de dates
 data/refuges-ffcam.json refuges et chalets FFCAM (produit par scripts/ffcam-refuges.mjs)
 vendor/leaflet/         Leaflet 1.9.4 (carte, licence BSD-2), copie du paquet npm
 confidentialite.html    politique de confidentialité
@@ -148,7 +156,9 @@ eslint.config.js        règles ESLint
 jsconfig.json           vérification des types par tsc (JSDoc)
 .github/workflows/      tests à chaque push, déploiement automatique depuis main
 scripts/test-rules.sh   lance l'émulateur Firestore et les tests
-scripts/ffcam-refuges.mjs relève les refuges sur ffcam.fr et écrit data/refuges-ffcam.json
+scripts/ffcam-refuges.mjs relève les refuges sur ffcam.fr et leurs mini-sites, et écrit data/refuges-ffcam.json
+scripts/ffcam-periodes.mjs analyse le texte « Période de gardiennage » des refuges
+tests/periodes.test.mjs tests de l'analyse des périodes de gardiennage et du filtre par dates
 tests/rules.test.mjs    tests des règles de sécurité
 tests/functions.test.mjs tests de la Cloud Function (fonctions pures, configuration identique au site)
 tests/usage.test.mjs    tests du relevé des quotas (Cloud Monitoring simulé)
