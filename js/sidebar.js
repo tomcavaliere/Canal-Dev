@@ -4,7 +4,8 @@ import { displayText, nameOf } from "./names.js";
 import { isLogo } from "./images.js";
 import { linkHost, linksOf } from "./links.js";
 import { $ } from "./ui.js";
-import { openProjectCalendar, selectConversation } from "./app.js";
+import { openProjectCalendar, openProjectTool, selectConversation } from "./app.js";
+import { toolsOf } from "./tools.js";
 import { pendingInvitations } from "./calendar.js";
 import { openOrgChart } from "./org.js";
 import { COUNT_LIMIT, openTaskCount, openTasks } from "./tasks.js";
@@ -226,7 +227,39 @@ function linksBlock(projectId) {
   return ul;
 }
 
-// Un groupe repliable : en-tête (titre du projet), ses rôles et ses liens, puis la liste de ses conversations.
+// Outils attachés au projet par l'admin (js/tools.js), sous ses liens : chacun s'ouvre à la place de la conversation.
+function toolsBlock(projectId) {
+  const tools = toolsOf(state.projects.get(projectId));
+  if (!tools.length) return null;
+  const ul = document.createElement("ul");
+  ul.className = "list group-tools";
+  ul.setAttribute("aria-label", "Outils du projet");
+  for (const t of tools) {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "group-tool";
+    b.title = t.description;
+    b.dataset.focus = `tool:${projectId}:${t.id}`;
+    if (state.toolOpen?.projectId === projectId && state.toolOpen.toolId === t.id) {
+      b.classList.add("active");
+      b.setAttribute("aria-current", "page");
+    }
+    const icon = document.createElement("span");
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = t.icon;
+    const name = document.createElement("span");
+    name.className = "group-tool-name";
+    name.textContent = t.name;
+    b.append(icon, name);
+    b.addEventListener("click", () => openProjectTool(projectId, t.id));
+    li.append(b);
+    ul.append(li);
+  }
+  return ul;
+}
+
+// Un groupe repliable : en-tête (titre du projet), ses rôles, ses liens et ses outils, puis la liste de ses conversations.
 function projectGroup(projectId, title, convs) {
   const li = document.createElement("li");
   li.className = "group" + (projectId ? "" : " group-loose");
@@ -327,6 +360,8 @@ function projectGroup(projectId, title, convs) {
     if (roles) li.append(roles);
     const links = projectId ? linksBlock(projectId) : null;
     if (links) li.append(links);
+    const tools = projectId ? toolsBlock(projectId) : null;
+    if (tools) li.append(tools);
     const ul = document.createElement("ul");
     ul.className = "list group-items";
     const items = convs.map(([id, c]) => conversationItem(id, c));

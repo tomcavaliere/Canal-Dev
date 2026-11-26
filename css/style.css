@@ -963,8 +963,16 @@ dialog.file-viewer[open] { display: flex; flex-direction: column; }
   .cal-body { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Outils (barre latérale) et outil « Refuges FFCAM » */
-.sidebar-tools { margin-top: 1rem; }
+/* Outils d'un projet (barre latérale, sous ses liens) et outil « Refuges FFCAM » */
+.group-tools { margin: 0 0 .15rem 1rem; border-left: 2px solid color-mix(in srgb, var(--proj) 35%, transparent); }
+.group-tool {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: .4rem; width: 100%;
+  padding: .3rem .75rem .3rem 1.1rem; min-height: 32px; font-size: .85rem; cursor: pointer;
+}
+.group-tool:hover { background: var(--surface-2); }
+.group-tool.active { --muted: var(--muted-on-mine); background: var(--mine); }
+.group-tool:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.group-tool-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chaine-0 { --chaine: var(--proj-0); }
 .chaine-1 { --chaine: var(--proj-3); }
 .chaine-2 { --chaine: var(--proj-2); }
@@ -972,7 +980,7 @@ dialog.file-viewer[open] { display: flex; flex-direction: column; }
 .chaine-4 { --chaine: var(--proj-4); }
 .chaine-5 { --chaine: var(--proj-5); }
 .refuges-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.refuges-view .chat-project { color: var(--accent); }
+.refuges-view .chat-project { color: var(--proj, var(--accent)); }
 .refuges-error { margin: 0; padding: .5rem 1rem 0; }
 .refuges-body {
   flex: 1; min-height: 0; padding: 1rem;

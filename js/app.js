@@ -26,6 +26,7 @@ import { renderOrgChart } from "./org.js";
 import { renderTasks, syncTaskCounts, taskUids, teardownTasks } from "./tasks.js";
 import { fileUids, renderFiles, teardownFiles } from "./files.js";
 import { closeRefuges, openRefuges } from "./refuges.js";
+import { canUseTool, TOOLS } from "./tools.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
@@ -290,7 +291,7 @@ function teardown() {
   clearReply();
   Object.assign(state, {
     user: null, isAdmin: false, isOwner: false, unsubAdminFlag: null, conversations: new Map(), convsLoaded: false, projects: new Map(), projectsLoaded: false,
-    selectedId: null, calendarProjectId: null,
+    selectedId: null, calendarProjectId: null, toolOpen: null,
     unsubConvs: null, unsubProjects: null, projectSubs: new Map(), unsubMessages: null, msgWatchers: new Map(), admin: null,
     unsubReads: null, reads: null, readWrite: 0, myReads: null, unsubMyReads: null, unsubInvite: null,
     recent: new Map(), unread: new Map(),
@@ -364,7 +365,7 @@ function listenConversations() {
       selectConversation(requestedConv);
       requestedConv = null;
     }
-    if (!state.selectedId && !state.calendarProjectId && state.conversations.size > 0 && !isMobile()) {
+    if (!state.selectedId && !state.calendarProjectId && !state.toolOpen && state.conversations.size > 0 && !isMobile()) {
       selectConversation(sortedConversations()[0][0]);
     }
     if (state.conversations.size > 0) maybeShowTutorial();
@@ -373,6 +374,7 @@ function listenConversations() {
     adminSyncTickets();
     syncTaskCounts();
     onCalendarContextChanged();
+    onToolContextChanged();
     renderTasks();
     renderFiles();
     syncNames();
@@ -402,6 +404,7 @@ function listenAllProjects() {
     adminSyncTickets();
     syncTaskCounts();
     onCalendarContextChanged();
+    onToolContextChanged();
     renderConversationList();
     renderOrgChart();
     renderTasks();
@@ -429,6 +432,7 @@ function syncProjectListeners() {
       syncNames(); // personnes qui tiennent un rôle
       syncTaskCounts();
       onCalendarContextChanged();
+      onToolContextChanged();
       renderConversationList();
       renderOrgChart();
       renderTasks();
@@ -490,7 +494,7 @@ function scheduleNamesRender() {
 export function selectConversation(id) {
   if (!state.conversations.has(id)) return;
   closeCalendar();
-  closeRefuges();
+  closeTool();
   $("screen-app").classList.add("show-chat");
   if (state.selectedId === id) {
     markViewedRead(); // mobile : retour sur la conversation déjà sélectionnée
@@ -600,7 +604,7 @@ function renderOnline() {
 $("btn-back").addEventListener("click", () => {
   $("screen-app").classList.remove("show-chat");
   closeCalendar();
-  closeRefuges();
+  closeTool();
 });
 // Mobile : la barre du haut est masquée dans une conversation, l'en-tête a son propre retour.
 $("btn-chat-back").addEventListener("click", () => $("btn-back").click());
@@ -653,19 +657,53 @@ renderSidebarToggle();
 export function openProjectCalendar(projectId) {
   if (!state.projects.get(projectId)) return;
   if (state.selectedId) closeConversation();
-  closeRefuges();
+  closeTool();
   $("screen-app").classList.add("show-chat");
   openCalendar(projectId);
 }
 
-// Outil « Refuges FFCAM » (section Outils de la barre latérale) : il prend aussi la place de la conversation.
-$("btn-tool-refuges").addEventListener("click", () => {
+// Outil d'un projet (barre latérale, sous ses liens) : il prend aussi la place de la conversation.
+// Seuls les membres du projet (et les admins) le voient et l'ouvrent (js/tools.js).
+/**
+ * @param {string} projectId
+ * @param {string} toolId
+ */
+export function openProjectTool(projectId, toolId) {
+  if (!canUseTool(projectId, toolId)) return;
   if (state.selectedId) closeConversation();
   closeCalendar();
+  if (state.toolOpen && state.toolOpen.toolId !== toolId) closeTool();
+  state.toolOpen = { projectId, toolId };
   $("screen-app").classList.add("show-chat");
-  openRefuges();
-});
-$("btn-refuges-close").addEventListener("click", () => {
+  renderToolHeader();
+  if (toolId === "refuges-ffcam") openRefuges();
+  renderConversationList();
+}
+
+function closeTool() {
+  if (!state.toolOpen) return;
+  state.toolOpen = null;
   closeRefuges();
+  renderConversationList();
+}
+
+function renderToolHeader() {
+  const t = state.toolOpen;
+  if (!t) return;
+  $("refuges-project").textContent = state.projects.get(t.projectId)?.title || "";
+  $("refuges-view").style.setProperty("--proj", projectColor(t.projectId));
+  $("refuges-heading").textContent = TOOLS.find((x) => x.id === t.toolId)?.name || "";
+}
+
+// Projets ou conversations modifiés : l'outil a pu être retiré du projet, ou le projet devenir inaccessible.
+function onToolContextChanged() {
+  const t = state.toolOpen;
+  if (!t) return;
+  if (canUseTool(t.projectId, t.toolId)) renderToolHeader();
+  else closeTool();
+}
+
+$("btn-refuges-close").addEventListener("click", () => {
+  closeTool();
   $("screen-app").classList.remove("show-chat");
 });

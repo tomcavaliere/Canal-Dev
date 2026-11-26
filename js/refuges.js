@@ -1,4 +1,4 @@
-// Outil « Refuges FFCAM » : carte OpenStreetMap et liste par chaîne et massif des refuges et chalets
+// Outil de projet « Refuges FFCAM » (js/tools.js) : carte OpenStreetMap et liste par chaîne et massif des refuges et chalets
 // du Club alpin, et fiche d'un refuge dans un dialogue. Les données viennent de data/refuges-ffcam.json,
 // produit par scripts/ffcam-refuges.mjs. Leaflet (vendor/leaflet) n'est chargé qu'à la première ouverture.
 
@@ -37,16 +37,12 @@ const markers = new Map();
 /** @type {string|null} */
 let selected = null;
 
-export function isRefugesOpen() {
-  return open;
-}
-
-// Ouvre la vue (à la place de la conversation). L'appelant a fermé la conversation et le calendrier.
+// Ouvre la vue (à la place de la conversation). L'appelant (openProjectTool) a fermé la conversation
+// et le calendrier, et vérifié que le projet a cet outil.
 export function openRefuges() {
   open = true;
   $("chat-empty").hidden = true;
   $("refuges-view").hidden = false;
-  $("btn-tool-refuges").classList.add("active");
   loading ??= load().catch((err) => {
     loading = null;
     console.error("Chargement des refuges impossible", err);
@@ -61,7 +57,6 @@ export function closeRefuges() {
   open = false;
   if ($("dlg-refuge").open) $("dlg-refuge").close();
   $("refuges-view").hidden = true;
-  $("btn-tool-refuges").classList.remove("active");
   if ($("chat-view").hidden && $("cal-view").hidden) $("chat-empty").hidden = false;
 }
 

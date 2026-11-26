@@ -19,6 +19,7 @@ import { isLogo, prepareLogo } from "./images.js";
 import { deleteProjectCalendar } from "./tickets.js";
 import { linksOf, MAX_LABEL, MAX_PROJECT_LINKS, normalizeUrl } from "./links.js";
 import { state } from "./state.js";
+import { TOOLS, toolsOf } from "./tools.js";
 import { addLog, log, purgeOldLogs, setupLogView } from "./log.js";
 
 // Durée de conservation d'un compte sans connexion (voir confidentialite.html).
@@ -752,9 +753,35 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     renderRoleEditors();
     draftLinks = linksOf(p).map((l) => ({ id: newRoleId(), label: l.label, url: l.url }));
     renderLinkEditors();
+    renderToolChoices(p);
     dlgProject.showModal();
   }
   on($("btn-new-project"), "click", () => openProjectDialog());
+
+  // Outils du projet (catalogue de js/tools.js) : une case par outil.
+  function renderToolChoices(p) {
+    const enabled = new Set(toolsOf(p).map((t) => t.id));
+    $("project-tools").replaceChildren(...TOOLS.map((t) => {
+      const label = document.createElement("label");
+      label.className = "check";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = t.id;
+      input.checked = enabled.has(t.id);
+      const text = document.createElement("span");
+      text.textContent = `${t.icon} ${t.name}`;
+      const desc = document.createElement("span");
+      desc.className = "muted small";
+      desc.textContent = ` — ${t.description}`;
+      text.append(desc);
+      label.append(input, text);
+      return label;
+    }));
+  }
+  /** @returns {string[]} */
+  function toolsField() {
+    return [...$("project-tools").querySelectorAll("input[type=checkbox]:checked")].map((i) => i.value);
+  }
 
   /* --- Logo d'un projet (petite image enregistrée dans le document du projet) --- */
   /** @type {string | null} */
@@ -1094,12 +1121,14 @@ export function setupAdmin({ getConversations, getProjects, getSelected, selectC
     try {
       if (editingProjectId) {
         await updateDoc(doc(db, "projects", editingProjectId), {
-          title, description, ...rolesFields(), ...levelsFields(), links: linked.links, logo: draftLogo ?? deleteField(), updatedAt: serverTimestamp(),
+          title, description, ...rolesFields(), ...levelsFields(), links: linked.links, tools: toolsField(),
+          logo: draftLogo ?? deleteField(), updatedAt: serverTimestamp(),
         });
         log("project.update", { projectId: editingProjectId, label: title });
       } else {
         const ref = await addDoc(collection(db, "projects"), {
-          title, description, ...rolesFields(), ...levelsFields(), links: linked.links, ...(draftLogo ? { logo: draftLogo } : {}),
+          title, description, ...rolesFields(), ...levelsFields(), links: linked.links, tools: toolsField(),
+          ...(draftLogo ? { logo: draftLogo } : {}),
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
         log("project.create", { projectId: ref.id, label: title });

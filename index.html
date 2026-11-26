@@ -76,16 +76,6 @@
       </div>
       <ul id="conv-list" class="list"></ul>
 
-      <div class="sidebar-tools">
-        <div class="sidebar-head">
-          <h2>Outils</h2>
-        </div>
-        <ul class="list">
-          <li><button id="btn-tool-refuges" class="item" type="button"><span class="item-row"><span class="item-title"><span
-            aria-hidden="true">⛰️ </span>Refuges FFCAM</span></span><span class="item-sub">Carte et liste par massif</span></button></li>
-        </ul>
-      </div>
-
       <div id="admin-users" hidden>
         <div class="sidebar-head">
           <h2>Utilisateurs</h2>
@@ -244,11 +234,11 @@
         </div>
       </section>
 
-      <!-- Outil : refuges FFCAM (à la place de la conversation) -->
+      <!-- Outil d'un projet : refuges FFCAM (à la place de la conversation) -->
       <section id="refuges-view" class="refuges-view" aria-labelledby="refuges-heading" hidden>
         <div class="chat-head">
           <div class="chat-head-text">
-            <p class="chat-project small">Outils</p>
+            <p id="refuges-project" class="chat-project small"></p>
             <h2 id="refuges-heading">Refuges FFCAM</h2>
             <p id="refuges-source" class="muted small">Chargement…</p>
           </div>
@@ -353,6 +343,12 @@
           Visibles par les membres des conversations du projet.</p>
         <ol id="project-links" class="role-editors"></ol>
         <div><button id="btn-add-project-link" type="button" class="btn small">+ Lien</button></div>
+      </fieldset>
+      <fieldset class="stack tight project-roles">
+        <legend>Outils</legend>
+        <p class="muted small">Affichés sous le nom du projet, dans la barre latérale. Visibles seulement par les membres
+          des conversations du projet.</p>
+        <div id="project-tools" class="stack tight"></div>
       </fieldset>
       <p id="project-error" class="error small" role="alert" hidden></p>
       <div class="row end">
