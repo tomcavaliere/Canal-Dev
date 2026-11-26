@@ -3,7 +3,7 @@ import js from "@eslint/js";
 import globals from "globals";
 
 export default [
-  { ignores: ["node_modules/", "functions/node_modules/", "js/sdk/"] },
+  { ignores: ["node_modules/", "functions/node_modules/", "js/sdk/", "vendor/"] },
   js.configs.recommended,
   {
     files: ["js/**/*.js"],
@@ -18,7 +18,7 @@ export default [
     languageOptions: { sourceType: "script" },
   },
   {
-    files: ["tests/**/*.mjs", "eslint.config.js", "functions/**/*.js"],
+    files: ["tests/**/*.mjs", "scripts/**/*.mjs", "eslint.config.js", "functions/**/*.js"],
     languageOptions: { ecmaVersion: 2023, sourceType: "module", globals: globals.node },
   },
   {
