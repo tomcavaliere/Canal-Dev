@@ -25,6 +25,7 @@ import { isLogo } from "./images.js";
 import { renderOrgChart } from "./org.js";
 import { renderTasks, syncTaskCounts, taskUids, teardownTasks } from "./tasks.js";
 import { fileUids, renderFiles, teardownFiles } from "./files.js";
+import { closeRefuges, openRefuges } from "./refuges.js";
 import { isMobile, state } from "./state.js";
 import { listenRate, stopRate } from "./rate.js";
 import {
@@ -277,6 +278,7 @@ function teardown() {
   state.msgWatchers.forEach((unsub) => unsub());
   state.admin?.teardown();
   teardownCalendar();
+  closeRefuges();
   teardownTasks();
   teardownFiles();
   resetTickets();
@@ -488,6 +490,7 @@ function scheduleNamesRender() {
 export function selectConversation(id) {
   if (!state.conversations.has(id)) return;
   closeCalendar();
+  closeRefuges();
   $("screen-app").classList.add("show-chat");
   if (state.selectedId === id) {
     markViewedRead(); // mobile : retour sur la conversation déjà sélectionnée
@@ -597,6 +600,7 @@ function renderOnline() {
 $("btn-back").addEventListener("click", () => {
   $("screen-app").classList.remove("show-chat");
   closeCalendar();
+  closeRefuges();
 });
 // Mobile : la barre du haut est masquée dans une conversation, l'en-tête a son propre retour.
 $("btn-chat-back").addEventListener("click", () => $("btn-back").click());
@@ -649,6 +653,19 @@ renderSidebarToggle();
 export function openProjectCalendar(projectId) {
   if (!state.projects.get(projectId)) return;
   if (state.selectedId) closeConversation();
+  closeRefuges();
   $("screen-app").classList.add("show-chat");
   openCalendar(projectId);
 }
+
+// Outil « Refuges FFCAM » (section Outils de la barre latérale) : il prend aussi la place de la conversation.
+$("btn-tool-refuges").addEventListener("click", () => {
+  if (state.selectedId) closeConversation();
+  closeCalendar();
+  $("screen-app").classList.add("show-chat");
+  openRefuges();
+});
+$("btn-refuges-close").addEventListener("click", () => {
+  closeRefuges();
+  $("screen-app").classList.remove("show-chat");
+});
