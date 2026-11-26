@@ -46,6 +46,7 @@
           <tr><td>Calendrier d'un projet : réunions que tu organises (titre, date, lieu, ordre du jour, invités),
             tes invitations et ta réponse (présent ou absent), objectifs et tâches que tu ajoutes, coches ou dont tu es responsable</td><td>Saisis par toi
             (ou par l'organisateur qui t'invite)</td><td>Organiser les réunions et suivre les objectifs et les tâches du projet</td></tr>
+          <tr><td>Fichiers que tu déposes dans un projet (HTML, Markdown, texte…) : nom, taille, contenu, date</td><td>Déposés par toi</td><td>Partager des documents avec les membres du projet</td></tr>
           <tr><td>Journal d'activité : ce que tu fais (créer, modifier, cocher ou supprimer une tâche, un objectif ou une réunion…),
             avec la date et le titre concerné, et les actions de l'administrateur qui te concernent (ajout à une conversation,
             nom affiché…)</td><td>Enregistré automatiquement à chaque action</td><td>Permettre à l'administrateur de savoir qui a fait
@@ -92,7 +93,7 @@
       <li><strong>Les membres d'un projet</strong> (membres de ses conversations) : son calendrier, c'est-à-dire
         les réunions (avec leurs invités, leurs réponses et leur organisateur) les objectifs et les tâches (avec la personne
         qui les a ajoutés ou cochés, le responsable d'une tâche, et la date), ainsi que les notes des tâches (avec la
-        dernière personne qui les a modifiées et la date), avec ton nom affiché.</li>
+        dernière personne qui les a modifiées et la date), et les fichiers déposés (avec la personne qui les a déposés et la date), avec ton nom affiché.</li>
       <li><strong>Les sous-traitants techniques</strong> listés ci-dessous, uniquement pour héberger le service.</li>
     </ul>
     <p>Ces règles d'accès sont appliquées côté serveur : un utilisateur ne peut techniquement pas lire
@@ -147,6 +148,8 @@
         supprimés, et tu es retiré des invitations, des objectifs et tâches que tu as cochés et des tâches dont tu étais responsable). Une tâche terminée
         est conservée dans l'historique du projet jusqu'à là. La <strong>note</strong> d'une tâche est supprimée avec elle ;
         si tu supprimes ton compte, ton nom est retiré des notes que tu as modifiées en dernier.</li>
+      <li><strong>Fichiers déposés</strong> : jusqu'à ce que tu les supprimes (ou l'administrateur), que l'administrateur
+        supprime le projet, ou que tu supprimes ton compte (tes fichiers sont alors supprimés).</li>
       <li><strong>Journal d'activité</strong> : 12 mois, puis supprimé automatiquement ; supprimé plus tôt si tu supprimes
         ton compte.</li>
       <li><strong>Retrait d'accès</strong> : si l'administrateur te retire d'une conversation, tes messages
@@ -188,7 +191,7 @@
         (fichier JSON contenant toutes les données te concernant, photos comprises, ainsi que les
         informations de ton compte de connexion, dont l'adresse de ta photo Google).</li>
       <li><strong>Effacement</strong> : bouton <em>Paramètres → Mon compte → Supprimer mon compte</em>
-        (supprime ton profil, tous tes messages et photos, tes réunions, objectifs et tâches, ton journal d'activité, tes accès et ton compte de connexion). Tu peux aussi supprimer un message ou une photo à tout moment.</li>
+        (supprime ton profil, tous tes messages et photos, tes réunions, objectifs et tâches, tes fichiers déposés, ton journal d'activité, tes accès et ton compte de connexion). Tu peux aussi supprimer un message ou une photo à tout moment.</li>
       <li><strong>Rectification</strong> : ton nom affiché est fixé par l'administrateur (au départ, celui de
         ton compte Google) ; il figure dans <em>Paramètres → Mon compte</em>. Pour le corriger, écris à l'adresse ci-dessous.
         Pour un message, modifie-le (il porte alors la mention « modifié ») ou supprime-le ;

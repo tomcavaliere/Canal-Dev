@@ -44,6 +44,14 @@ Canal de communication pour suivre le développement d'un outil.
   Dans la liste, les échéances les plus proches passent en premier.
   Le nombre de **tâches ouvertes** s'affiche en pastille sur le ✅ de chaque projet dans la barre latérale (en couleur quand certaines
   te sont assignées, « 100+ » au-delà de 100).
+- Chaque projet a une **zone de dépôt de fichiers** (📁 à côté de son nom), ouverte à tous ses membres : on y glisse (ou choisit)
+  des fichiers **texte** — HTML, Markdown, texte, CSV, TSV, JSON, XML, YAML, journaux, CSS, JS, TS, Python, SQL, shell —, 900 Ko au
+  plus chacun, 200 par projet. Un clic ouvre le fichier : le **Markdown** est mis en forme dans l'application ([js/markdown.js](js/markdown.js),
+  sans jamais interpréter de HTML), une **page HTML** s'affiche avec ses styles et ses scripts dans [apercu.html](apercu.html), chargée dans un
+  cadre `sandbox` **sans** `allow-same-origin` : la page a une origine opaque et n'a accès ni au compte, ni aux données, ni au stockage de
+  Canal Dev. Les autres fichiers s'affichent en texte brut. « Source », « Copier » et « Télécharger » sont toujours disponibles.
+  Un fichier ne se modifie pas (on dépose une nouvelle version) ; la personne qui l'a déposé (et l'admin) le supprime.
+  Stockage : dans Firestore (`files/{id}` pour la liste, `fileData/{id}` pour le contenu, lu seulement à l'ouverture).
 - Un **tutoriel** en quelques étapes présente l'application : il s'ouvre seul à la première arrivée (une fois par compte et par
   navigateur, mémorisé dans le stockage local) et se rouvre depuis ⚙️ Paramètres → Mon compte.
   L'administrateur voit en plus une étape sur l'administration.
@@ -55,7 +63,7 @@ Canal de communication pour suivre le développement d'un outil.
 - Un **journal d'activité** (bouton **Journal** dans « Utilisateurs », réservé aux admins) liste qui a fait quoi et quand :
   projets et conversations créés, modifiés, déplacés ou supprimés, membres ajoutés ou retirés, invitations, noms affichés,
   droits d'administration, comptes supprimés, liens et épingles, et dans les projets les tâches, objectifs et réunions
-  (créés, modifiés, cochés, rouverts, supprimés, responsable). Du plus récent au plus ancien, filtrable par projet.
+  (créés, modifiés, cochés, rouverts, supprimés, responsable) et les fichiers (déposés, supprimés). Du plus récent au plus ancien, filtrable par projet.
   Les entrées ne se modifient pas ; elles sont supprimées au bout de 12 mois.
 - Le nom affiché à côté des messages vient d'un **annuaire tenu par l'administrateur** : personne ne peut se faire passer pour un autre membre, et les messages de l'admin portent un badge **Admin**.
 
@@ -67,6 +75,7 @@ Le contrôle d'accès est appliqué côté serveur par [firestore.rules](firesto
 
 ```
 index.html              page unique
+apercu.html             aperçu isolé des pages HTML déposées (cadre sandbox, voir js/files.js)
 manifest.webmanifest    installation comme application (PWA)
 sw.js                   service worker : installation, notifications, notifications push et pastille de l'icône (aucune page en cache)
 icons/                  icônes de l'application (icon.svg est la source des PNG)
@@ -86,6 +95,9 @@ js/emoji.js             réactions (liste fixe), sélecteur d'emojis, emojis aff
 js/admin.js             création de conversations, gestion des membres (admin)
 js/calendar.js          calendrier d'un projet : réunions, invitations et réponses, objectifs, tâches à échéance
 js/tasks.js             liste de tâches d'un projet (todo list, historique des tâches terminées)
+js/files.js             fichiers d'un projet : zone de dépôt, liste, ouverture (aperçu, source, téléchargement)
+js/markdown.js          rendu Markdown des fichiers déposés (nœuds DOM, jamais de HTML)
+js/apercu.js            script de apercu.html : reçoit la page déposée et l'affiche
 js/log.js               journal d'activité : écriture des entrées, dialogue « Journal » (admins), purge à 12 mois
 js/org.js              organigramme d'un projet : rôles rangés par niveau (lecture)
 js/tickets.js           fiches de membre des projets (accès au calendrier), tenues à jour par l'admin
@@ -106,7 +118,7 @@ confidentialite.html    politique de confidentialité
 RGPD.md                 registre du traitement et procédures RGPD
 firestore.rules         règles de sécurité  ← ADMIN_UID à remplir
 firestore.indexes.json  index (collection groups messages.authorUid, images.authorUid, thumbs.authorUid, reads.uid, members.uid,
-                        events.createdBy, events.attendees, goals.createdBy, goals.doneBy, tasks.createdBy, tasks.doneBy et tasks.assignee, requis pour l'export/la suppression
+                        events.createdBy, events.attendees, goals.createdBy, goals.doneBy, tasks.createdBy, tasks.doneBy, tasks.assignee, files.createdBy et fileData.createdBy, requis pour l'export/la suppression
                         et la pastille des invitations ; index composé logs (projectId, at) pour filtrer le journal par projet)
 firebase.json           hébergement (en-têtes HTTP, fichiers exclus), règles, index, émulateur des tests
 .firebaserc             projet Firebase par défaut
@@ -147,7 +159,7 @@ Et [database.rules.json](database.rules.json) : **Realtime Database → Règles 
 La CLI déploie aussi [firestore.indexes.json](firestore.indexes.json). Si tu passes par la console, crée l'exemption d'index à la main :
 **Firestore → Index → Champ unique → Ajouter une exemption** : collection `messages`, champ `authorUid`, portée **Groupe de collections**, ordre croissant activé. Idem pour les collections `images` et `thumbs`, et pour la collection `reads` avec le champ `uid`.
 Idem pour le calendrier : `members` (champ `uid`), `events` (champ `createdBy`, et champ `attendees` avec « contient un tableau »),
-`goals` (champs `createdBy` et `doneBy`) et `tasks` (champs `createdBy`, `doneBy` et `assignee`).
+`goals` (champs `createdBy` et `doneBy`), `tasks` (champs `createdBy`, `doneBy` et `assignee`), `files` et `fileData` (champ `createdBy`).
 Sans ces index, « Télécharger mes données », la suppression de compte et la pastille des invitations aux réunions échouent.
 
 ### 3. Devenir administrateur
